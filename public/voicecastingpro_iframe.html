@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoiceCastingPro Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+        }
+        
+        .iframe-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            outline: none;
+            background: #ffffff;
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #f8f9fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            transition: opacity 0.3s ease;
+        }
+        
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e3e3e3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Hide loading overlay when iframe loads */
+        iframe[data-loaded="true"] + .loading-overlay {
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="iframe-container">
+        <iframe 
+            id="voicecastingpro-iframe"
+            src="https://voicecastingpro-platform.onrender.com"
+            title="VoiceCastingPro Platform"
+            allow="accelerometer; autoplay; camera; clipboard-write; encrypted-media; fullscreen; gyroscope; microphone; picture-in-picture"
+            allowfullscreen
+            sandbox="allow-forms allow-modals allow-orientation-lock allow-pointer-lock allow-presentation allow-same-origin allow-scripts allow-top-navigation allow-top-navigation-by-user-activation"
+            loading="eager"
+        ></iframe>
+        
+        <div class="loading-overlay" id="loading-overlay">
+            <div class="loading-spinner"></div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const iframe = document.getElementById('voicecastingpro-iframe');
+            const loadingOverlay = document.getElementById('loading-overlay');
+            
+            // Hide loading overlay when iframe loads
+            iframe.addEventListener('load', function() {
+                iframe.setAttribute('data-loaded', 'true');
+                setTimeout(() => {
+                    loadingOverlay.style.display = 'none';
+                }, 300);
+            });
+            
+            // Error handling
+            iframe.addEventListener('error', function() {
+                loadingOverlay.innerHTML = '<div style="text-align: center; color: #666;"><h3>Unable to load the website</h3><p>Please check your internet connection or try again later.</p></div>';
+            });
+            
+            // Responsive handling
+            function adjustIframe() {
+                const container = document.querySelector('.iframe-container');
+                iframe.style.width = container.offsetWidth + 'px';
+                iframe.style.height = container.offsetHeight + 'px';
+            }
+            
+            window.addEventListener('resize', adjustIframe);
+            adjustIframe();
+        });
+    </script>
+</body>
+</html>
