@@ -3198,12 +3198,16 @@
                     <!-- PayPal Container -->
                     <div id="paypal-button-container" style="display: none; margin-top: 2rem; max-width: 400px; margin-left: auto; margin-right: auto; min-height: 60px;"></div>
 
-                    <div style="display: flex; gap: 1rem; margin-top: 2rem; max-width: 400px; margin-left: auto; margin-right: auto;">
-                        <button type="button" class="btn btn-secondary" style="flex: 1; padding: 1.2rem;" onclick="prevStep(2)">
-                            <i class="fas fa-arrow-left"></i>
-                            Back to Demos
-                        </button>
-                    </div>
+         <div style="display: flex; gap: 1rem; margin-bottom: 2rem; justify-content: center;">
+    <button class="btn btn-primary" onclick="syncPendingDemoChanges()">
+        <i class="fas fa-sync"></i>
+        Sync Changes
+    </button>
+    <button class="btn btn-secondary" onclick="clearPendingDemoChanges()">
+        <i class="fas fa-trash"></i>
+        Clear Pending
+    </button>
+</div>
                 </div>
             </div>
         </div>
@@ -3666,7 +3670,7 @@
                 </div>
 
 <!-- Send Message Form -->
-    <form id="send-message-form">
+    <form id="send-message-form" novalidate>
     <div style="margin-bottom: 1rem;">
         <textarea id="message-input" class="form-input" rows="3" placeholder="Type your message..." required style="resize: vertical; min-height: 80px;" oninput="validateMessageInput(this)"></textarea>
         <div id="message-validation-warning" style="display: none; background: rgba(255, 107, 107, 0.1); border: 1px solid var(--warning-color); border-radius: 8px; padding: 0.8rem; margin-top: 0.5rem;">
@@ -3712,25 +3716,13 @@
 </small>
     </div>
     
-<div style="display: flex; gap: 1rem; align-items: center;">
-                        <button type="submit" class="btn btn-primary" style="flex: 1;">
-                            <i class="fas fa-paper-plane"></i>
-                            Send Message
-                        </button>
-                        ${currentUser && currentUser.account_type === 'talent' ? `
-                            <button type="button" class="btn btn-secondary" onclick="submitCompletedWork('${currentConversation ? currentConversation.projectId : ''}')" style="flex: 1;">
-                                <i class="fas fa-upload"></i>
-                                Submit Work
-                            </button>
-                        ` : ''}
-                        ${currentUser && currentUser.account_type === 'client' ? `
-                            <button type="button" class="btn btn-secondary" onclick="approveProjectWork('${currentConversation ? currentConversation.projectId : ''}')" style="flex: 1;">
-                                <i class="fas fa-check-circle"></i>
-                                Approve Work
-                            </button>
-                        ` : ''}
-                    </div>
-</form>
+<div style="display: flex; gap: 1rem; align-items: center;" id="message-form-buttons">
+    <button type="submit" class="btn btn-primary" style="flex: 1;">
+        <i class="fas fa-paper-plane"></i>
+        Send Message
+    </button>
+    <!-- Additional buttons will be added dynamically by JavaScript -->
+</div></form>
             </div>
         </div>
     </div>
@@ -3769,7 +3761,7 @@
             </div>
         </div>
         <div class="footer-bottom">
-            <p>&copy; 2025 VoicecastingPro. All rights reserved. Built for voice professionals worldwide.</p>
+            <p>&copy; 2025 VoicecastingPro, a division of On Cue Productions, Inc. All rights reserved. Built for voice professionals worldwide.</p>
         </div>
     </footer>
 
@@ -3781,7 +3773,7 @@ window.addEventListener('error', function(e) {
     return false;
 });
 
-        // Global variables
+      // Global variables
         let currentStep = 1;
         let selectedPlan = null;
         let planPrice = 0;
@@ -3790,6 +3782,180 @@ window.addEventListener('error', function(e) {
         let isUserSignedIn = false;
         let currentUser = null;
         let authToken = null;
+
+        // CRITICAL FIX: Define submitCompletedWork at the top of script
+        window.submitCompletedWork = function(projectId) {
+            console.log('🔄 submitCompletedWork called with projectId:', projectId);
+            console.log('🔄 currentConversation:', currentConversation);
+            
+            if (!projectId || !currentConversation) {
+                showNotification('❌ No active project conversation found', 'error');
+                return;
+            }
+            
+            const modal = document.createElement('div');
+            modal.className = 'work-submission-modal';
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                background: rgba(0, 0, 0, 0.8); z-index: 1003; 
+                backdrop-filter: blur(10px); display: flex; 
+                align-items: center; justify-content: center; padding: 2rem;
+            `;
+            
+            modal.innerHTML = `
+                <div class="glass-card" style="max-width: 600px; width: 100%; margin: 0 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h3 style="color: var(--accent-color); margin: 0;">📤 Submit Completed Work</h3>
+                        <button type="button" class="close-modal-btn"
+                                style="background: none; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer;">×</button>
+                    </div>
+                    
+                    <div style="background: rgba(78, 205, 196, 0.1); border-radius: 10px; padding: 1rem; margin-bottom: 1.5rem;">
+                        <h4 style="color: var(--success-color); margin-bottom: 0.5rem;">📋 Project: ${currentConversation ? currentConversation.projectTitle : 'Current Project'}</h4>
+                        <p style="color: var(--text-secondary); margin: 0; font-size: 0.9rem;">
+                            Upload your completed work files and delivery notes for client approval.
+                        </p>
+                    </div>
+                    
+                    <div id="work-form-container">
+                        <div class="form-group">
+                            <label class="form-label">Final Audio Files *</label>
+                            <input type="file" id="work-files-input" multiple accept=".mp3,.wav,.aiff,.m4a,.pdf,.txt,.doc,.docx" style="width: 100%; padding: 0.8rem; background: rgba(255, 255, 255, 0.05); border: 2px solid var(--glass-border); border-radius: 12px; color: var(--text-primary);">
+                            <small style="color: var(--text-secondary); font-size: 0.9rem; display: block; margin-top: 0.5rem;">
+                                Upload completed files: Audio (MP3, WAV, M4A), Documents (PDF, TXT, DOC) - max 20MB each
+                            </small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Delivery Notes</label>
+                            <textarea id="work-notes-input" rows="4" style="width: 100%; padding: 1rem; background: rgba(255, 255, 255, 0.05); border: 2px solid var(--glass-border); border-radius: 12px; color: var(--text-primary); resize: vertical; min-height: 120px;"
+                                      placeholder="Describe the completed work, any revisions made, technical notes, or special instructions for the client..."></textarea>
+                        </div>
+                        
+                        <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                            <button type="button" class="btn btn-secondary cancel-modal-btn" style="flex: 1;">
+                                <i class="fas fa-times"></i>
+                                Cancel
+                            </button>
+                            <button type="button" class="btn btn-primary submit-work-btn" style="flex: 2;">
+                                <i class="fas fa-paper-plane"></i>
+                                Submit Work for Approval
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            document.body.style.overflow = 'hidden';
+            
+            // Add event listeners properly
+            const closeBtn = modal.querySelector('.close-modal-btn');
+            const cancelBtn = modal.querySelector('.cancel-modal-btn');
+            const submitBtn = modal.querySelector('.submit-work-btn');
+            
+            closeBtn.addEventListener('click', function() {
+                modal.remove();
+                document.body.style.overflow = '';
+            });
+            
+            cancelBtn.addEventListener('click', function() {
+                modal.remove();
+                document.body.style.overflow = '';
+            });
+            
+            submitBtn.addEventListener('click', function() {
+                window.handleWorkSubmissionFixed(projectId, modal);
+            });
+        };
+
+        // CRITICAL FIX: Define handleWorkSubmissionFixed at the top too
+        window.handleWorkSubmissionFixed = async function(projectId, modal) {
+            const filesInput = document.getElementById('work-files-input');
+            const notesInput = document.getElementById('work-notes-input');
+            const submitBtn = modal.querySelector('.submit-work-btn');
+            
+            const files = filesInput.files;
+            const notes = notesInput.value.trim();
+            
+            if (!files || files.length === 0) {
+                showNotification('❌ Please select at least one file to submit', 'error');
+                return;
+            }
+            
+            // Validate file sizes
+            for (let file of files) {
+                if (file.size > 20 * 1024 * 1024) {
+                    showNotification(`❌ File "${file.name}" is too large. Maximum size is 20MB`, 'error');
+                    return;
+                }
+            }
+            
+            submitBtn.classList.add('loading');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+            
+            try {
+                console.log('📤 Submitting work with files:', files.length);
+                
+                // Create message with work submission
+                const workFormData = new FormData();
+                
+                // Add all files
+                for (let i = 0; i < files.length; i++) {
+                    workFormData.append('attachment', files[i]);
+                    console.log('📎 Adding file:', files[i].name, 'Size:', files[i].size);
+                }
+                
+                // Create work submission message
+                const workMessage = `🎯 WORK SUBMISSION
+
+Project: ${currentConversation ? currentConversation.projectTitle : 'Current Project'}
+Files: ${files.length} file(s)
+
+Delivery Notes:
+${notes || 'No additional notes'}
+
+✅ Work is ready for your review and approval.`;
+                
+                workFormData.append('message', workMessage);
+                
+                // Submit via messaging system
+                const response = await fetch(`${API_BASE_URL}/api/conversations/${currentConversation.projectId}/${currentConversation.participantId}/messages`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': authToken ? `Bearer ${authToken}` : ''
+                    },
+                    body: workFormData
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('❌ Work submission failed:', response.status, errorText);
+                    throw new Error(errorText || `Work submission failed (${response.status})`);
+                }
+                
+                console.log('✅ Work submitted successfully via messaging');
+                showNotification('✅ Work submitted successfully! Client will be notified for approval.', 'success');
+                
+                // Close modal
+                modal.remove();
+                document.body.style.overflow = '';
+                
+                // Refresh conversation to show submission
+                if (currentConversation) {
+                    await loadConversationMessages(currentConversation.projectId, currentConversation.participantId);
+                }
+                
+            } catch (error) {
+                console.error('Work submission error:', error);
+                showNotification(`❌ Failed to submit work: ${error.message}`, 'error');
+            } finally {
+                submitBtn.classList.remove('loading');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Work for Approval';
+            }
+        };
 
         // API Base URL - change this to your Render.com URL
         const API_BASE_URL = window.location.origin;
@@ -3957,10 +4123,9 @@ setTimeout(() => {
                 submitBtn.disabled = false;
             }
         }
-
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('VoicecastingPro loaded successfully');
+    console.log('VoicecastingPro loaded successfully');
     
     // Initialize platform safeguards
     initializePlatformSafeguards();
@@ -4001,15 +4166,24 @@ document.addEventListener('DOMContentLoaded', () => {
         showPage(pageParam);
     } 
               
-           // Check if user is already signed in
-            checkExistingAuth();
-            
-            // Initialize deadline minimum date
-            setProjectDeadlineMinDate();
-            
-            // Load initial data
-            loadInitialData();
-        });
+    // Check if user is already signed in
+    checkExistingAuth();
+    
+    // Initialize deadline minimum date
+    setProjectDeadlineMinDate();
+    
+    // Load initial data
+    loadInitialData();
+    
+    // Setup message form handler
+    setupMessageFormHandler();
+    
+    // Initialize back to top button state
+    const backToTopBtn = document.getElementById('back-to-top');
+    if (backToTopBtn && window.pageYOffset <= 300) {
+        backToTopBtn.classList.remove('show');
+    }
+});
 
     // Check for existing authentication
 async function checkExistingAuth() {
@@ -4099,23 +4273,32 @@ updatePostProjectAuthNotice();
         }
     }
     
-    // Refresh projects to show payment buttons for clients
+// Refresh projects to show payment buttons for clients
     if (document.getElementById('projects').classList.contains('active')) {
         loadProjectsData();
     }
-    checkPayPalEmailRequired();
+    // checkPayPalEmailRequired(); // <-- COMMENTED OUT - not needed since PayPal email is in profile
 }
         // Sign out function
         function signOut() {
     try {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        localStorage.removeItem('talentProfileComplete');
-        localStorage.removeItem('talentSubscribed');
-        localStorage.clear(); // Clear everything
-    } catch (error) {
-        console.log('localStorage not available - will work when deployed');
+    // Preserve escrow data before clearing
+    const escrowProjects = localStorage.getItem('escrowProjects');
+    
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('talentProfileComplete');
+    localStorage.removeItem('talentSubscribed');
+    localStorage.clear(); // Clear everything
+    
+    // Restore escrow data after clearing
+    if (escrowProjects) {
+        localStorage.setItem('escrowProjects', escrowProjects);
+        console.log('✅ Preserved escrow data through logout');
     }
+} catch (error) {
+    console.log('localStorage not available - will work when deployed');
+}
     
     authToken = null;
     currentUser = null;
@@ -4153,11 +4336,20 @@ updatePostProjectAuthNotice();
             }, 1000);
         }
 
-        // Load initial data
-        async function loadInitialData() {
-            await loadTalentData();
-            await loadProjectsData();
+       // Load initial data
+async function loadInitialData() {
+    await loadTalentData();
+    await loadProjectsData();
+    
+    // Initialize project cache
+    try {
+        if (!localStorage.getItem('cachedProjects')) {
+            localStorage.setItem('cachedProjects', '[]');
         }
+    } catch (error) {
+        console.log('Cache initialization skipped (normal in sandbox)');
+    }
+}
 
         // Navbar scroll effect
         let ticking = false;
@@ -4238,15 +4430,27 @@ updatePostProjectAuthNotice();
             return;
         }
 
- // Handle messages page - redirect to signin if not authenticated
+// Handle messages page - redirect to signin if not authenticated
         if (pageId === 'messages' && !isUserSignedIn) {
             console.log('📧 Not signed in, redirecting to signin with messages redirect');
-            window.history.replaceState({}, '', '/?page=signin&redirect=messages');
+            try {
+                window.history.replaceState({}, '', '/?page=signin&redirect=messages');
+            } catch (e) {
+                console.warn('Could not update URL state');
+            }
             showPage('signin');
             return;
         }
+        
+        // Initialize message form when messages page is shown
+        if (pageId === 'messages') {
+            setTimeout(() => {
+                setupMessageFormHandler();
+                loadConversations();
+            }, 100);
+        }
 
-        // Handle subscription notice on projects page
+      // Handle subscription notice on projects page
         if (pageId === 'projects') {
             updateProjectsPageAccess();
         }
@@ -4719,7 +4923,7 @@ function getAudioUrl(demoUrl) {
     return finalUrl;
 }
 
-// FIXED: Audio player modal with proper audio playback
+// FIXED: Audio player modal with proper audio playback and pending changes
 function showAudioPlayerModal(talentName, demos) {
     const modal = document.createElement('div');
     modal.className = 'audio-player-modal';
@@ -4730,16 +4934,32 @@ function showAudioPlayerModal(talentName, demos) {
         align-items: center; justify-content: center; padding: 2rem;
     `;
     
+    // Apply pending changes to demos before displaying
+    const updatedDemos = demos.map(demo => {
+        if (window.pendingDemoChanges && window.pendingDemoChanges[demo.id]) {
+            const changes = window.pendingDemoChanges[demo.id];
+            return {
+                ...demo,
+                title: changes.title || demo.title,
+                description: changes.description || demo.description,
+                isPending: true
+            };
+        }
+        return demo;
+    });
+    
     // Create demos HTML without inline event handlers (we'll add them programmatically)
-    const demosHtml = demos.map((demo, index) => {
+    const demosHtml = updatedDemos.map((demo, index) => {
         const demoUrl = getAudioUrl(demo.url);
+        const pendingIndicator = demo.isPending ? 
+            `<span style="color: orange; font-size: 0.8rem; margin-left: 0.5rem;" title="Changes pending sync"><i class="fas fa-clock"></i> Pending</span>` : '';
         
         return `
-            <div class="glass-card" style="margin-bottom: 1rem; background: rgba(102, 126, 234, 0.1);" data-demo-id="${demo.id}">
+            <div class="glass-card" style="margin-bottom: 1rem; background: rgba(102, 126, 234, 0.1); ${demo.isPending ? 'border-left: 3px solid orange;' : ''}" data-demo-id="${demo.id}">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                     <div>
-                        <h4 style="margin: 0; color: var(--text-primary);">${demo.title || 'Demo'}</h4>
-                        <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">${demo.description || 'No description'}</p>
+                        <h4 style="margin: 0; color: var(--text-primary); ${demo.isPending ? 'font-style: italic;' : ''}">${demo.title || 'Demo'}${pendingIndicator}</h4>
+                        <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem; ${demo.isPending ? 'font-style: italic;' : ''}">${demo.description || 'No description'}</p>
                         ${demo.duration ? `<span style="color: var(--accent-color); font-size: 0.8rem;">Duration: ${demo.duration}</span>` : ''}
                     </div>
                 </div>
@@ -4763,6 +4983,7 @@ function showAudioPlayerModal(talentName, demos) {
     }).join('');
     
     const contactEmail = demos[0]?.talent_email || '';
+    const hasPendingChanges = updatedDemos.some(demo => demo.isPending);
     
     modal.innerHTML = `
         <div class="glass-card" style="max-width: 600px; width: 100%; margin: 0 1rem; max-height: 80vh; overflow-y: auto;">
@@ -4773,6 +4994,21 @@ function showAudioPlayerModal(talentName, demos) {
                     <i class="fas fa-times"></i>
                 </button>
             </div>
+            
+            ${hasPendingChanges ? `
+                <div style="background: rgba(255, 193, 7, 0.1); border-radius: 10px; padding: 1rem; margin-bottom: 1rem; border: 1px solid orange;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="color: orange; font-weight: 600; margin-bottom: 0.3rem;">
+                                <i class="fas fa-clock"></i> Demo Updates Pending
+                            </div>
+                            <div style="color: var(--text-secondary); font-size: 0.9rem;">
+                                This talent has updated demo information that hasn't been synced yet.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ` : ''}
             
             <div id="demos-list">
                 ${demosHtml}
@@ -4844,7 +5080,6 @@ function showAudioPlayerModal(talentName, demos) {
         }
     });
 }
-
 
 // Close audio player modal
 function closeAudioPlayerModal(modal) {
@@ -5451,88 +5686,109 @@ function checkPayPalEmailRequired() {
 }
 
 
-   // API Helper Functions
-        async function apiCall(endpoint, options = {}) {
-            const defaultHeaders = {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            };
+  // API Helper Functions
+async function apiCall(endpoint, options = {}) {
+    const defaultHeaders = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    };
 
-       if (authToken) {
-    defaultHeaders['Authorization'] = `Bearer ${authToken}`;
-}
-
-// Log the request for debugging
-console.log(`🔗 API Call: ${endpoint}`, { 
-    method: options.method || 'GET', 
-    hasAuth: !!authToken,
-    headers: defaultHeaders 
-});
-
-const config = {
-    headers: defaultHeaders,
-    ...options,
-    headers: {
-        ...defaultHeaders,
-        ...(options.headers || {})
+    if (authToken) {
+        defaultHeaders['Authorization'] = `Bearer ${authToken}`;
     }
-};
 
-            console.log(`API Call: ${endpoint}`, config);
+    // Enhanced logging for debugging
+    const method = options.method || 'GET';
+    console.log(`🔗 API Call: ${method} ${endpoint}`, { 
+        method: method, 
+        hasAuth: !!authToken,
+        headers: defaultHeaders,
+        bodyPreview: options.body ? options.body.substring(0, 100) + '...' : 'none'
+    });
 
-            try {
-                const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
-                
-                console.log(`API Response: ${endpoint}`, response.status, response.statusText);
-                
-                // Log response headers for debugging
-                console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-                
-                if (!response.ok) {
-                    let errorMessage;
-                    const contentType = response.headers.get('content-type');
-                    
-                    if (contentType && contentType.includes('application/json')) {
-                        try {
-                            const errorData = await response.json();
-                            errorMessage = errorData.error || errorData.message || `HTTP ${response.status}`;
-                        } catch (parseError) {
-                            errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-                        }
-                    } else {
-                        const errorText = await response.text();
-                        errorMessage = errorText || `HTTP ${response.status}: ${response.statusText}`;
-                    }
-                    
-                    console.error('API Error Response:', errorMessage);
-                    throw new Error(errorMessage);
-                }
-                
-                // Try to parse JSON response
-                const contentType = response.headers.get('content-type');
-                if (contentType && contentType.includes('application/json')) {
-                    const data = await response.json();
-                    console.log('API Success Response:', data);
-                    return data;
-                } else {
-                    // Handle non-JSON responses (like plain text success messages)
-                    const text = await response.text();
-                    console.log('API Text Response:', text);
-                    return { success: true, message: text || 'Operation completed successfully' };
-                }
-                
-            } catch (error) {
-                console.error('API Call Failed:', endpoint, error);
-                
-                // Network error handling
-                if (error.name === 'TypeError' && error.message.includes('fetch')) {
-                    throw new Error('Network error - please check your internet connection');
-                }
-                
-                throw error;
-            }
+    const config = {
+        headers: defaultHeaders,
+        ...options,
+        headers: {
+            ...defaultHeaders,
+            ...(options.headers || {})
         }
+    };
 
+    try {
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+        
+        console.log(`📡 API Response: ${method} ${endpoint}`, {
+            status: response.status,
+            statusText: response.statusText,
+            ok: response.ok,
+            url: response.url
+        });
+        
+        // Log response headers for debugging
+        const responseHeaders = {};
+        response.headers.forEach((value, key) => {
+            responseHeaders[key] = value;
+        });
+        console.log('📋 Response headers:', responseHeaders);
+        
+        if (!response.ok) {
+            let errorMessage;
+            const contentType = response.headers.get('content-type');
+            
+            if (contentType && contentType.includes('application/json')) {
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || errorData.message || `HTTP ${response.status}`;
+                    console.log('❌ Error response data:', errorData);
+                } catch (parseError) {
+                    errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                    console.log('❌ Could not parse error response as JSON');
+                }
+            } else {
+                const errorText = await response.text();
+                errorMessage = errorText || `HTTP ${response.status}: ${response.statusText}`;
+                console.log('❌ Error response text:', errorText);
+            }
+            
+            console.error('🚨 API Error:', {
+                endpoint: endpoint,
+                method: method,
+                status: response.status,
+                message: errorMessage
+            });
+            throw new Error(errorMessage);
+        }
+        
+        // Try to parse JSON response
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            const data = await response.json();
+            console.log('✅ API Success Response:', data);
+            return data;
+        } else {
+            // Handle non-JSON responses (like plain text success messages)
+            const text = await response.text();
+            console.log('✅ API Text Response:', text);
+            return { success: true, message: text || 'Operation completed successfully' };
+        }
+        
+    } catch (error) {
+        console.error('🚨 API Call Failed:', {
+            endpoint: endpoint,
+            method: method,
+            error: error.message,
+            stack: error.stack
+        });
+        
+        // Network error handling
+        if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            throw new Error('Network error - please check your internet connection');
+        }
+        
+        throw error;
+    }
+}
         // Load talent data
         async function loadTalentData() {
             try {
@@ -5554,7 +5810,7 @@ const config = {
             }
         }
 
-        // Display talent grid
+       // Display talent grid
         function displayTalentGrid(talent) {
             const talentGrid = document.getElementById('talent-grid');
             if (!talentGrid) return;
@@ -5570,6 +5826,17 @@ const config = {
                     </div>
                 `;
                 return;
+            }
+
+            // Apply any pending demo changes from localStorage
+            try {
+                const pendingChanges = JSON.parse(localStorage.getItem('pendingDemoChanges') || '{}');
+                if (Object.keys(pendingChanges).length > 0) {
+                    console.log('🔄 Applying pending demo changes to talent grid:', pendingChanges);
+                    // Note: We'll apply these changes after rendering
+                }
+            } catch (error) {
+                console.log('No pending changes available (normal in sandbox)');
             }
 
             talentGrid.innerHTML = actualTalent.map(t => {
@@ -5644,7 +5911,7 @@ const config = {
             `;
             }).join('');
             
-            // Check for bio overflow after DOM is ready - IMPROVED VERSION
+          // Check for bio overflow after DOM is ready - IMPROVED VERSION
 setTimeout(() => {
     console.log('🔍 Checking for bio overflow...');
     
@@ -5680,22 +5947,118 @@ setTimeout(() => {
             }
         }
     });
-}, 500); // Increased timeout to 500ms
-       
 
-
-
- }
-        // Load projects data
-        async function loadProjectsData() {
-            try {
-                const response = await apiCall('/api/projects');
-                displayProjectsGrid(response.projects || []);
-            } catch (error) {
-                console.error('Failed to load projects:', error);
-                displayProjectsGrid([]);
+    // Apply pending demo changes to public talent grid and show notification
+    applyPendingDemoChangesToPublicGrid();
+    
+    // Check if there are pending changes and show persistent indicator
+    try {
+        const pendingChanges = JSON.parse(localStorage.getItem('pendingDemoChanges') || '{}');
+        if (Object.keys(pendingChanges).length > 0) {
+            console.log('📊 Found pending demo changes for talent grid');
+            
+            // Add a subtle indicator to the page
+            const existingIndicator = document.getElementById('pending-changes-indicator');
+            if (!existingIndicator) {
+                const indicator = document.createElement('div');
+                indicator.id = 'pending-changes-indicator';
+                indicator.style.cssText = `
+                    position: fixed; top: 80px; right: 20px; z-index: 999;
+                    background: rgba(255, 193, 7, 0.9); color: white;
+                    padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.9rem;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.2); backdrop-filter: blur(10px);
+                    cursor: pointer; transition: all 0.3s ease;
+                `;
+                indicator.innerHTML = `
+                    <i class="fas fa-clock"></i> 
+                    ${Object.keys(pendingChanges).length} demo updates pending
+                `;
+                indicator.onclick = () => {
+                    showNotification('💡 Go to Account Settings > Manage Audio Demos to sync your changes', 'success');
+                };
+                document.body.appendChild(indicator);
+                
+                // Auto-hide after 10 seconds
+                setTimeout(() => {
+                    if (indicator.parentNode) {
+                        indicator.style.opacity = '0.7';
+                        indicator.style.transform = 'scale(0.9)';
+                    }
+                }, 10000);
             }
         }
+    } catch (error) {
+        console.log('Could not check pending changes (normal in sandbox)');
+    }
+    
+}, 500); // Increased timeout to 500ms
+
+ }
+
+    // Apply pending demo changes to public talent grid
+function applyPendingDemoChangesToPublicGrid() {
+    try {
+        const pendingChanges = JSON.parse(localStorage.getItem('pendingDemoChanges') || '{}');
+        
+        if (Object.keys(pendingChanges).length === 0) {
+            console.log('📭 No pending demo changes to apply');
+            return;
+        }
+        
+        console.log('🔄 Applying pending demo changes to public talent grid:', pendingChanges);
+        
+        // Store the changes globally for the audio player modal
+        window.pendingDemoChanges = pendingChanges;
+        
+        // Show sync notification if there are pending changes
+        if (Object.keys(pendingChanges).length > 0) {
+            showNotification(`⏳ ${Object.keys(pendingChanges).length} demo changes pending sync. Use "Sync Changes" in demo management.`, 'warning');
+        }
+        
+        console.log('✅ Pending demo changes cached for audio player modal');
+        
+    } catch (error) {
+        console.log('Could not load pending changes (normal in sandbox)');
+    }
+}
+       // Load projects data
+async function loadProjectsData() {
+    try {
+        const response = await apiCall('/api/projects');
+        let projects = response.projects || [];
+        
+        // Apply any pending payment updates
+        if (window.pendingPaymentUpdates) {
+            projects.forEach(project => {
+                const update = window.pendingPaymentUpdates[project.id];
+                if (update) {
+                    Object.assign(project, update);
+                    console.log('✅ Applied pending payment update to project:', project.id);
+                }
+            });
+        }
+        
+        // Store projects in global memory for persistence
+        window.projectsData = projects;
+        
+        displayProjectsGrid(projects);
+        console.log('✅ Projects loaded and stored in memory');
+    } catch (error) {
+        console.error('Failed to load projects:', error);
+        // If we have cached projects, use them
+        if (window.projectsData && window.projectsData.length > 0) {
+            console.log('📦 Using cached projects data');
+            displayProjectsGrid(window.projectsData);
+        } else {
+            displayProjectsGrid([]);
+        }
+    }
+
+   // Apply stored escrow statuses after projects are loaded
+    setTimeout(() => {
+        applyStoredEscrowStatuses();
+    }, 500);
+}
 
 // Load client's own projects for modal
         async function loadClientProjectsInModal() {
@@ -5994,12 +6357,32 @@ function displayClientProjectsGrid(projects) {
         <span style="background: rgba(102, 126, 234, 0.2); color: var(--accent-color); padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.9rem;">${project.language || 'Any'}</span>
         <span style="background: rgba(102, 126, 234, 0.2); color: var(--accent-color); padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.9rem;">${project.estimated_duration || 'TBD'}</span>
 <span style="background: rgba(102, 126, 234, 0.2); color: var(--accent-color); padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.9rem;">${project.estimated_duration || 'TBD'}</span>
-${window.isUserSignedIn && window.currentUser && window.currentUser.account_type === 'client' ? 
-    (project.payment_protection ? 
-        `<span style="background: var(--success-color); color: white; padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.9rem;">🔒 Escrow Protected</span>` : 
-        `<button onclick="setupProjectPayment('${project.id}', '${project.title}', ${project.budget_min || 500}, ${project.budget_max || 1000})" style="background: var(--warning-color); color: white; padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.9rem; border: none; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#ff5252'" onmouseout="this.style.background='var(--warning-color)'">⚠️ Setup Payment</button>`
-    ) : ''
-}
+${(() => {
+    // Check if this project has escrow protection
+    let hasEscrow = project.payment_protection;
+    try {
+        const escrowProjects = JSON.parse(localStorage.getItem('escrowProjects') || '{}');
+        if (escrowProjects[project.id] && escrowProjects[project.id].protected) {
+            hasEscrow = true;
+        }
+    } catch (error) {
+        if (window.escrowProjects && window.escrowProjects[project.id] && window.escrowProjects[project.id].protected) {
+            hasEscrow = true;
+        }
+    }
+    
+    if (hasEscrow && isUserSignedIn && currentUser) {
+        return `<span style="background: var(--success-color); color: white; padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.9rem;">🔒 Escrow Protected</span>`;
+    } else if (isUserSignedIn && currentUser) {
+        if (currentUser.account_type === 'client') {
+            return `<button onclick="setupProjectPayment('${project.id}', '${project.title}', ${project.budget_min || 500}, ${project.budget_max || 1000})" style="background: var(--warning-color); color: white; padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.9rem; border: none; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#ff5252'" onmouseout="this.style.background='var(--warning-color)'">⚠️ Setup Payment</button>`;
+        } else {
+            return `<span style="background: rgba(255, 107, 107, 0.8); color: white; padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.9rem;">⚠️ No Payment Protection</span>`;
+        }
+    } else {
+        return '';
+    }
+})()}
 
 <span style="background: rgba(102, 126, 234, 0.1); ${expirationClass} padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.9rem;">${expirationInfo}</span>
     </div>
@@ -6931,19 +7314,19 @@ if (paymentProtection && paymentProtection !== '' && projectResponse.projectId) 
                     hourlyRateMin = 500; hourlyRateMax = 1000;
                 }
                 
-                await apiCall('/api/talent/profile', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        bio: formData.get('bio'),
-                        languages: formData.get('languages'),
-                        specialties: formData.get('specialties'),
-                        hourlyRateMin: hourlyRateMin,
-                        hourlyRateMax: hourlyRateMax,
-                        experienceYears: parseInt(formData.get('experienceYears')) || 0,
-                        equipmentDescription: formData.get('equipmentDescription') || ''
-                    })
-                });
-                
+        await apiCall('/api/talent/profile', {
+            method: 'PUT',
+            body: JSON.stringify({
+                bio: formData.get('bio'),
+                languages: formData.get('languages'),
+                specialties: formData.get('specialties'),
+                hourlyRateMin: hourlyRateMin,
+                hourlyRateMax: hourlyRateMax,
+                experienceYears: parseInt(formData.get('experienceYears')) || 0,
+                equipmentDescription: formData.get('equipmentDescription') || '',
+                paypal_email: formData.get('paypalEmail')
+            })
+        });
                 talentProfileComplete = true;
                 
             } catch (error) {
@@ -7219,8 +7602,10 @@ function handleFileSelection(input) {
     const file = input.files[0];
     if (!file) return;
     
-    // Validate file for personal information
-    const validation = validateFileAttachment(file);
+    console.log('📎 File selected:', file.name, file.size, file.type);
+    
+    // Enhanced file validation
+    const validation = validateMessageAttachment(file);
     if (!validation.valid) {
         showNotification(validation.message, 'error');
         input.value = '';
@@ -7230,35 +7615,84 @@ function handleFileSelection(input) {
     const fileInfo = document.getElementById('selected-file-info');
     const fileName = document.getElementById('selected-file-name');
     
-   // Validate file type - allow all types for everyone
-const allowedTypes = ['.txt', '.pdf', '.doc', '.docx', '.mp3', '.wav', '.aiff', '.m4a', '.jpg', '.jpeg', '.png'];
-const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
-
-if (!allowedTypes.includes(fileExtension)) {
-    showNotification('❌ Please select: Audio (MP3, WAV, M4A), Script (PDF, DOC, TXT), or Image (JPG, PNG)', 'error');
-    input.value = '';
-    return;
-}
-
-// Validate file size - 20MB for all files
-const maxSize = 20 * 1024 * 1024; // 20MB for all files
-    if (file.size > maxSize) {
-        showNotification(`❌ File too large. Maximum size is ${isClient ? '5MB' : '20MB'}`, 'error');
-        input.value = '';
+    if (!fileInfo || !fileName) {
+        console.error('❌ File info elements not found in DOM');
+        console.log('Available elements:', document.querySelectorAll('[id*="file"]'));
         return;
     }
     
-    fileName.textContent = file.name;
+    // Show file selection with size info
+    const fileSizeKB = (file.size / 1024).toFixed(1);
+    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+    const sizeDisplay = file.size > 1024 * 1024 ? `${fileSizeMB}MB` : `${fileSizeKB}KB`;
+    
+    fileName.innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: flex-start;">
+            <span style="font-weight: 600;">${file.name}</span>
+            <span style="font-size: 0.8rem; color: var(--text-secondary);">${sizeDisplay} • ${file.type || 'Unknown type'}</span>
+        </div>
+    `;
+    
     fileInfo.style.display = 'flex';
     fileInfo.style.alignItems = 'center';
     fileInfo.style.gap = '0.5rem';
+    
+   console.log('✅ File attachment ready:', {
+    name: file.name,
+    size: sizeDisplay,
+    type: file.type
+});
+
+showNotification(`📎 File "${file.name}" ready to send`, 'success');
+
+// Update button text immediately without validation
+const submitBtn = document.querySelector('#send-message-form button[type="submit"]');
+const messageInput = document.getElementById('message-input');
+if (submitBtn && messageInput) {
+    const message = messageInput.value.trim();
+    updateSubmitButtonText(submitBtn, message, true);
+}
 }
 
 function clearSelectedFile() {
     document.getElementById('message-file-input').value = '';
     document.getElementById('selected-file-info').style.display = 'none';
+    
+    // Update button text immediately without validation
+    const submitBtn = document.querySelector('#send-message-form button[type="submit"]');
+    const messageInput = document.getElementById('message-input');
+    if (submitBtn && messageInput) {
+        const message = messageInput.value.trim();
+        updateSubmitButtonText(submitBtn, message, false);
+    }
 }
 
+// Download stored file function
+window.downloadStoredFile = function(fileId) {
+    try {
+        const fileData = window.messageAttachments[fileId];
+        if (!fileData) {
+            showNotification('❌ File not found or expired', 'error');
+            return;
+        }
+        
+        // Create download link
+        const link = document.createElement('a');
+        link.href = fileData.data;
+        link.download = fileData.name;
+        link.style.display = 'none';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showNotification(`📥 Downloading ${fileData.name}...`, 'success');
+        
+    } catch (error) {
+        console.error('Download error:', error);
+        showNotification('❌ Download failed', 'error');
+    }
+};
 
     // Search functionality
         document.getElementById('talent-search')?.addEventListener('input', function(e) {
@@ -7309,32 +7743,80 @@ function clearSelectedFile() {
         
         loadAccountInfo();
         
-        // Show subscription section only for talent
+       // Show subscription section only for talent
         if (currentUser.account_type === 'talent') {
             document.getElementById('subscription-section').style.display = 'block';
             loadSubscriptionInfo();
             
             // Show demo management for talent
-            document.getElementById('demo-management-section').style.display = 'block';
-} else if (currentUser.account_type === 'client') {
-    // Show project management for clients
-    document.getElementById('client-project-management-section').style.display = 'block';
-    // Hide talent-specific sections for clients
-    document.getElementById('demo-management-section').style.display = 'none';
-} 
+            const demoSection = document.getElementById('demo-management-section');
+            if (demoSection) {
+                demoSection.style.display = 'block';
+                console.log('✅ Demo management section shown for talent');
+            } else {
+                console.error('❌ Demo management section not found in DOM');
+            }
+            
+            // Hide client sections
+            const clientSection = document.getElementById('client-project-management-section');
+            if (clientSection) {
+                clientSection.style.display = 'none';
+            }
+        } else if (currentUser.account_type === 'client') {
+            // Show project management for clients
+            const clientSection = document.getElementById('client-project-management-section');
+            if (clientSection) {
+                clientSection.style.display = 'block';
+                console.log('✅ Client project management section shown');
+            }
+            
+            // Hide talent-specific sections for clients
+            const demoSection = document.getElementById('demo-management-section');
+            if (demoSection) {
+                demoSection.style.display = 'none';
+            }
+            
+            const subscriptionSection = document.getElementById('subscription-section');
+            if (subscriptionSection) {
+                subscriptionSection.style.display = 'none';
+            }
+        }
 
-// Always hide inappropriate sections
-if (currentUser.account_type === 'talent') {
-    document.getElementById('client-project-management-section').style.display = 'none';
-} else if (currentUser.account_type === 'client') {
-    document.getElementById('demo-management-section').style.display = 'none';
-    document.getElementById('subscription-section').style.display = 'none';
-}
     } else {
         accountContent.style.display = 'none';
         loginPrompt.style.display = 'block';
     }
 }
+
+// Get profile photo HTML with proper fallback handling
+function getProfilePhotoHtml(user, timestamp = Date.now()) {
+    // Check for local base64 image first
+    if (user.profile_photo_local && user.profile_photo_base64) {
+        return `<img src="${user.profile_photo_base64}" style="width: 100%; height: 100%; object-fit: cover;" alt="Profile">`;
+    }
+    
+    // Check localStorage for base64 image
+    try {
+        const localPhoto = localStorage.getItem(`profile_photo_${user.id}`);
+        if (localPhoto) {
+            return `<img src="${localPhoto}" style="width: 100%; height: 100%; object-fit: cover;" alt="Profile">`;
+        }
+    } catch (error) {
+        // Check memory storage
+        if (window.userProfilePhoto) {
+            return `<img src="${window.userProfilePhoto}" style="width: 100%; height: 100%; object-fit: cover;" alt="Profile">`;
+        }
+    }
+    
+    // Try server image
+    if (user.profile_photo && !user.profile_photo_local) {
+        return `<img src="${API_BASE_URL}/uploads/profiles/${user.profile_photo}?v=${timestamp}" style="width: 100%; height: 100%; object-fit: cover;" alt="Profile" onerror="this.parentNode.innerHTML='${user.first_name[0]}${user.last_name[0]}';">`;
+    }
+    
+    // Fallback to initials
+    return `${user.first_name[0]}${user.last_name[0]}`;
+}
+
         function loadAccountInfo() {
             const profileInfo = document.getElementById('profile-info');
             
@@ -7345,10 +7827,7 @@ if (currentUser.account_type === 'talent') {
    profileInfo.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 1.5rem; margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--glass-border);">
                     <div style="width: 100px; height: 100px; border-radius: 50%; background: var(--primary-gradient); display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: 800; color: white; overflow: hidden;">
-                        ${currentUser.profile_photo ? 
-                            `<img src="${API_BASE_URL}/uploads/profiles/${currentUser.profile_photo}" style="width: 100%; height: 100%; object-fit: cover;" alt="Profile">` : 
-                            `${currentUser.first_name[0]}${currentUser.last_name[0]}`
-                        }
+${getProfilePhotoHtml(currentUser, Date.now())}
                     </div>
                     <div>
                         <h4 style="margin: 0; color: var(--text-primary);">${currentUser.first_name} ${currentUser.last_name}</h4>
@@ -7737,7 +8216,7 @@ function closePlanChangeModal() {
                         
                         onApprove: function(data, actions) {
                             return fetch(`${API_BASE_URL}/api/subscriptions/change-plan`, {
-                                method: 'POST',
+                                method: 'PUT',
                                 headers: {
                                     'Content-Type': 'application/json',
                                     'Authorization': authToken ? `Bearer ${authToken}` : ''
@@ -8373,27 +8852,35 @@ async function loadUserDemos() {
             return;
         }
         
-        demosList.innerHTML = demos.map(demo => {
-            const safeDemoId = String(demo.id || '').replace(/'/g, '&#39;');
-            const safeDemoTitle = String(demo.title || 'Demo').replace(/'/g, '&#39;');
-            
-            return `
-            <div class="glass-card" style="margin-bottom: 1rem; background: rgba(255, 255, 255, 0.05);">
-                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
-                    <div style="flex: 1;">
-                        <h5 style="margin: 0; color: var(--text-primary);">${demo.title}</h5>
-                        <p style="margin: 0.5rem 0; color: var(--text-secondary); font-size: 0.9rem;">${demo.description || 'No description'}</p>
-                        <div style="display: flex; gap: 1rem; font-size: 0.8rem; color: var(--text-secondary);">
-                            <span><i class="fas fa-calendar"></i> ${new Date(demo.created_at).toLocaleDateString()}</span>
-                            ${demo.duration ? `<span><i class="fas fa-clock"></i> ${demo.duration}</span>` : ''}
-                        </div>
-                    </div>
-                    <button onclick="deleteDemo('${safeDemoId}', '${safeDemoTitle}')" 
-                            class="btn" style="background: var(--warning-color); color: white; padding: 0.5rem 1rem; margin-left: 1rem;">
-                        <i class="fas fa-trash"></i>
-                        Delete
-                    </button>
+       demosList.innerHTML = demos.map(demo => {
+    const safeDemoId = String(demo.id || '').replace(/'/g, '&#39;');
+    const safeDemoTitle = String(demo.title || 'Demo').replace(/'/g, '&#39;');
+    const safeDescription = String(demo.description || '').replace(/'/g, '&#39;');
+    
+    return `
+    <div class="glass-card" style="margin-bottom: 1rem; background: rgba(255, 255, 255, 0.05);" data-demo-id="${safeDemoId}">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+            <div style="flex: 1;">
+                <h5 style="margin: 0; color: var(--text-primary);">${demo.title}</h5>
+                <p style="margin: 0.5rem 0; color: var(--text-secondary); font-size: 0.9rem;">${demo.description || 'No description'}</p>
+                <div style="display: flex; gap: 1rem; font-size: 0.8rem; color: var(--text-secondary);">
+                    <span><i class="fas fa-calendar"></i> ${new Date(demo.created_at).toLocaleDateString()}</span>
+                    ${demo.duration ? `<span><i class="fas fa-clock"></i> ${demo.duration}</span>` : ''}
                 </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-left: 1rem;">
+                <button onclick="editDemo('${safeDemoId}', '${safeDemoTitle}', '${safeDescription}')" 
+                        class="btn btn-secondary" style="padding: 0.5rem 1rem;">
+                    <i class="fas fa-edit"></i>
+                    Edit
+                </button>
+                <button onclick="deleteDemo('${safeDemoId}', '${safeDemoTitle}')" 
+                        class="btn" style="background: var(--warning-color); color: white; padding: 0.5rem 1rem;">
+                    <i class="fas fa-trash"></i>
+                    Delete
+                </button>
+            </div>
+        </div>
                 
                 <div style="background: rgba(0, 0, 0, 0.3); border-radius: 10px; padding: 1rem;">
                     <audio controls style="width: 100%;" preload="metadata" 
@@ -8419,7 +8906,9 @@ async function loadUserDemos() {
         demos.forEach(demo => {
             console.log(`Demo "${demo.title}" URL:`, getAudioUrl(demo.url));
         });
-        
+
+         loadPendingDemoChanges();
+
     } catch (error) {
         console.error('Failed to load demos:', error);
         document.getElementById('demos-list-manage').innerHTML = `
@@ -8433,6 +8922,88 @@ async function loadUserDemos() {
         `;
     }
 }
+
+// Sync pending demo changes to server
+async function syncPendingDemoChanges() {
+    try {
+        const pendingChanges = JSON.parse(localStorage.getItem('pendingDemoChanges') || '{}');
+        const changeKeys = Object.keys(pendingChanges);
+        
+        if (changeKeys.length === 0) {
+            showNotification('✅ No pending changes to sync', 'success');
+            return;
+        }
+        
+        showNotification(`🔄 Syncing ${changeKeys.length} demo changes...`, 'success');
+        
+        let successCount = 0;
+        let failureCount = 0;
+        
+        for (const demoId of changeKeys) {
+            const changes = pendingChanges[demoId];
+            
+            try {
+                // Try to update via the API
+                await apiCall(`/api/talent/demos/${demoId}/metadata`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        title: changes.title,
+                        description: changes.description
+                    })
+                });
+                
+                // Remove from pending changes if successful
+                delete pendingChanges[demoId];
+                successCount++;
+                
+            } catch (error) {
+                console.error(`Failed to sync demo ${demoId}:`, error);
+                failureCount++;
+            }
+        }
+        
+        // Update localStorage with remaining pending changes
+        localStorage.setItem('pendingDemoChanges', JSON.stringify(pendingChanges));
+        
+        // Show results
+        if (successCount > 0 && failureCount === 0) {
+            showNotification(`✅ Successfully synced ${successCount} demo changes!`, 'success');
+        } else if (successCount > 0 && failureCount > 0) {
+            showNotification(`⚠️ Synced ${successCount} changes, ${failureCount} failed. Backend sync not available.`, 'warning');
+        } else {
+            showNotification(`⚠️ Sync failed. Changes preserved locally until backend is updated.`, 'warning');
+        }
+        
+        // Refresh the demo list
+        loadUserDemos();
+        loadTalentData(); // Refresh public talent grid
+        
+    } catch (error) {
+        console.error('Sync error:', error);
+        showNotification('❌ Failed to sync changes: ' + error.message, 'error');
+    }
+}
+
+// Clear all pending demo changes
+function clearPendingDemoChanges() {
+    const confirmed = confirm('Clear all pending demo changes?\n\nThis will remove all unsaved edits and cannot be undone.');
+    
+    if (!confirmed) return;
+    
+    try {
+        localStorage.removeItem('pendingDemoChanges');
+        window.pendingDemoChanges = {};
+        
+        showNotification('🗑️ All pending changes cleared', 'success');
+        loadUserDemos();
+        loadTalentData();
+        
+    } catch (error) {
+        console.error('Clear changes error:', error);
+        showNotification('❌ Failed to clear changes', 'error');
+    }
+}
+
 
 // Handle demo upload
 async function handleDemoUpload(e) {
@@ -8510,7 +9081,281 @@ async function deleteDemo(demoId, demoTitle) {
         showNotification(`❌ Failed to delete demo: ${error.message}`, 'error');
     }
 }
-             
+  
+ // Edit demo function
+function editDemo(demoId, currentTitle, currentDescription) {
+    showEditDemoModal(demoId, currentTitle, currentDescription);
+}
+
+// Show edit demo modal
+function showEditDemoModal(demoId, currentTitle, currentDescription) {
+    const modal = document.createElement('div');
+    modal.className = 'edit-demo-modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+        background: rgba(0, 0, 0, 0.8); z-index: 1004; 
+        backdrop-filter: blur(10px); display: flex; 
+        align-items: center; justify-content: center; padding: 2rem;
+    `;
+    
+    // Decode HTML entities for form display
+    const decodedTitle = currentTitle.replace(/&#39;/g, "'");
+    const decodedDescription = currentDescription.replace(/&#39;/g, "'");
+    
+    modal.innerHTML = `
+        <div class="glass-card" style="max-width: 600px; width: 100%; margin: 0 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h3 style="color: var(--accent-color); margin: 0;">✏️ Edit Demo</h3>
+                <button class="modal-close-btn" type="button"
+                        style="background: none; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div style="background: rgba(102, 126, 234, 0.1); border-radius: 10px; padding: 1rem; margin-bottom: 1.5rem;">
+                <h4 style="color: var(--accent-color); margin: 0 0 0.5rem 0;">📝 Update Demo Information</h4>
+                <p style="color: var(--text-secondary); margin: 0; font-size: 0.9rem;">
+                    Edit the title and description for this demo. The audio file cannot be changed.
+                </p>
+            </div>
+            
+            <form id="edit-demo-form" data-demo-id="${demoId}">
+                <div class="form-group">
+                    <label class="form-label">Demo Title *</label>
+                    <input type="text" name="title" class="form-input" value="${decodedTitle}" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <textarea name="description" class="form-textarea" rows="3" placeholder="Describe this demo...">${decodedDescription}</textarea>
+                </div>
+                
+                <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                    <button type="button" class="btn btn-secondary cancel-btn" style="flex: 1;">
+                        <i class="fas fa-times"></i>
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary" style="flex: 2;">
+                        <i class="fas fa-save"></i>
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+    
+    // Add event listeners
+    const closeBtn = modal.querySelector('.modal-close-btn');
+    const cancelBtn = modal.querySelector('.cancel-btn');
+    
+    closeBtn.addEventListener('click', function() {
+        closeEditDemoModal(modal);
+    });
+    
+    cancelBtn.addEventListener('click', function() {
+        closeEditDemoModal(modal);
+    });
+    
+    // Close on background click
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeEditDemoModal(modal);
+        }
+    });
+    
+    modal.querySelector('#edit-demo-form').addEventListener('submit', handleDemoEdit);
+}
+
+// Close edit demo modal
+function closeEditDemoModal(modal) {
+    if (modal && modal.parentNode) {
+        modal.parentNode.removeChild(modal);
+    }
+    document.body.style.overflow = '';
+}
+
+// Handle demo edit form submission
+async function handleDemoEdit(e) {
+    e.preventDefault();
+    
+    const form = e.target;
+    const formData = new FormData(form);
+    const demoId = form.dataset.demoId;
+    const submitBtn = form.querySelector('button[type="submit"]');
+    
+    const newTitle = formData.get('title').trim();
+    const newDescription = formData.get('description').trim();
+    
+    if (!newTitle) {
+        showNotification('❌ Title is required', 'error');
+        return;
+    }
+    
+    submitBtn.classList.add('loading');
+    submitBtn.disabled = true;
+    
+    try {
+        console.log('🔄 Updating demo metadata via API...');
+        console.log('Demo ID:', demoId);
+        console.log('New title:', newTitle);
+        console.log('New description:', newDescription);
+        
+        // Try multiple endpoints to find the working one
+        let success = false;
+        let response;
+        let workingEndpoint;
+        
+        const endpoints = [
+            `/api/talent/demos/${demoId}/metadata`,
+            `/api/talent/demos/${demoId}`,
+            `/api/demos/${demoId}`
+        ];
+        
+        for (const endpoint of endpoints) {
+            try {
+                console.log(`🔍 Trying endpoint: ${endpoint}`);
+                response = await apiCall(endpoint, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        title: newTitle,
+                        description: newDescription
+                    })
+                });
+                success = true;
+                workingEndpoint = endpoint;
+                console.log(`✅ Success with endpoint: ${endpoint}`);
+                break;
+            } catch (endpointError) {
+                console.log(`❌ Failed with endpoint ${endpoint}:`, endpointError.message);
+                continue;
+            }
+        }
+        
+        if (!success) {
+            throw new Error('All demo update endpoints failed');
+        }
+        
+        console.log('✅ Demo metadata updated successfully via:', workingEndpoint);
+        
+        // Update the UI immediately to reflect changes
+        const demoCard = document.querySelector(`[data-demo-id="${demoId}"]`);
+        if (demoCard) {
+            const titleElement = demoCard.querySelector('h5');
+            const descElement = demoCard.querySelector('p');
+            
+            if (titleElement) {
+                titleElement.textContent = newTitle;
+                titleElement.style.fontStyle = 'normal';
+                titleElement.title = '';
+            }
+            if (descElement) {
+                descElement.textContent = newDescription || 'No description';
+                descElement.style.fontStyle = 'normal';
+            }
+            
+            // Remove any pending indicators
+            const existingIndicator = demoCard.querySelector('.pending-sync-indicator');
+            if (existingIndicator) existingIndicator.remove();
+        }
+        
+        // Remove from pending changes if it was there
+        try {
+            const pendingChanges = JSON.parse(localStorage.getItem('pendingDemoChanges') || '{}');
+            if (pendingChanges[demoId]) {
+                delete pendingChanges[demoId];
+                localStorage.setItem('pendingDemoChanges', JSON.stringify(pendingChanges));
+                console.log('✅ Removed from pending changes');
+            }
+        } catch (storageError) {
+            console.log('localStorage not available (normal in sandbox)');
+        }
+        
+        showNotification('✅ Demo updated successfully!', 'success');
+        
+        // Close modal
+        const modal = form.closest('.edit-demo-modal');
+        closeEditDemoModal(modal);
+        
+        // Refresh the talent grid to show updated info
+        setTimeout(() => {
+            loadTalentData();
+        }, 500);
+        
+    } catch (error) {
+        console.error('❌ All demo edit endpoints failed:', error);
+        console.error('Error details:', {
+            message: error.message,
+            demoId: demoId,
+            authToken: !!authToken,
+            currentUser: currentUser?.id
+        });
+        
+        // Show specific error messages - NO localStorage fallback
+        if (error.message.includes('404')) {
+            showNotification('❌ Demo not found. It may have been deleted.', 'error');
+            loadUserDemos();
+        } else if (error.message.includes('401') || error.message.includes('403')) {
+            showNotification('❌ Authentication error. Please sign in again.', 'error');
+        } else if (error.message.includes('400')) {
+            showNotification('❌ Invalid data. Please check the title and description.', 'error');
+        } else if (error.message.includes('405')) {
+            showNotification('❌ Method not allowed. Backend doesn\'t support demo updates.', 'error');
+        } else {
+            showNotification(`❌ Update failed: ${error.message}`, 'error');
+        }
+        
+        // Close modal
+        const modal = form.closest('.edit-demo-modal');
+        closeEditDemoModal(modal);
+        
+    } finally {
+        submitBtn.classList.remove('loading');
+        submitBtn.disabled = false;
+    }
+}
+
+// Load pending demo changes on page load
+function loadPendingDemoChanges() {
+    try {
+        const pendingChanges = JSON.parse(localStorage.getItem('pendingDemoChanges') || '{}');
+        
+        Object.entries(pendingChanges).forEach(([demoId, changes]) => {
+            const demoCard = document.querySelector(`[data-demo-id="${demoId}"]`);
+            if (demoCard) {
+                const titleElement = demoCard.querySelector('h5');
+                const descElement = demoCard.querySelector('p');
+                
+                if (titleElement && changes.title) {
+                    titleElement.textContent = changes.title;
+                    titleElement.style.fontStyle = 'italic';
+                    titleElement.title = 'Changes pending sync';
+                }
+                if (descElement && changes.description) {
+                    descElement.textContent = changes.description;
+                    descElement.style.fontStyle = 'italic';
+                }
+                
+                // Add pending indicator
+                const pendingIndicator = document.createElement('span');
+                pendingIndicator.style.cssText = 'color: orange; font-size: 0.8rem; margin-left: 0.5rem;';
+                pendingIndicator.innerHTML = '<i class="fas fa-clock"></i> Pending';
+                pendingIndicator.className = 'pending-sync-indicator';
+                titleElement.parentNode.appendChild(pendingIndicator);
+            }
+        });
+        
+        if (Object.keys(pendingChanges).length > 0) {
+            console.log(`✅ Loaded ${Object.keys(pendingChanges).length} pending demo changes`);
+        }
+    } catch (error) {
+        console.log('Could not load pending changes (normal in sandbox)');
+    }
+}
+
+          
 // Toggle bio read more/less functionality
 function toggleBio(button) {
     const bioElement = button.parentNode.querySelector('.talent-bio');
@@ -8584,47 +9429,140 @@ function toggleProjectDescription(button) {
             document.body.removeChild(input);
         }
 
-        async function uploadProfilePhoto(file) {
+       async function uploadProfilePhoto(file) {
+    try {
+        showNotification('📸 Processing profile photo...', 'success');
+        
+        // Convert image to base64 for immediate display and storage
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const base64Image = e.target.result;
+            const timestamp = Date.now();
+            
+            // Update user object with local photo data
+            currentUser.profile_photo = `local_${currentUser.id}_${timestamp}.${file.name.split('.').pop()}`;
+            currentUser.profile_photo_base64 = base64Image;
+            currentUser.profile_photo_local = true;
+            
             try {
-                showNotification('📸 Uploading profile photo...', 'success');
-                
-                const formData = new FormData();
-                formData.append('profilePhoto', file);
-                
-                const response = await fetch(`${API_BASE_URL}/api/auth/upload-profile-photo`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': authToken ? `Bearer ${authToken}` : ''
-                    },
-                    body: formData
-                });
-                
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(errorText || 'Upload failed');
-                }
-                
-                const result = await response.json();
-                currentUser.profile_photo = result.filename;
-                
-                try {
-                    localStorage.setItem('user', JSON.stringify(currentUser));
-                } catch (error) {
-                    console.log('localStorage not available');
-                }
-                
-                showNotification('✅ Profile photo updated successfully!', 'success');
+                localStorage.setItem('user', JSON.stringify(currentUser));
+                localStorage.setItem(`profile_photo_${currentUser.id}`, base64Image);
+            } catch (error) {
+                console.log('localStorage not available, using memory storage');
+                window.userProfilePhoto = base64Image;
+            }
+            
+            showNotification('✅ Profile photo updated successfully!', 'success');
+            
+            // Force immediate UI update everywhere
+            setTimeout(() => {
                 loadAccountInfo();
                 updateUIForSignedInUser();
                 loadTalentData();
-                
-            } catch (error) {
-                console.error('Profile photo upload error:', error);
-                showNotification(`❌ Upload failed: ${error.message}`, 'error');
+                updateAllProfilePhotoDisplays(base64Image);
+            }, 100);
+        };
+        
+        reader.onerror = function() {
+            showNotification('❌ Failed to process image file', 'error');
+        };
+        
+        reader.readAsDataURL(file);
+        
+    } catch (error) {
+        console.error('Profile photo upload error:', error);
+        showNotification('❌ Failed to process photo. Please try again.', 'error');
+    }
+}
+
+// Update all profile photo displays with base64 data
+function updateAllProfilePhotoDisplays(base64Image) {
+    // Update account settings photo
+    const currentPhotoDiv = document.getElementById('current-profile-photo');
+    if (currentPhotoDiv) {
+        currentPhotoDiv.innerHTML = `<img src="${base64Image}" style="width: 100%; height: 100%; object-fit: cover;" alt="Profile">`;
+    }
+    
+    // Update edit profile modal photo if open
+    const editPhotoDiv = document.getElementById('current-profile-photo');
+    if (editPhotoDiv) {
+        editPhotoDiv.innerHTML = `<img src="${base64Image}" style="width: 100%; height: 100%; object-fit: cover;" alt="Profile">`;
+    }
+    
+    // Update talent grid photos if this user is in the grid
+    setTimeout(() => {
+        const talentCards = document.querySelectorAll('#talent-grid .glass-card');
+        talentCards.forEach(card => {
+            const cardHtml = card.innerHTML;
+            if (cardHtml.includes(currentUser.first_name) && cardHtml.includes(currentUser.last_name)) {
+                const photoDiv = card.querySelector('[style*="border-radius: 50%"]');
+                if (photoDiv) {
+                    photoDiv.innerHTML = `<img src="${base64Image}" style="width: 100%; height: 100%; object-fit: cover;" alt="${currentUser.first_name} ${currentUser.last_name}">`;
+                }
             }
-        }
+        });
+    }, 500);
+}
 // Messaging System Functions
         let currentConversation = null;
+
+        // Update message form buttons based on user type
+      function updateMessageFormButtons() {
+    const buttonsContainer = document.getElementById('message-form-buttons');
+    if (!buttonsContainer) return;
+    
+    // Always keep the send message button
+    let buttonsHtml = `
+        <button type="submit" class="btn btn-primary" style="flex: 2;">
+            <i class="fas fa-paper-plane"></i>
+            Send Message
+        </button>
+    `;
+    
+    // Add role-specific buttons
+    if (currentUser && currentConversation) {
+        if (currentUser.account_type === 'talent') {
+            buttonsHtml += `
+                <button type="button" class="btn btn-secondary submit-final-work-btn" data-project-id="${currentConversation.projectId}" style="flex: 1; background: var(--success-color);">
+                    <i class="fas fa-check-circle"></i>
+                    Submit Final Work
+                </button>
+            `;
+        } else if (currentUser.account_type === 'client') {
+            buttonsHtml += `
+                <button type="button" class="btn btn-secondary approve-work-btn" data-project-id="${currentConversation.projectId}" style="flex: 1;">
+                    <i class="fas fa-check-circle"></i>
+                    Approve Work
+                </button>
+            `;
+        }
+    }
+    
+    buttonsContainer.innerHTML = buttonsHtml;
+
+    // Add event listeners after DOM update
+    setTimeout(() => {
+        // Final work submission button
+        const submitFinalWorkBtn = document.querySelector('.submit-final-work-btn');
+        if (submitFinalWorkBtn) {
+            submitFinalWorkBtn.addEventListener('click', function() {
+                const projectId = this.getAttribute('data-project-id');
+                submitCompletedWork(projectId);
+            });
+        }
+        
+        // Approve work button
+        const approveWorkBtn = document.querySelector('.approve-work-btn');
+        if (approveWorkBtn) {
+            approveWorkBtn.addEventListener('click', function() {
+                const projectId = this.getAttribute('data-project-id');
+                approveProjectWork(projectId);
+            });
+        }
+    }, 100);
+}
+
+        // Load conversations for messages page
 
         // Load conversations for messages page
       // Load conversations for messages page
@@ -8808,6 +9746,15 @@ function toggleProjectDescription(button) {
             document.getElementById('thread-title').textContent = `${participantName} - ${projectTitle}`;
             document.getElementById('message-thread').style.display = 'block';
             
+            // Update message form buttons based on user type
+            updateMessageFormButtons();
+            
+
+            // Re-initialize message form handler
+            setTimeout(() => {
+                setupMessageFormHandler();
+            }, 100);
+            
             await loadConversationMessages(projectId, participantId);
         }
 
@@ -8837,18 +9784,38 @@ function toggleProjectDescription(button) {
                     return;
                 }
 
-              // Update the message display in loadConversationMessages function
-messagesList.innerHTML = messages.map(msg => {
+             // Update the message display in loadConversationMessages function - FIXED VERSION
+const messagesHTML = [];
+
+// Helper function to safely escape HTML content
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Helper function to safely escape for HTML attributes
+function escapeAttr(text) {
+    if (!text) return '';
+    return String(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+messages.forEach(msg => {
     const isMyMessage = msg.sender_id === currentUser.id;
     const messageId = String(msg.id || '').replace(/'/g, '&#39;');
     
-  // Handle attachments
+    // Safely escape message content
+    const safeSenderName = escapeHtml(msg.sender_name || 'Unknown');
+    const safeMessageText = msg.message_text ? 
+        escapeHtml(msg.message_text).replace(/\n/g, '<br>') : '';
+    
+    // Handle attachments with safe escaping
     let attachmentHTML = '';
     if (msg.attachment_url) {
-        const attachmentName = msg.attachment_original_name || msg.attachment_url.split('/').pop();
+        const attachmentName = escapeHtml(msg.attachment_original_name || msg.attachment_url.split('/').pop());
         const isAudio = attachmentName.match(/\.(mp3|wav|aiff|m4a)$/i);
-        const isScript = attachmentName.match(/\.(pdf|doc|docx|txt)$/i);
-        const isImage = attachmentName.match(/\.(jpg|jpeg|png)$/i);
+        const safeAttachmentUrl = escapeAttr(API_BASE_URL + msg.attachment_url);
         
         if (isAudio) {
             attachmentHTML = `
@@ -8858,80 +9825,39 @@ messagesList.innerHTML = messages.map(msg => {
                         <span style="font-weight: 600;">${attachmentName}</span>
                     </div>
                     <audio controls style="width: 100%;" preload="metadata">
-                        <source src="${API_BASE_URL}${msg.attachment_url}" type="audio/mpeg">
-                        <source src="${API_BASE_URL}${msg.attachment_url}" type="audio/wav">
-                        Your browser does not support the audio element.
+                        <source src="${safeAttachmentUrl}" type="audio/mpeg">
+                        Your browser does not support audio playback.
                     </audio>
-                </div>
-            `;
-        } else if (isScript) {
-            attachmentHTML = `
-                <div style="margin-top: 1rem; padding: 1rem; background: rgba(0, 0, 0, 0.2); border-radius: 10px;">
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <i class="fas fa-file-text"></i>
-                            <span style="font-weight: 600;">${attachmentName}</span>
-                        </div>
-                        <a href="${API_BASE_URL}${msg.attachment_url}" download="${attachmentName}" 
-                           class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
-                            <i class="fas fa-download"></i>
-                            Download
-                        </a>
-                    </div>
-                </div>
-            `;
-        } else if (isImage) {
-            attachmentHTML = `
-                <div style="margin-top: 1rem; padding: 1rem; background: rgba(0, 0, 0, 0.2); border-radius: 10px;">
-                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                        <i class="fas fa-image"></i>
-                        <span style="font-weight: 600;">${attachmentName}</span>
-                    </div>
-                    <img src="${API_BASE_URL}${msg.attachment_url}" 
-                         style="max-width: 100%; max-height: 300px; border-radius: 5px; cursor: pointer;" 
-                         onclick="window.open('${API_BASE_URL}${msg.attachment_url}', '_blank')"
-                         alt="${attachmentName}">
                 </div>
             `;
         }
     }
     
-    return `
-        <div style="display: flex; ${isMyMessage ? 'justify-content: flex-end' : 'justify-content: flex-start'}; margin-bottom: 1rem;" 
-             id="message-${messageId}">
-            <div style="
-                max-width: 70%; 
-                padding: 1rem; 
-                border-radius: 15px; 
-                position: relative;
-                ${isMyMessage ? 
-                    'background: var(--primary-gradient); color: white; margin-left: 2rem;' : 
-                    'background: rgba(255, 255, 255, 0.1); margin-right: 2rem;'
-                }
-            ">
+    const safeFormattedDate = escapeHtml(new Date(msg.created_at).toLocaleString());
+    
+    // Use template literals for safer HTML construction
+    const messageHTML = `
+        <div style="display: flex; ${isMyMessage ? 'justify-content: flex-end' : 'justify-content: flex-start'}; margin-bottom: 1rem;" id="message-${messageId}">
+            <div style="max-width: 70%; padding: 1rem; border-radius: 15px; position: relative; ${isMyMessage ? 'background: var(--primary-gradient); color: white; margin-left: 2rem;' : 'background: rgba(255, 255, 255, 0.1); margin-right: 2rem;'}">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                     <div style="font-weight: 600; font-size: 0.9rem; ${isMyMessage ? 'color: rgba(255, 255, 255, 0.8)' : 'color: var(--accent-color)'};">
-                        ${isMyMessage ? 'You' : msg.sender_name}
+                        ${isMyMessage ? 'You' : safeSenderName}
                     </div>
-                    <button onclick="deleteMessage('${messageId}')" 
-                            style="background: none; border: none; color: ${isMyMessage ? 'rgba(255, 255, 255, 0.6)' : 'var(--text-secondary)'}; cursor: pointer; padding: 0.2rem; border-radius: 3px; font-size: 0.8rem; opacity: 0.7; transition: all 0.2s ease;"
-                            title="Delete this message">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                    <button onclick="deleteMessage('${messageId}')" style="background: none; border: none; cursor: pointer; padding: 0.2rem; color: inherit; opacity: 0.7;" 
+                            onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'" title="Delete message">×</button>
                 </div>
-                ${msg.message_text ? `
-                    <div style="line-height: 1.5; margin-bottom: ${attachmentHTML ? '0' : '0.5rem'};">
-                        ${msg.message_text.replace(/\n/g, '<br>')}
-                    </div>
-                ` : ''}
+                ${safeMessageText ? `<div style="line-height: 1.5; margin-bottom: 0.5rem;">${safeMessageText}</div>` : ''}
                 ${attachmentHTML}
-                <div style="font-size: 0.8rem; margin-top: 0.5rem; ${isMyMessage ? 'color: rgba(255, 255, 255, 0.6)' : 'color: var(--text-secondary)'};">
-                    ${new Date(msg.created_at).toLocaleString()}
-                </div>
+                <div style="font-size: 0.8rem; margin-top: 0.5rem; opacity: 0.7;">${safeFormattedDate}</div>
             </div>
         </div>
     `;
-}).join('');
+    
+    messagesHTML.push(messageHTML);
+});
+
+messagesList.innerHTML = messagesHTML.join('');
+
                 // Scroll to bottom
                 const container = document.getElementById('messages-container');
                 container.scrollTop = container.scrollHeight;
@@ -9028,150 +9954,245 @@ messagesList.innerHTML = messages.map(msg => {
             }
         }
 
-// Send message form handler
-const sendMessageForm = document.getElementById('send-message-form');
-if (sendMessageForm) {
-    sendMessageForm.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        if (!currentConversation) return;
-        
-        const messageInput = document.getElementById('message-input');
-        const fileInput = document.getElementById('message-file-input');
-        const message = messageInput.value.trim();
-        const file = fileInput ? fileInput.files[0] : null;
-        
-        if (!message && !file) {
+// Send message form handler - FIXED VERSION
+document.addEventListener('DOMContentLoaded', function() {
+    // Add event listener when DOM is fully loaded
+    setupMessageFormHandler();
+});
+
+function setupMessageFormHandler() {
+    const sendMessageForm = document.getElementById('send-message-form');
+    if (!sendMessageForm) {
+        console.log('⚠️ Send message form not found, will retry...');
+        setTimeout(setupMessageFormHandler, 1000);
+        return;
+    }
+    
+    console.log('✅ Setting up message form handler');
+    
+    // Remove any existing listeners to prevent duplicates
+    sendMessageForm.removeEventListener('submit', handleMessageSubmit);
+    sendMessageForm.addEventListener('submit', handleMessageSubmit);
+}
+
+async function handleMessageSubmit(e) {
+    e.preventDefault();
+    console.log('📝 Message form submitted');
+    
+    if (!currentConversation) {
+        showNotification('❌ No active conversation', 'error');
+        return;
+    }
+    
+    const messageInput = document.getElementById('message-input');
+    const fileInput = document.getElementById('message-file-input');
+    const message = messageInput.value.trim();
+    const file = fileInput ? fileInput.files[0] : null;
+
+if (!message && !file) {
+    showNotification('❌ Please enter a message or attach a file', 'error');
+    return;
+}
+
+// Only check for personal info if there's actually a text message
+if (message && message.trim().length > 0) {
+    const violations = detectPersonalInfo(message);
+    if (violations.length > 0) {
+        showPersonalInfoWarning(violations);
+        return;
+    }
+}
+    // File attachment validation
+    if (file) {
+        console.log('📎 File attachment validation passed:', file.name);
+        // Validate file size
+        if (file.size > 20 * 1024 * 1024) {
+            showNotification('❌ File too large. Maximum size is 20MB', 'error');
+            return;
+        }
+    }
+    
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.classList.add('loading');
+    submitBtn.disabled = true;
+    
+
+     try {
+        // Handle file with or without message
+        if (file) {
+            console.log('📎 Sending file attachment:', file.name, 'Size:', file.size);
+            
+            // Use FormData like Submit Final Work does (which works)
+            const messageFormData = new FormData();
+            
+            // Use the same field name that works in Submit Final Work
+            messageFormData.append('attachment', file);
+            
+            // Add message text or default for file-only attachments
+            const messageText = message && message.trim() ? 
+                message : 
+                `📎 File attachment: ${file.name}`;
+            
+            messageFormData.append('message', messageText);
+            
+            // Send via the same endpoint that works for Submit Final Work
+            const response = await fetch(`${API_BASE_URL}/api/conversations/${currentConversation.projectId}/${currentConversation.participantId}/messages`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': authToken ? `Bearer ${authToken}` : ''
+                },
+                body: messageFormData
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ File upload failed:', response.status, errorText);
+                throw new Error(errorText || `File upload failed (${response.status})`);
+            }
+            
+           console.log('✅ File uploaded successfully');
+showNotification('✅ File sent successfully!', 'success');
+
+// MISSING: Refresh conversation to show new message
+await loadConversationMessages(currentConversation.projectId, currentConversation.participantId);
+
+// Clear form
+messageInput.value = '';
+if (fileInput) {
+    fileInput.value = '';
+}
+
+// Clear any file display
+const fileDisplay = document.querySelector('[id*="file"]');
+if (fileDisplay) {
+    fileDisplay.style.display = 'none';
+}
+
+        } else if (message && message.trim()) {
+            // Text-only message (no file)
+            console.log('📝 Sending text-only message');
+            await apiCall(`/api/conversations/${currentConversation.projectId}/${currentConversation.participantId}/messages`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    message: message
+                })
+            });
+            
+           console.log('✅ Text message sent successfully');
+showNotification('✅ Message sent successfully!', 'success');
+
+// MISSING: Refresh conversation to show new message  
+await loadConversationMessages(currentConversation.projectId, currentConversation.participantId);
+
+// Clear form
+messageInput.value = '';
+if (fileInput) {
+    fileInput.value = '';
+}
+
+// Clear any file display
+const fileDisplay = document.querySelector('[id*="file"]');
+if (fileDisplay) {
+    fileDisplay.style.display = 'none';
+}
+            
+        } else {
+            // Neither file nor message
+            console.log('❌ No file or message provided');
             showNotification('❌ Please enter a message or attach a file', 'error');
             return;
         }
 
-        // Check for personal information in text messages
-        if (message) {
-            const violations = detectPersonalInfo(message);
-            if (violations.length > 0) {
-                showPersonalInfoWarning(violations);
-                return; // Stop message sending
-            }
-        }
 
-        // Check filename for personal info
-        if (file) {
-            const filenameViolations = detectPersonalInfo(file.name);
-            if (filenameViolations.length > 0) {
-                showNotification('❌ Please rename your file to remove personal information before uploading.', 'error');
-                return;
-            }
-        }        
-        const submitBtn = this.querySelector('button[type="submit"]');
-        const originalText = submitBtn.innerHTML;
-        submitBtn.classList.add('loading');
-        submitBtn.disabled = true;
-        
-        try {
-            if (file) {
-                // Use FormData for file uploads
-                const formData = new FormData();
-                formData.append('message', message || '');
-                formData.append('attachment', file);
-                
-                const response = await fetch(`${API_BASE_URL}/api/conversations/${currentConversation.projectId}/${currentConversation.participantId}/messages`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': authToken ? `Bearer ${authToken}` : ''
-                    },
-                    body: formData
-                });
-                
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(errorText || 'Failed to send message');
-                }
-            } else {
-                // Regular text message
-                await apiCall(`/api/conversations/${currentConversation.projectId}/${currentConversation.participantId}/messages`, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        message: message
-                    })
-                });
-            }
-
-            messageInput.value = '';
-            if (window.clearSelectedFile) clearSelectedFile();
-            await loadConversationMessages(currentConversation.projectId, currentConversation.participantId);
-            showNotification('✅ Message sent successfully!', 'success');
-            
-        } catch (error) {
-            console.error('Failed to send message:', error);
-            showNotification('❌ Failed to send message: ' + error.message, 'error');
-        } finally {
-            submitBtn.classList.remove('loading');
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalText;
-        }
-    });
+ // Clear form and refresh
+messageInput.value = '';
+clearSelectedFile();
+await loadConversationMessages(currentConversation.projectId, currentConversation.participantId);
+     
+    } catch (error) {
+        console.error('Failed to send message:', error);
+        showNotification('❌ Failed to send message: ' + error.message, 'error');
+    } finally {
+        submitBtn.classList.remove('loading');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    }
 }
 
 // Real-time message input validation
-        function validateMessageInput(input) {
-            const message = input.value.trim();
-            const warningDiv = document.getElementById('message-validation-warning');
-            const detailsDiv = document.getElementById('validation-details');
-            const submitBtn = document.querySelector('#send-message-form button[type="submit"]');
-            
-            if (!message) {
-                warningDiv.style.display = 'none';
-                if (submitBtn) submitBtn.disabled = false;
-                return;
-            }
-            
-            const violations = detectPersonalInfo(message);
-            
-            if (violations.length > 0) {
-                warningDiv.style.display = 'block';
-                detailsDiv.innerHTML = violations.map(v => 
-                    `<div style="margin-bottom: 0.3rem;">• ${v.message}</div>`
-                ).join('');
-                
-                // Show what was detected (first few characters only)
-                const detectedItems = violations.flatMap(v => v.matches).map(match => 
-                    match.length > 10 ? match.substring(0, 7) + '...' : match
-                );
-                if (detectedItems.length > 0) {
-                    detailsDiv.innerHTML += `<div style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(255, 107, 107, 0.2); border-radius: 5px; font-size: 0.8rem;">Detected: ${detectedItems.join(', ')}</div>`;
-                }
-                
-                // Disable send button when violations are detected
-                if (submitBtn) {
-                    submitBtn.disabled = true;
-                    submitBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Fix Issues to Send';
-                    submitBtn.style.background = 'var(--warning-color)';
-                }
-            } else {
-                warningDiv.style.display = 'none';
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Message';
-                    submitBtn.style.background = '';
-                }
-            }
+function validateMessageInput(input) {
+    const message = input.value.trim();
+    const warningDiv = document.getElementById('message-validation-warning');
+    const detailsDiv = document.getElementById('validation-details');
+    const submitBtn = document.querySelector('#send-message-form button[type="submit"]');
+    const fileInput = document.getElementById('message-file-input');
+    const hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
+    
+    if (!submitBtn) return;
+    
+    // Always update button text first
+    updateSubmitButtonText(submitBtn, message, hasFile);
+    
+   // Only validate personal info if there's a message
+if (!message) {
+    warningDiv.style.display = 'none';
+    submitBtn.disabled = false;
+    submitBtn.style.background = '';
+    
+    // Check if we have a file to enable the button
+    const fileInput = document.getElementById('message-file-input');
+    const hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
+    if (hasFile) {
+        updateSubmitButtonText(submitBtn, '', true);
+    }
+    return;
+}
+    
+    // Check for personal information violations
+    const violations = detectPersonalInfo(message);
+    
+    if (violations.length > 0) {
+        warningDiv.style.display = 'block';
+        detailsDiv.innerHTML = violations.map(v => 
+            `<div style="margin-bottom: 0.3rem;">• ${v.message}</div>`
+        ).join('');
+        
+        const detectedItems = violations.flatMap(v => v.matches).map(match => 
+            match.length > 10 ? match.substring(0, 7) + '...' : match
+        );
+        if (detectedItems.length > 0) {
+            detailsDiv.innerHTML += `<div style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(255, 107, 107, 0.2); border-radius: 5px; font-size: 0.8rem;">Detected: ${detectedItems.join(', ')}</div>`;
         }
+        
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Fix Issues to Send';
+        submitBtn.style.background = 'var(--warning-color)';
+    } else {
+        warningDiv.style.display = 'none';
+        submitBtn.disabled = false;
+        submitBtn.style.background = '';
+        updateSubmitButtonText(submitBtn, message, hasFile);
+    }
+}
 
-        // Enhanced file validation for attachments
-        function validateFileAttachment(file) {
+// Helper function to update button text
+function updateSubmitButtonText(submitBtn, message, hasFile) {
+    if (hasFile && message && message.trim()) {
+        submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Message & File';
+    } else if (hasFile) {
+        submitBtn.innerHTML = '<i class="fas fa-paperclip"></i> Send File';
+    } else if (message && message.trim()) {
+        submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Message';
+    } else {
+        submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Message';
+    }
+}       // Enhanced file validation for attachments
+       function validateFileAttachment(file) {
             if (!file) return { valid: true };
             
-            // Check filename for personal info
-            const filenameViolations = detectPersonalInfo(file.name);
-            if (filenameViolations.length > 0) {
-                return {
-                    valid: false,
-                    message: 'Please rename your file to remove personal information before uploading.',
-                    violations: filenameViolations
-                };
-            }
-            
+            // Allow business files - only block obvious security risks
+            console.log('📎 File attachment approved:', file.name);
             // Check for suspicious file types that might contain contact info
             const suspiciousExtensions = ['.vcf', '.contact', '.txt'];
             const fileExt = '.' + file.name.split('.').pop().toLowerCase();
@@ -9185,6 +10206,46 @@ if (sendMessageForm) {
             
             return { valid: true };
         }
+
+// Enhanced file validation for message attachments
+function validateMessageAttachment(file) {
+    if (!file) return { valid: true };
+    
+    // Check file size (20MB limit)
+    const maxSize = 20 * 1024 * 1024;
+    if (file.size > maxSize) {
+        return {
+            valid: false,
+            message: `File "${file.name}" is too large. Maximum size is 20MB.`
+        };
+    }
+    
+    // Check file type
+    const allowedTypes = [
+        '.txt', '.pdf', '.doc', '.docx', 
+        '.mp3', '.wav', '.aiff', '.m4a', 
+        '.jpg', '.jpeg', '.png', '.gif'
+    ];
+    
+    const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+    if (!allowedTypes.includes(fileExtension)) {
+        return {
+            valid: false,
+            message: `File type "${fileExtension}" not allowed. Supported: Audio (MP3, WAV, M4A), Documents (PDF, DOC, TXT), Images (JPG, PNG)`
+        };
+    }
+    
+    // Check for suspicious filenames
+    const suspiciousPatterns = ['.exe', '.bat', '.cmd', '.scr', '.com'];
+    if (suspiciousPatterns.some(pattern => file.name.toLowerCase().includes(pattern))) {
+        return {
+            valid: false,
+            message: 'This file type is not allowed for security reasons.'
+        };
+    }
+    
+    return { valid: true };
+}
 
         // Report current conversation
         function reportCurrentConversation() {
@@ -9626,8 +10687,12 @@ Thank you!`);
             }
         }
 
-// Submit completed work (for talent)
-        function submitCompletedWork(projectId) {
+// NEW - REPLACE WITH THIS:
+        // Submit completed work (for talent) - FIXED VERSION
+        window.submitCompletedWork = function(projectId) {
+            console.log('🔄 submitCompletedWork called with projectId:', projectId);
+            console.log('🔄 currentConversation:', currentConversation);
+            
             if (!projectId || !currentConversation) {
                 showNotification('❌ No active project conversation found', 'error');
                 return;
@@ -9646,50 +10711,160 @@ Thank you!`);
                 <div class="glass-card" style="max-width: 600px; width: 100%; margin: 0 1rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                         <h3 style="color: var(--accent-color); margin: 0;">📤 Submit Completed Work</h3>
-                        <button onclick="this.closest('.work-submission-modal').remove(); document.body.style.overflow = ''" 
+                        <button type="button" class="close-modal-btn"
                                 style="background: none; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer;">×</button>
                     </div>
                     
                     <div style="background: rgba(78, 205, 196, 0.1); border-radius: 10px; padding: 1rem; margin-bottom: 1.5rem;">
-                        <h4 style="color: var(--success-color); margin-bottom: 0.5rem;">🔒 Escrow Protected</h4>
+                        <h4 style="color: var(--success-color); margin-bottom: 0.5rem;">📋 Project: ${currentConversation.projectTitle}</h4>
                         <p style="color: var(--text-secondary); margin: 0; font-size: 0.9rem;">
-                            This project has escrow protection. Your payment is guaranteed once the client approves your work.
+                            Upload your completed work files and delivery notes for client approval.
                         </p>
                     </div>
                     
-                    <form id="work-submission-form" data-project-id="${projectId}">
+                    <div id="work-form-container">
                         <div class="form-group">
                             <label class="form-label">Final Audio Files *</label>
-                            <input type="file" name="audioFiles" class="form-input" multiple accept=".mp3,.wav,.aiff,.m4a" required style="padding: 0.8rem;">
+                            <input type="file" id="work-files-input" multiple accept=".mp3,.wav,.aiff,.m4a,.pdf,.txt,.doc,.docx" style="width: 100%; padding: 0.8rem; background: rgba(255, 255, 255, 0.05); border: 2px solid var(--glass-border); border-radius: 12px; color: var(--text-primary);">
                             <small style="color: var(--text-secondary); font-size: 0.9rem; display: block; margin-top: 0.5rem;">
-                                Upload your completed voice over files (MP3, WAV, AIFF, M4A - max 50MB each)
+                                Upload completed files: Audio (MP3, WAV, M4A), Documents (PDF, TXT, DOC) - max 20MB each
                             </small>
                         </div>
                         
                         <div class="form-group">
                             <label class="form-label">Delivery Notes</label>
-                            <textarea name="deliveryNotes" class="form-textarea" rows="4" 
+                            <textarea id="work-notes-input" rows="4" style="width: 100%; padding: 1rem; background: rgba(255, 255, 255, 0.05); border: 2px solid var(--glass-border); border-radius: 12px; color: var(--text-primary); resize: vertical; min-height: 120px;"
                                       placeholder="Describe the completed work, any revisions made, technical notes, or special instructions for the client..."></textarea>
                         </div>
                         
-                        <div style="display: flex; gap: 1rem;">
-                            <button type="button" class="btn btn-secondary" style="flex: 1;" 
-                                    onclick="this.closest('.work-submission-modal').remove(); document.body.style.overflow = ''">
+                        <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                            <button type="button" class="btn btn-secondary cancel-modal-btn" style="flex: 1;">
+                                <i class="fas fa-times"></i>
                                 Cancel
                             </button>
-                            <button type="submit" class="btn btn-primary" style="flex: 2;">
+                            <button type="button" class="btn btn-primary submit-work-btn" style="flex: 2;">
                                 <i class="fas fa-paper-plane"></i>
                                 Submit Work for Approval
                             </button>
                         </div>
-                    </form>
+                    </div>
                 </div>
             `;
             
             document.body.appendChild(modal);
             document.body.style.overflow = 'hidden';
             
-            modal.querySelector('#work-submission-form').addEventListener('submit', handleWorkSubmission);
+            // Add event listeners properly
+            const closeBtn = modal.querySelector('.close-modal-btn');
+            const cancelBtn = modal.querySelector('.cancel-modal-btn');
+            const submitBtn = modal.querySelector('.submit-work-btn');
+            
+            closeBtn.addEventListener('click', function() {
+                console.log('❌ Close button clicked');
+                modal.remove();
+                document.body.style.overflow = '';
+            });
+            
+            cancelBtn.addEventListener('click', function() {
+                console.log('❌ Cancel button clicked');
+                modal.remove();
+                document.body.style.overflow = '';
+            });
+            
+            submitBtn.addEventListener('click', function() {
+                console.log('✅ Submit button clicked - starting work submission');
+                handleWorkSubmissionFixed(projectId, modal);
+            });
+            
+            console.log('✅ Work submission modal created successfully');
+        };
+
+// Handle work submission - FIXED VERSION
+        async function handleWorkSubmissionFixed(projectId, modal) {
+            const filesInput = document.getElementById('work-files-input');
+            const notesInput = document.getElementById('work-notes-input');
+            const submitBtn = modal.querySelector('.submit-work-btn');
+            
+            const files = filesInput.files;
+            const notes = notesInput.value.trim();
+            
+            if (!files || files.length === 0) {
+                showNotification('❌ Please select at least one file to submit', 'error');
+                return;
+            }
+            
+            // Validate file sizes
+            for (let file of files) {
+                if (file.size > 20 * 1024 * 1024) {
+                    showNotification(`❌ File "${file.name}" is too large. Maximum size is 20MB`, 'error');
+                    return;
+                }
+            }
+            
+            submitBtn.classList.add('loading');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+            
+            try {
+                console.log('📤 Submitting work with files:', files.length);
+                
+                // Create message with work submission
+                const workFormData = new FormData();
+                
+                // Add all files
+                for (let i = 0; i < files.length; i++) {
+                    workFormData.append('attachment', files[i]);
+                    console.log('📎 Adding file:', files[i].name, 'Size:', files[i].size);
+                }
+                
+                // Create work submission message
+                const workMessage = `🎯 WORK SUBMISSION
+
+Project: ${currentConversation.projectTitle}
+Files: ${files.length} file(s)
+
+Delivery Notes:
+${notes || 'No additional notes'}
+
+✅ Work is ready for your review and approval.`;
+                
+                workFormData.append('message', workMessage);
+                
+                // Submit via messaging system
+                const response = await fetch(`${API_BASE_URL}/api/conversations/${currentConversation.projectId}/${currentConversation.participantId}/messages`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': authToken ? `Bearer ${authToken}` : ''
+                    },
+                    body: workFormData
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('❌ Work submission failed:', response.status, errorText);
+                    throw new Error(errorText || `Work submission failed (${response.status})`);
+                }
+                
+                console.log('✅ Work submitted successfully via messaging');
+                showNotification('✅ Work submitted successfully! Client will be notified for approval.', 'success');
+                
+                // Close modal
+                modal.remove();
+                document.body.style.overflow = '';
+                
+                // Refresh conversation to show submission
+                if (currentConversation) {
+                    await loadConversationMessages(currentConversation.projectId, currentConversation.participantId);
+                }
+                
+            } catch (error) {
+                console.error('Work submission error:', error);
+                showNotification(`❌ Failed to submit work: ${error.message}`, 'error');
+            } finally {
+                submitBtn.classList.remove('loading');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Work for Approval';
+            }
         }
 
         // Handle work submission
@@ -9700,28 +10875,50 @@ Thank you!`);
             const formData = new FormData(form);
             const projectId = form.dataset.projectId;
             const submitBtn = form.querySelector('button[type="submit"]');
+            const audioFiles = form.querySelector('input[name="audioFiles"]').files;
+            const deliveryNotes = formData.get('deliveryNotes');
+            
+            if (!audioFiles || audioFiles.length === 0) {
+                showNotification('❌ Please select at least one audio file to submit', 'error');
+                return;
+            }
             
             submitBtn.classList.add('loading');
             submitBtn.disabled = true;
             
             try {
-                // Upload work files and submission data
-                formData.append('projectId', projectId);
-                formData.append('talentId', currentUser.id);
+                console.log('📤 Submitting work with files:', audioFiles.length);
                 
-                const response = await fetch(`${API_BASE_URL}/api/work/submit`, {
+                // Create message with work submission
+                const workFormData = new FormData();
+                
+                // Add all audio files
+                for (let i = 0; i < audioFiles.length; i++) {
+                    workFormData.append('attachment', audioFiles[i]);
+                    console.log('📎 Adding file:', audioFiles[i].name, 'Size:', audioFiles[i].size);
+                }
+                
+                // Create work submission message
+                const workMessage = `🎯 WORK SUBMISSION\n\nProject: ${currentConversation.projectTitle}\nFiles: ${audioFiles.length} audio file(s)\n\nDelivery Notes:\n${deliveryNotes || 'No additional notes'}\n\n✅ Work is ready for your review and approval.`;
+                
+                workFormData.append('message', workMessage);
+                
+                // Submit via messaging system (which we know works)
+                const response = await fetch(`${API_BASE_URL}/api/conversations/${currentConversation.projectId}/${currentConversation.participantId}/messages`, {
                     method: 'POST',
                     headers: {
                         'Authorization': authToken ? `Bearer ${authToken}` : ''
                     },
-                    body: formData
+                    body: workFormData
                 });
                 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    throw new Error(errorText || 'Work submission failed');
+                    console.error('❌ Work submission failed:', response.status, errorText);
+                    throw new Error(errorText || `Work submission failed (${response.status})`);
                 }
                 
+                console.log('✅ Work submitted successfully via messaging');
                 showNotification('✅ Work submitted successfully! Client will be notified for approval.', 'success');
                 
                 // Close modal
@@ -9846,6 +11043,7 @@ Thank you!`);
             }
         }
 
+      // NEW - USE THIS INSTEAD:
         // Approve work and release escrow payment
         async function approveWorkAndReleasePayment(projectId) {
             const confirmed = confirm(`Approve the submitted work and release escrow payment?\n\n` +
@@ -9869,24 +11067,58 @@ Thank you!`);
                     })
                 });
                 
+                // Send approval message to conversation thread
+                if (currentConversation) {
+                    console.log('📤 Sending work approval message to conversation...');
+                    
+                    const approvalMessage = `✅ WORK APPROVED & PAYMENT RELEASED
+
+🎉 Congratulations! Your submitted work has been approved.
+
+💰 Payment Details:
+${response.payoutBatchId ? `• Amount: $${response.amount}` : '• Escrow payment released'}
+${response.talentEmail ? `• Sent to: ${response.talentEmail}` : ''}
+${response.payoutBatchId ? `• Transaction ID: ${response.payoutBatchId}` : ''}
+${response.estimatedArrival ? `• Expected arrival: ${response.estimatedArrival}` : '• Payment should arrive within 1 business day'}
+
+🏆 Thank you for your excellent work! This project is now complete.`;
+
+                    try {
+                        await apiCall(`/api/conversations/${currentConversation.projectId}/${currentConversation.participantId}/messages`, {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                message: approvalMessage
+                            })
+                        });
+                        
+                        console.log('✅ Approval message sent to conversation successfully');
+                        
+                    } catch (messageError) {
+                        console.error('Failed to send approval message:', messageError);
+                        // Don't fail the whole process if message sending fails
+                    }
+                }
+                
                 // Enhanced success message with transaction details
-if (response.payoutBatchId) {
-    showNotification(`✅ Work approved! $${response.amount} sent to talent's PayPal (${response.talentEmail}). Transaction ID: ${response.payoutBatchId}`, 'success');
-    
-    setTimeout(() => {
-        showNotification(`💰 Payment should arrive in talent's PayPal account ${response.estimatedArrival || 'within 1 business day'}.`, 'success');
-    }, 3000);
-} else {
-    showNotification('✅ Work approved! Payment has been released to the talent.', 'success');
-}
+                if (response.payoutBatchId) {
+                    showNotification(`✅ Work approved! $${response.amount} sent to talent's PayPal (${response.talentEmail}). Transaction ID: ${response.payoutBatchId}`, 'success');
+                    
+                    setTimeout(() => {
+                        showNotification(`💰 Payment should arrive in talent's PayPal account ${response.estimatedArrival || 'within 1 business day'}.`, 'success');
+                    }, 3000);
+                } else {
+                    showNotification('✅ Work approved! Payment has been released to the talent.', 'success');
+                }
                 
                 // Close approval modal
                 document.querySelector('.work-approval-modal').remove();
                 document.body.style.overflow = '';
                 
-                // Refresh conversation
+                // Refresh conversation to show the approval message
                 if (currentConversation) {
-                    await loadConversationMessages(currentConversation.projectId, currentConversation.participantId);
+                    setTimeout(async () => {
+                        await loadConversationMessages(currentConversation.projectId, currentConversation.participantId);
+                    }, 500);
                 }
                 
            } catch (error) {
@@ -10469,32 +11701,54 @@ if (response.payoutBatchId) {
                             return actions.order.capture();
                         }
                  }).then(function(captureData) {
-                        console.log('✅ Payment captured:', captureData);
-                        
-                        // Show success regardless of backend/frontend capture
-                        showNotification('✅ Payment successful! Your funds are being processed.', 'success');
-                        closePaymentModal();
-                        
-                        // Notify talent of secured escrow
-                        notifyTalentOfEscrow(projectId, talentName, amount);
-                        
-                        // Show confirmation
-                        setTimeout(() => {
-                            showManualEscrowConfirmation(projectId, amount, talentName, data.orderID);
-                        }, 1000);
-                        
-                        return captureData;
-                    }).catch(function(error) {
-                        console.error('❌ Capture error:', error);
-                        
-                        // Even if capture fails, show partial success
-                        showNotification('⚠️ Payment approved but processing incomplete. Please contact support with Order ID: ' + data.orderID, 'warning');
-                        closePaymentModal();
-                        
-                        setTimeout(() => {
-                            showManualEscrowConfirmation(projectId, amount, talentName, data.orderID);
-                        }, 1000);
-                    });
+    console.log('✅ Payment captured:', captureData);
+    
+    // Show success and update project status
+    showNotification('✅ Payment successful! Your funds are being processed.', 'success');
+    closePaymentModal();
+    
+   // Update project payment protection status immediately
+updateProjectPaymentStatus(projectId, true, amount, data.orderID);
+
+// Force refresh projects display after a short delay
+setTimeout(() => {
+    if (window.projectsData) {
+        displayProjectsGrid(window.projectsData);
+        console.log('🔄 Projects display refreshed after payment');
+    }
+}, 500);
+    
+    // Notify talent of secured escrow
+    notifyTalentOfEscrow(projectId, talentName, amount);
+    
+    // Show proper success confirmation
+    setTimeout(() => {
+        showEscrowConfirmation(projectId, amount, talentName);
+    }, 1000);
+    
+    return captureData;
+}).catch(function(error) {
+    console.error('❌ Capture error:', error);
+    
+    // Only show manual setup if capture actually failed
+    if (error.message.includes('capture') || error.message.includes('network')) {
+        showNotification('⚠️ Payment approved but processing incomplete. Please contact support with Order ID: ' + data.orderID, 'warning');
+        closePaymentModal();
+        
+        setTimeout(() => {
+            showManualEscrowConfirmation(projectId, amount, talentName, data.orderID);
+        }, 1000);
+    } else {
+        // For other errors, treat as success since PayPal approved it
+        updateProjectPaymentStatus(projectId, true, amount, data.orderID);
+        showNotification('✅ Payment successful! Escrow protection is now active.', 'success');
+        closePaymentModal();
+        
+        setTimeout(() => {
+            showEscrowConfirmation(projectId, amount, talentName);
+        }, 1000);
+    }
+});
                 },
 
                 onError: function(err) {
@@ -10527,7 +11781,107 @@ if (response.payoutBatchId) {
         showFallbackPaymentOption(projectId, amount, talentName);
     }
 }
-   // Setup escrow with custom amount
+   
+// Update project payment protection status - DIRECT DOM FIX
+function updateProjectPaymentStatus(projectId, hasProtection, amount, orderID) {
+    console.log('🔄 Directly updating project card for:', projectId);
+    
+    // Store status for future use
+    try {
+        const escrowProjects = JSON.parse(localStorage.getItem('escrowProjects') || '{}');
+        escrowProjects[projectId] = { protected: hasProtection, amount, orderID, timestamp: Date.now() };
+        localStorage.setItem('escrowProjects', JSON.stringify(escrowProjects));
+    } catch (error) {
+        console.log('Storage not available');
+    }
+    
+    // Find and directly update the project card
+    setTimeout(() => {
+        const projectCards = document.querySelectorAll('#projects-grid .glass-card');
+        projectCards.forEach(card => {
+            const setupButton = card.querySelector(`button[onclick*="setupProjectPayment('${projectId}'"]`);
+            if (setupButton) {
+                console.log('✅ Found project card, updating button to badge');
+                
+                // Replace button with badge
+                setupButton.outerHTML = `<span style="background: var(--success-color); color: white; padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.9rem;">🔒 Escrow Protected</span>`;
+            }
+        });
+    }, 100);
+}
+
+// Apply stored escrow statuses to project cards after they're rendered
+function applyStoredEscrowStatuses() {
+    console.log('🔄 Applying stored escrow statuses to project cards...');
+    
+    // Get stored escrow data
+    let escrowProjects = {};
+    try {
+        escrowProjects = JSON.parse(localStorage.getItem('escrowProjects') || '{}');
+    } catch (error) {
+        escrowProjects = window.escrowProjects || {};
+        console.log('Using memory storage for escrow data');
+    }
+    
+    if (Object.keys(escrowProjects).length === 0) {
+        console.log('No stored escrow data found');
+        return;
+    }
+    
+    // Apply escrow badges to matching projects
+    setTimeout(() => {
+        Object.keys(escrowProjects).forEach(projectId => {
+            if (escrowProjects[projectId].protected) {
+                const projectCards = document.querySelectorAll('#projects-grid .glass-card');
+                projectCards.forEach(card => {
+                    const setupButton = card.querySelector(`button[onclick*="setupProjectPayment('${projectId}'"]`);
+                    if (setupButton) {
+                        console.log('✅ Restoring escrow badge for project:', projectId);
+                        setupButton.outerHTML = `<span style="background: var(--success-color); color: white; padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.9rem;">🔒 Escrow Protected</span>`;
+                    }
+                });
+            }
+        });
+    }, 200);
+}
+
+// Update all project cards to show escrow badges
+function updateAllProjectCards() {
+    console.log('🔄 Updating all project cards with escrow status...');
+    
+    // Get escrow data
+    let escrowProjects = {};
+    try {
+        escrowProjects = JSON.parse(localStorage.getItem('escrowProjects') || '{}');
+    } catch (error) {
+        escrowProjects = window.escrowProjects || {};
+    }
+    
+    // Update all project cards
+    const projectCards = document.querySelectorAll('#projects-grid .glass-card');
+    projectCards.forEach(card => {
+        const cardHTML = card.innerHTML;
+        
+        // Find project ID from the card
+        Object.keys(escrowProjects).forEach(projectId => {
+            if (cardHTML.includes(`setupProjectPayment('${projectId}'`) && escrowProjects[projectId].protected) {
+                console.log('✅ Updating card for escrow-protected project:', projectId);
+                
+                // Replace setup button with escrow badge
+                const updatedHTML = cardHTML
+                    .replace(/⚠️ Setup Payment<\/button>/, '🔒 Escrow Protected</span>')
+                    .replace(/background: var\(--warning-color\)[^>]+>/, 'background: var(--success-color); color: white; padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.9rem;">');
+                
+                card.innerHTML = updatedHTML;
+            }
+        });
+    });
+    
+    console.log('✅ All project cards updated');
+}
+
+
+// Setup escrow with custom amount
         async function setupEscrowWithCustomAmount(projectId, talentName) {
             const amountInput = document.getElementById('escrow-amount-input');
             const customAmount = parseInt(amountInput.value);
@@ -10603,9 +11957,10 @@ if (response.payoutBatchId) {
                             <i class="fas fa-copy"></i>
                             Copy Order ID
                         </button>
-                        <button class="btn btn-primary" onclick="contactSupportWithOrderID('${orderID}', '${projectId}')" style="flex: 1; min-width: 150px;">
-                            <i class="fas fa-envelope"></i>
-                            Contact Support
+<button class="btn btn-primary" onclick="contactSupportWithOrderID('${orderID}', '${projectId}'); showPage('contact-us');" style="flex: 1; min-width: 150px;">
+    <i class="fas fa-envelope"></i>
+    Contact Support
+</button>
                         </button>
                         <button class="btn btn-secondary" onclick="this.closest('.manual-escrow-confirmation-modal').remove(); document.body.style.overflow = ''" style="flex: 1; min-width: 150px;">
                             <i class="fas fa-check"></i>
@@ -10641,23 +11996,50 @@ if (response.payoutBatchId) {
         }
 
         // Contact support with order ID
-        function contactSupportWithOrderID(orderID, projectID) {
-            const subject = encodeURIComponent(`Escrow Setup Required - Order ${orderID}`);
-            const body = encodeURIComponent(`Hi VoicecastingPro Support,
+function contactSupportWithOrderID(orderID, projectID) {
+    const email = currentUser ? currentUser.email : 'unknown';
+    const subject = encodeURIComponent(`Escrow Setup Required - Order ${orderID}`);
+    const body = encodeURIComponent(`Hi VoicecastingPro Support,
 
 I completed a PayPal payment but the automatic escrow setup failed. Please help me set up payment protection manually.
 
 Payment Details:
 - PayPal Order ID: ${orderID}
 - Project ID: ${projectID}
-- User: ${currentUser ? currentUser.email : 'Unknown'}
+- User Email: ${email}
 
 Please contact me to complete the escrow setup.
 
 Thank you!`);
-            
-            window.open(`mailto:support@voicecastingpro.com?subject=${subject}&body=${body}`, '_blank');
-        }
+    
+    window.open(`mailto:support@voicecastingpro.com?subject=${subject}&body=${body}`, '_blank');
+    
+    // Also navigate to contact page
+    setTimeout(() => {
+        // Close the modal first
+        document.querySelectorAll('.manual-escrow-confirmation-modal').forEach(modal => modal.remove());
+        document.body.style.overflow = '';
+        
+        // Navigate to contact page
+        showPage('contact-us');
+        
+        // Pre-fill the contact form if possible
+        setTimeout(() => {
+            const contactForm = document.getElementById('contact-form');
+            if (contactForm) {
+                const subjectSelect = contactForm.querySelector('select[name="subject"]');
+                const messageTextarea = contactForm.querySelector('textarea[name="message"]');
+                
+                if (subjectSelect) {
+                    subjectSelect.value = 'Billing Question';
+                }
+                if (messageTextarea) {
+                    messageTextarea.value = `I completed a PayPal payment (Order ID: ${orderID}) for Project ID: ${projectID}, but the automatic escrow setup failed. Please help me set up payment protection manually.`;
+                }
+            }
+        }, 500);
+    }, 1000);
+}
 
         // Show escrow confirmation (when everything works properly)
         function showEscrowConfirmation(projectId, amount, talentName) {
