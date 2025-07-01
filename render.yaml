@@ -1,0 +1,55 @@
+services:
+  # Web service
+  - type: web
+    name: voicecastingpro
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: voicecastingpro-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        value: https://voicecastingpro.onrender.com
+      - key: UPLOAD_DIR
+        value: uploads
+      - key: MAX_FILE_SIZE
+        value: 50000000
+      - key: PAYPAL_ENVIRONMENT
+        value: sandbox
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_ESCROW_EMAIL
+        value: escrow@voicecastingpro.com
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: MAIL_FROM_NAME
+        value: VoiceCastingPro
+      - key: MAIL_FROM_ADDRESS
+        value: noreply@voicecastingpro.com
+      - key: SUPPORT_EMAIL
+        value: support@voicecastingpro.com
+      - key: WEBSOCKET_URL
+        value: wss://voicecastingpro.onrender.com
+
+# Database
+databases:
+  - name: voicecastingpro-db
+    plan: starter
+    databaseName: voicecastingpro
+    user: voicecastingpro
