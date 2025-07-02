@@ -121,9 +121,9 @@ function App() {
       case 'post-project':
         return <PostProject onBack={() => setCurrentPage('home')} />;
       case 'help-center':
-        return <HelpCenter />;
+        return <HelpCenter onPageChange={handlePageChange} />;
       case 'contact-us':
-        return <ContactUs />;
+        return <ContactUs onPageChange={handlePageChange} />;
       case 'terms-of-service':
         return <TermsOfService />;
       case 'privacy-policy':

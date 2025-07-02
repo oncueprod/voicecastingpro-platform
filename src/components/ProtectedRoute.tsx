@@ -18,7 +18,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   const handleBackClick = () => {
     // Use window.location.href to navigate to home page directly
-    // This is more reliable than window.history.back() in different environments
     window.location.href = '/';
   };
 

@@ -100,8 +100,12 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
   };
 
   const handleBackClick = () => {
-    // Navigate to talent directory
-    window.location.href = '/talent';
+    if (onClose) {
+      onClose();
+    } else {
+      // Use window.location.href to ensure consistent navigation
+      window.location.href = '/talent';
+    }
   };
 
   const tabs = [

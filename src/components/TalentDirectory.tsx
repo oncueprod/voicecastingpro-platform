@@ -193,8 +193,12 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
   };
 
   const handleBackClick = () => {
-    // Navigate to home page
-    window.location.href = '/';
+    if (onBack) {
+      onBack();
+    } else {
+      // Use window.location.href to ensure consistent navigation
+      window.location.href = '/';
+    }
   };
 
   const clearFilters = () => {
@@ -222,15 +226,15 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
     <div className="min-h-screen bg-slate-900 pt-24 pb-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Back Button */}
-        <motion.a
-          href="/"
+        <motion.button
+          onClick={handleBackClick}
           className="flex items-center space-x-2 text-white/80 hover:text-white mb-8 transition-colors"
           whileHover={{ x: -5 }}
           transition={{ type: "spring", stiffness: 400, damping: 10 }}
         >
           <ArrowLeft className="h-5 w-5" />
           <span>Back to Home</span>
-        </motion.a>
+        </motion.button>
 
         {/* Header */}
         <motion.div 
