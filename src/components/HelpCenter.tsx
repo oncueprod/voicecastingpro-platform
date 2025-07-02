@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
-import { Search, MessageCircle, FileText, Video, Mail, ArrowLeft } from 'lucide-react';
+import { Search, MessageCircle, FileText, Video, Mail, ArrowLeft, HelpCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const HelpCenter: React.FC = () => {
+interface HelpCenterProps {
+  onPageChange?: (page: string) => void;
+}
+
+const HelpCenter: React.FC<HelpCenterProps> = ({ onPageChange }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeArticle, setActiveArticle] = useState<string | null>(null);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState<'helpful' | 'not-helpful' | null>(null);
@@ -68,6 +72,8 @@ const HelpCenter: React.FC = () => {
       setActiveArticle(null);
       setFeedbackSubmitted(null);
       setShowContactForm(false);
+    } else if (onPageChange) {
+      onPageChange('home');
     } else {
       // Navigate to home page
       window.location.href = '/';
@@ -94,6 +100,14 @@ const HelpCenter: React.FC = () => {
         setActiveArticle(null);
         setFeedbackSubmitted(null);
       }, 3000);
+    }
+  };
+
+  const handleContactClick = () => {
+    if (onPageChange) {
+      onPageChange('contact-us');
+    } else {
+      window.location.href = '/contact-us';
     }
   };
 
@@ -153,14 +167,14 @@ const HelpCenter: React.FC = () => {
                   <p className="text-sm mt-1">Our support team is ready to assist you with your specific question.</p>
                 </div>
                 
-                <motion.a
-                  href="/contact-us"
+                <motion.button
+                  onClick={handleContactClick}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg transition-colors font-medium mt-4 inline-block text-center"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
                   Contact Support Team
-                </motion.a>
+                </motion.button>
               </div>
             ) : (
               <div className="mt-8 pt-6 border-t border-gray-700">
@@ -300,15 +314,15 @@ const HelpCenter: React.FC = () => {
                 Our support team is here to help you succeed. Get in touch with us directly.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <motion.a 
-                  href="/contact-us"
+                <motion.button 
+                  onClick={handleContactClick}
                   className="flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-lg hover:shadow-lg hover:shadow-blue-600/20 transition-all font-medium"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
                   <Mail className="h-5 w-5" />
                   <span>Email Support</span>
-                </motion.a>
+                </motion.button>
               </div>
             </motion.div>
           </>

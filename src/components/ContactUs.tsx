@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
-import { Mail, MessageCircle, Send, CheckCircle, AlertCircle, ArrowLeft, Paperclip, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, MessageCircle, Send, CheckCircle, AlertCircle, ArrowLeft, Paperclip, X, Download, HelpCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { emailService, ContactFormData } from '../services/emailService';
 
-const ContactUs: React.FC = () => {
+interface ContactUsProps {
+  onPageChange?: (page: string) => void;
+}
+
+const ContactUs: React.FC<ContactUsProps> = ({ onPageChange }) => {
   const [formData, setFormData] = useState<ContactFormData>({
     name: '',
     email: '',
@@ -121,8 +125,10 @@ const ContactUs: React.FC = () => {
   };
 
   const handleHelpCenterClick = () => {
-    // Navigate to help center page
-    window.location.href = '/help-center';
+    // Use the onPageChange prop to navigate to the help center
+    if (onPageChange) {
+      onPageChange('help-center');
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -483,22 +489,28 @@ const ContactUs: React.FC = () => {
               </div>
             </div>
 
-            {/* FAQ Link */}
+            {/* Help Center Link */}
             <div className="bg-slate-800 rounded-2xl p-8 border border-gray-700">
-              <h3 className="text-xl font-bold text-white mb-4">
-                Looking for Quick Answers?
-              </h3>
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="bg-indigo-900/50 p-3 rounded-lg">
+                  <HelpCircle className="h-6 w-6 text-indigo-400" />
+                </div>
+                <h3 className="text-xl font-bold text-white">
+                  Need Quick Answers?
+                </h3>
+              </div>
               <p className="text-gray-300 mb-6">
-                Check out our Help Center for frequently asked questions and detailed guides.
+                Our Help Center has answers to frequently asked questions and detailed guides to help you get the most out of VoiceCastingPro.
               </p>
-              <motion.a 
-                href="/help-center"
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-lg hover:shadow-lg hover:shadow-blue-600/20 transition-all font-medium inline-block"
+              <motion.button 
+                onClick={handleHelpCenterClick}
+                className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-lg hover:shadow-lg hover:shadow-indigo-600/20 transition-all font-medium inline-flex items-center space-x-2"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                Visit Help Center
-              </motion.a>
+                <HelpCircle className="h-5 w-5" />
+                <span>Browse Help Center</span>
+              </motion.button>
             </div>
           </motion.div>
         </div>

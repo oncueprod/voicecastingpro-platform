@@ -25,10 +25,7 @@ import PayPalSandboxTester from './components/PayPalSandboxTester';
 import ScrollToTop from './components/ScrollToTop';
 import AdminLogin from './components/AdminLogin';
 import AdminDashboard from './components/AdminDashboard';
-import AudioWaveBackground from './components/AudioWaveBackground';
-import SoundRippleBackground from './components/SoundRippleBackground';
-import MicrophoneParticlesBackground from './components/MicrophoneParticlesBackground';
-import GradientWaveBackground from './components/GradientWaveBackground';
+import CircularSoundwaveBackground from './components/CircularSoundwaveBackground';
 
 function App() {
   const [currentPage, setCurrentPage] = useState('home');
@@ -36,24 +33,7 @@ function App() {
   const [selectedTalentId, setSelectedTalentId] = useState<string | null>(null);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
-  const [backgroundType, setBackgroundType] = useState<'waveform' | 'particles' | 'ripples' | 'gradient'>('waveform');
   const isProduction = import.meta.env.PROD;
-
-  // Cycle through background types every 30 seconds for demo purposes
-  useEffect(() => {
-    const backgroundTypes: ('waveform' | 'particles' | 'ripples' | 'gradient')[] = 
-      ['waveform', 'particles', 'ripples', 'gradient'];
-    
-    const interval = setInterval(() => {
-      setBackgroundType(prev => {
-        const currentIndex = backgroundTypes.indexOf(prev);
-        const nextIndex = (currentIndex + 1) % backgroundTypes.length;
-        return backgroundTypes[nextIndex];
-      });
-    }, 30000);
-    
-    return () => clearInterval(interval);
-  }, []);
 
   // Listen for custom event to show admin login
   useEffect(() => {
@@ -127,22 +107,10 @@ function App() {
     }, 100);
   };
 
-  // Render the appropriate background based on the current type
+  // Render the background
   const renderBackground = () => {
     if (currentPage !== 'home') return null;
-    
-    switch (backgroundType) {
-      case 'waveform':
-        return <AudioWaveBackground color="blue" intensity="medium" />;
-      case 'particles':
-        return <MicrophoneParticlesBackground color="blue" intensity="medium" />;
-      case 'ripples':
-        return <SoundRippleBackground color="blue" intensity="medium" />;
-      case 'gradient':
-        return <GradientWaveBackground color="blue" intensity="medium" />;
-      default:
-        return <AudioWaveBackground color="blue" intensity="medium" />;
-    }
+    return <CircularSoundwaveBackground color="blue" intensity="medium" />;
   };
 
   const renderPage = () => {
@@ -188,9 +156,9 @@ function App() {
       case 'post-project':
         return <PostProject onBack={() => setCurrentPage('home')} />;
       case 'help-center':
-        return <HelpCenter />;
+        return <HelpCenter onPageChange={handlePageChange} />;
       case 'contact-us':
-        return <ContactUs />;
+        return <ContactUs onPageChange={handlePageChange} />;
       case 'terms-of-service':
         return <TermsOfService />;
       case 'privacy-policy':

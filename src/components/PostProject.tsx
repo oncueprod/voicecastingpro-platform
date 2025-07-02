@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Upload, FileAudio, DollarSign, Calendar, Globe, Mic, ArrowLeft, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import ProtectedRoute from './ProtectedRoute';
@@ -93,7 +93,7 @@ const PostProject: React.FC<PostProjectProps> = ({ onBack }) => {
       }
       
       if (file.size > 10 * 1024 * 1024) { // 10MB limit
-        alert(`File ${file.name} is too large. Maximum file size is 10MB.`);
+        alert(`File ${file.name} is too large. Maximum size is 10MB.`);
         return false;
       }
       
@@ -184,7 +184,7 @@ const PostProject: React.FC<PostProjectProps> = ({ onBack }) => {
   };
 
   // Load draft on component mount
-  React.useEffect(() => {
+  useEffect(() => {
     const savedDraft = localStorage.getItem('project_draft');
     if (savedDraft) {
       try {
@@ -224,15 +224,15 @@ const PostProject: React.FC<PostProjectProps> = ({ onBack }) => {
       <div className="min-h-screen bg-slate-900 pt-24 pb-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Back Button */}
-          <motion.a
-            href="/"
+          <motion.button
+            onClick={onBack}
             className="flex items-center space-x-2 text-white/80 hover:text-white mb-8 transition-colors"
             whileHover={{ x: -5 }}
             transition={{ type: "spring", stiffness: 400, damping: 10 }}
           >
             <ArrowLeft className="h-5 w-5" />
             <span>Back to Home</span>
-          </motion.a>
+          </motion.button>
 
           {/* Header */}
           <motion.div 
