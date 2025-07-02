@@ -435,7 +435,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ type, onBack, onSuccess }) => {
                   Already have an account?{' '}
                   <button
                     type="button"
-                    onClick={() => window.history.replaceState(null, '', '/signin')}
+                    onClick={() => onBack()}
                     className="text-white hover:text-blue-200 font-medium underline"
                   >
                     Sign in here
@@ -584,7 +584,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ type, onBack, onSuccess }) => {
                   Don't have an account?{' '}
                   <button
                     type="button"
-                    onClick={() => window.history.replaceState(null, '', '/signup')}
+                    onClick={() => onBack()}
                     className="text-white hover:text-blue-200 font-medium underline"
                   >
                     Sign up
