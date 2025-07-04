@@ -1,26 +1,21 @@
 import express from 'express';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 const router = express.Router();
 
-// Configure your email transporter
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  secure: process.env.SMTP_SECURE === 'true',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
-  }
-});
+// Initialize Resend with your API key
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 router.post('/', async (req, res) => {
   try {
     const { name, email, subject, message } = req.body;
 
-    const mailOptions = {
-      from: process.env.FROM_EMAIL,
-      to: process.env.TO_EMAIL,
+    console.log('=== Contact Form Debug ===');
+    console.log('Form data:', { name, email, subject, message });
+
+    const { data, error } = await resend.emails.send({
+      from: `Contact Form <noreply@voicecastingpro.com>`,
+      to: [process.env.TO_EMAIL],
       subject: subject || 'New Contact Form Submission',
       html: `
         <h3>New Contact Form Submission</h3>
@@ -30,9 +25,14 @@ router.post('/', async (req, res) => {
         <p><strong>Message:</strong></p>
         <p>${message}</p>
       `
-    };
+    });
 
-    await transporter.sendMail(mailOptions);
+    if (error) {
+      console.error('Resend error:', error);
+      return res.status(500).json({ success: false, error: 'Failed to send email' });
+    }
+
+    console.log('Email sent successfully:', data);
     res.status(200).json({ success: true, message: 'Email sent successfully' });
   } catch (error) {
     console.error('Contact form error:', error);
