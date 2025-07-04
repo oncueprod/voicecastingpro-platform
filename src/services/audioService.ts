@@ -8,89 +8,256 @@ interface AudioFile {
   userId: string;
   projectId?: string;
   type: 'demo' | 'project_delivery' | 'revision';
+  title?: string;
+  description?: string;
+  category?: string;
 }
 
 class AudioService {
-  private storageKey = 'audio_files';
+  private apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
+  // Get auth token from localStorage
+  private getAuthToken(): string | null {
+    return localStorage.getItem('authToken') || localStorage.getItem('token');
+  }
+
+  // Get auth headers
+  private getAuthHeaders(): HeadersInit {
+    const token = this.getAuthToken();
+    return {
+      'Authorization': token ? `Bearer ${token}` : '',
+    };
+  }
 
   async uploadAudio(
     file: File, 
     userId: string, 
     type: 'demo' | 'project_delivery' | 'revision',
-    projectId?: string
+    projectId?: string,
+    options?: {
+      title?: string;
+      description?: string;
+      category?: string;
+      duration?: number;
+    }
   ): Promise<AudioFile> {
-    return new Promise((resolve, reject) => {
+    try {
       if (!file.type.startsWith('audio/')) {
-        reject(new Error('File must be an audio file'));
-        return;
+        throw new Error('File must be an audio file');
       }
 
       if (file.size > 50 * 1024 * 1024) { // 50MB limit
-        reject(new Error('File size must be less than 50MB'));
-        return;
+        throw new Error('File size must be less than 50MB');
       }
 
-      const reader = new FileReader();
-      reader.onload = () => {
-        const audioElement = new Audio();
-        audioElement.onloadedmetadata = () => {
-          const audioFile: AudioFile = {
-            id: `audio_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            name: file.name,
-            url: reader.result as string,
-            duration: audioElement.duration,
-            size: file.size,
-            uploadedAt: new Date(),
-            userId,
-            projectId,
-            type
-          };
+      // Create FormData
+      const formData = new FormData();
+      formData.append('audio', file);
+      formData.append('type', type);
+      
+      if (projectId) {
+        formData.append('projectId', projectId);
+      }
+      
+      if (options?.title) {
+        formData.append('title', options.title);
+      }
+      
+      if (options?.description) {
+        formData.append('description', options.description);
+      }
+      
+      if (options?.category) {
+        formData.append('category', options.category);
+      }
+      
+      if (options?.duration) {
+        formData.append('duration', options.duration.toString());
+      }
 
-          // Store in localStorage (in production, this would be cloud storage)
-          const existingFiles = this.getAudioFiles();
-          existingFiles.push(audioFile);
-          localStorage.setItem(this.storageKey, JSON.stringify(existingFiles));
+      // Upload to backend
+      const response = await fetch(`${this.apiUrl}/upload/audio`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: formData
+      });
 
-          resolve(audioFile);
-        };
-        audioElement.src = reader.result as string;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Upload failed' }));
+        throw new Error(errorData.error || `Upload failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Upload failed');
+      }
+
+      // Convert to AudioFile interface
+      const audioFile: AudioFile = {
+        id: result.file.id,
+        name: result.file.name,
+        url: result.file.url,
+        duration: result.file.duration || 0,
+        size: result.file.size,
+        uploadedAt: new Date(result.file.uploadedAt),
+        userId: result.file.userId,
+        projectId: result.file.projectId,
+        type: result.file.type,
+        title: options?.title,
+        description: options?.description,
+        category: options?.category
       };
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsDataURL(file);
-    });
+
+      return audioFile;
+
+    } catch (error) {
+      console.error('Audio upload error:', error);
+      throw error instanceof Error ? error : new Error('Upload failed');
+    }
   }
 
-  getAudioFiles(userId?: string, projectId?: string): AudioFile[] {
-    const files = JSON.parse(localStorage.getItem(this.storageKey) || '[]');
-    return files.filter((file: AudioFile) => {
-      if (userId && file.userId !== userId) return false;
-      if (projectId && file.projectId !== projectId) return false;
-      return true;
-    });
+  async getAudioFiles(userId?: string, projectId?: string): Promise<AudioFile[]> {
+    try {
+      const token = this.getAuthToken();
+      if (!token) {
+        console.warn('No auth token found, returning empty array');
+        return [];
+      }
+
+      // If no userId provided, try to get from token
+      if (!userId) {
+        try {
+          const tokenData = JSON.parse(atob(token.split('.')[1]));
+          userId = tokenData.userId;
+        } catch (e) {
+          console.warn('Could not parse user ID from token');
+          return [];
+        }
+      }
+
+      if (!userId) {
+        return [];
+      }
+
+      let url = `${this.apiUrl}/upload/audio/${userId}`;
+      const params = new URLSearchParams();
+      
+      if (projectId) {
+        params.append('projectId', projectId);
+      }
+      
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
+
+      const response = await fetch(url, {
+        headers: this.getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        console.error('Failed to fetch audio files:', response.status);
+        return [];
+      }
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        console.error('Failed to fetch audio files:', result.error);
+        return [];
+      }
+
+      // Convert to AudioFile interface
+      return result.files.map((file: any) => ({
+        id: file.id,
+        name: file.name,
+        url: file.url,
+        duration: file.duration || 0,
+        size: file.size,
+        uploadedAt: new Date(file.uploadedAt),
+        userId: file.userId,
+        projectId: file.projectId,
+        type: file.type,
+        title: file.title,
+        description: file.description,
+        category: file.category
+      }));
+
+    } catch (error) {
+      console.error('Get audio files error:', error);
+      return [];
+    }
   }
 
-  deleteAudioFile(fileId: string, userId: string): boolean {
-    const files = this.getAudioFiles();
-    const fileIndex = files.findIndex(f => f.id === fileId && f.userId === userId);
-    
-    if (fileIndex === -1) return false;
+  async deleteAudioFile(fileId: string, userId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.apiUrl}/upload/${fileId}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
+      });
 
-    files.splice(fileIndex, 1);
-    localStorage.setItem(this.storageKey, JSON.stringify(files));
-    return true;
+      if (!response.ok) {
+        console.error('Failed to delete audio file:', response.status);
+        return false;
+      }
+
+      const result = await response.json();
+      return result.success;
+
+    } catch (error) {
+      console.error('Delete audio file error:', error);
+      return false;
+    }
   }
 
   getAudioFile(fileId: string): AudioFile | null {
-    const files = this.getAudioFiles();
-    return files.find(f => f.id === fileId) || null;
+    // Since we're now using backend storage, we'd need to implement a separate API call
+    // For now, this method is not actively used, but keeping for compatibility
+    console.warn('getAudioFile not implemented for backend storage');
+    return null;
   }
 
-  getUserDemos(userId: string): AudioFile[] {
-    return this.getAudioFiles(userId).filter(f => f.type === 'demo');
+  async getUserDemos(userId: string): Promise<AudioFile[]> {
+    const files = await this.getAudioFiles(userId);
+    return files.filter(f => f.type === 'demo');
   }
 
-  getProjectAudio(projectId: string): AudioFile[] {
-    return this.getAudioFiles(undefined, projectId);
+  async getProjectAudio(projectId: string): Promise<AudioFile[]> {
+    const files = await this.getAudioFiles(undefined, projectId);
+    return files;
+  }
+
+  // Utility method to get ImageKit optimized URLs
+  getOptimizedAudioUrl(url: string, options?: {
+    quality?: number;
+    format?: string;
+  }): string {
+    if (!url.includes('ik.imagekit.io')) {
+      return url; // Not an ImageKit URL
+    }
+
+    const params = new URLSearchParams();
+    
+    if (options?.quality) {
+      params.append('tr', `q-${options.quality}`);
+    }
+    
+    if (options?.format) {
+      params.append('tr', `f-${options.format}`);
+    }
+
+    return params.toString() ? `${url}?${params.toString()}` : url;
+  }
+
+  // Method to get audio metadata/waveform thumbnail (future enhancement)
+  getAudioThumbnailUrl(url: string): string {
+    if (!url.includes('ik.imagekit.io')) {
+      return url;
+    }
+    
+    // For audio files, we might want to generate a waveform image
+    // This would require server-side processing, but ImageKit can store the waveform image
+    return `${url}?tr=w-300,h-100`; // Placeholder for future waveform functionality
   }
 }
 
