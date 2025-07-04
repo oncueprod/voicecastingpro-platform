@@ -6,6 +6,7 @@ import { Server } from 'socket.io';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import pg from 'pg';
+import fs from 'fs';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -14,6 +15,7 @@ import talentRoutes from './routes/talent.js';
 import messageRoutes from './routes/messages.js';
 import paymentRoutes from './routes/payments.js';
 import adminRoutes from './routes/admin.js';
+import uploadRoutes from './routes/upload.js';
 
 // Import database
 import { initDb } from './db/index.js';
@@ -52,19 +54,24 @@ app.use(express.urlencoded({ extended: true }));
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Simple debugging
+console.log('Project structure check:');
+console.log('Server __dirname:', __dirname);
+console.log('Looking for dist at:', path.join(__dirname, '../../dist'));
+console.log('Root contents:', fs.readdirSync(path.join(__dirname, '../..')));
+
 // Create uploads directory if it doesn't exist
 const uploadsDir = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
-import fs from 'fs';
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Serve static files
+// IMPORTANT: Serve static files BEFORE API routes and catch-all
 app.use('/uploads', express.static(uploadsDir));
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../dist')));
+  app.use(express.static(path.join(__dirname, '../../dist')));
 }
 
 // API routes
@@ -74,16 +81,23 @@ app.use('/api/talent', talentRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Handle SPA routing in production
+// IMPORTANT: Catch-all route MUST be LAST
+// Handle SPA routing in production - this MUST come after all static file serving
 if (process.env.NODE_ENV === 'production') {
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../dist/index.html'));
+    // Only redirect if it's not an API call or static file
+    if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
+      res.sendFile(path.join(__dirname, '../../dist/index.html'));
+    } else {
+      res.status(404).json({ error: 'Not found' });
+    }
   });
 }
 
