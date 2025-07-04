@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Star, MapPin, Clock, Play, Pause, MessageCircle, DollarSign, Award, Lock, ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import AudioUpload from './AudioUpload';
 import EnhancedMessagingInterface from './EnhancedMessagingInterface';
 import EscrowPaymentManager from './EscrowPaymentManager';
+import { talentService } from '../services/talentService';
+import { audioService, AudioFile } from '../services/audioService';
 
 interface TalentProfileProps {
   talentId: string;
@@ -17,61 +19,118 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
   const [showMessaging, setShowMessaging] = useState(false);
   const [showEscrow, setShowEscrow] = useState(false);
   const [playingDemo, setPlayingDemo] = useState<string | null>(null);
+  const [talent, setTalent] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [audioDemos, setAudioDemos] = useState<AudioFile[]>([]);
+  const [audioElements, setAudioElements] = useState<{[key: string]: HTMLAudioElement}>({});
 
   // Scroll to top when component mounts
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
-
-  // Mock talent data - in production, this would come from your API
-  const talent = {
-    id: talentId,
-    name: 'Sarah Mitchell',
-    title: 'Commercial Voice Specialist',
-    location: 'Los Angeles, CA',
-    rating: 5.0,
-    reviews: 245,
-    responseTime: '2 hours',
-    priceRange: '$150-300',
-    image: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=400',
-    specialties: ['Commercial', 'Warm & Friendly', 'Corporate', 'E-Learning'],
-    languages: ['English (US)', 'Spanish'],
-    badge: 'Pro Voice',
-    bio: 'Professional voice artist with over 10 years of experience in commercial voice over. I specialize in warm, friendly, and conversational reads that connect with your audience. My home studio is equipped with industry-standard equipment ensuring broadcast-quality recordings.',
-    experience: '10+ years',
-    completedProjects: 500,
-    repeatClients: 85,
-    equipment: ['Neumann U87', 'Apollo Twin', 'Pro Tools', 'Treated Home Studio'],
-    demos: [
-      { id: '1', name: 'Commercial Demo', duration: 45, type: 'Commercial' },
-      { id: '2', name: 'Corporate Narration', duration: 60, type: 'Corporate' },
-      { id: '3', name: 'E-Learning Sample', duration: 30, type: 'E-Learning' }
-    ],
-    recentReviews: [
-      {
-        id: '1',
-        client: 'TechFlow Inc.',
-        rating: 5,
-        comment: 'Absolutely perfect! Sarah delivered exactly what we needed for our commercial. Professional, quick turnaround, and amazing quality.',
-        date: '2024-01-15',
-        project: 'Tech Startup Commercial'
-      },
-      {
-        id: '2',
-        client: 'EduCorp',
-        rating: 5,
-        comment: 'Outstanding work on our e-learning modules. Clear, engaging, and professional delivery.',
-        date: '2024-01-10',
-        project: 'Corporate Training Videos'
+  
+  // Load talent data
+  useEffect(() => {
+    setLoading(true);
+    const talentProfile = talentService.getTalentProfile(talentId);
+    
+    if (talentProfile) {
+      setTalent(talentProfile);
+      
+      // Load audio demos for this talent
+      if (talentProfile.userId) {
+        const demos = audioService.getUserDemos(talentProfile.userId);
+        setAudioDemos(demos);
       }
-    ]
-  };
+    } else {
+      // Fallback to mock data if not found
+      setTalent({
+        id: talentId,
+        name: 'Sarah Mitchell',
+        title: 'Commercial Voice Specialist',
+        location: 'Los Angeles, CA',
+        rating: 5.0,
+        reviews: 245,
+        responseTime: '2 hours',
+        priceRange: '$150-300',
+        image: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=400',
+        specialties: ['Commercial', 'Warm & Friendly', 'Corporate', 'E-Learning'],
+        languages: ['English (US)', 'Spanish'],
+        badge: 'Pro Voice',
+        bio: 'Professional voice artist with over 10 years of experience in commercial voice over. I specialize in warm, friendly, and conversational reads that connect with your audience. My home studio is equipped with industry-standard equipment ensuring broadcast-quality recordings.',
+        experience: '10+ years',
+        completedProjects: 500,
+        repeatClients: 85,
+        equipment: ['Neumann U87', 'Apollo Twin', 'Pro Tools', 'Treated Home Studio'],
+        demos: [
+          { id: '1', name: 'Commercial Demo', duration: 45, type: 'Commercial' },
+          { id: '2', name: 'Corporate Narration', duration: 60, type: 'Corporate' },
+          { id: '3', name: 'E-Learning Sample', duration: 30, type: 'E-Learning' }
+        ],
+        recentReviews: [
+          {
+            id: '1',
+            client: 'TechFlow Inc.',
+            rating: 5,
+            comment: 'Absolutely perfect! Sarah delivered exactly what we needed for our commercial. Professional, quick turnaround, and amazing quality.',
+            date: '2024-01-15',
+            project: 'Tech Startup Commercial'
+          },
+          {
+            id: '2',
+            client: 'EduCorp',
+            rating: 5,
+            comment: 'Outstanding work on our e-learning modules. Clear, engaging, and professional delivery.',
+            date: '2024-01-10',
+            project: 'Corporate Training Videos'
+          }
+        ]
+      });
+    }
+    
+    setLoading(false);
+  }, [talentId]);
+
+  // Create audio elements for demos
+  useEffect(() => {
+    const audioMap: {[key: string]: HTMLAudioElement} = {};
+    
+    audioDemos.forEach(demo => {
+      const audio = new Audio(demo.url);
+      audio.addEventListener('ended', () => {
+        setPlayingDemo(null);
+      });
+      audioMap[demo.id] = audio;
+    });
+    
+    setAudioElements(audioMap);
+    
+    // Cleanup function to stop and remove audio elements
+    return () => {
+      Object.values(audioMap).forEach(audio => {
+        audio.pause();
+        audio.src = '';
+      });
+    };
+  }, [audioDemos]);
 
   const handlePlayDemo = (demoId: string) => {
+    // Stop currently playing demo if any
+    if (playingDemo && audioElements[playingDemo]) {
+      audioElements[playingDemo].pause();
+      audioElements[playingDemo].currentTime = 0;
+    }
+    
     if (playingDemo === demoId) {
       setPlayingDemo(null);
     } else {
-      setPlayingDemo(demoId);
+      // Play the selected demo
+      if (audioElements[demoId]) {
+        audioElements[demoId].play().catch(err => {
+          console.error('Error playing audio:', err);
+        });
+        setPlayingDemo(demoId);
+      }
     }
   };
 
@@ -103,8 +162,8 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     if (onClose) {
       onClose();
     } else {
-      // Use window.location.href to ensure consistent navigation
-      window.location.href = '/talent';
+      // Navigate back to talent directory
+      window.location.href = '/';
     }
   };
 
@@ -114,6 +173,14 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     { id: 'reviews', label: 'Reviews' },
     { id: 'contact', label: 'Contact & Payment' }
   ];
+
+  if (loading || !talent) {
+    return (
+      <div className="min-h-screen bg-slate-900 pt-24 pb-20 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 pt-24 pb-20">
@@ -177,7 +244,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
               </div>
 
               <div className="flex flex-wrap gap-2 mb-6">
-                {talent.specialties.map((specialty, index) => (
+                {talent.specialties.map((specialty: string, index: number) => (
                   <span
                     key={index}
                     className="bg-blue-900/50 text-blue-400 text-sm font-medium px-3 py-1 rounded-full border border-blue-800/50"
@@ -284,7 +351,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                 <div className="bg-slate-800 rounded-xl p-6 border border-gray-700">
                   <h3 className="text-xl font-bold text-white mb-4">Studio Equipment</h3>
                   <div className="grid md:grid-cols-2 gap-3">
-                    {talent.equipment.map((item, index) => (
+                    {talent.equipment.map((item: string, index: number) => (
                       <div key={index} className="flex items-center space-x-2">
                         <Award className="h-4 w-4 text-blue-400" />
                         <span className="text-gray-300">{item}</span>
@@ -318,7 +385,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                 <div className="bg-slate-800 rounded-xl p-6 border border-gray-700">
                   <h3 className="text-lg font-bold text-white mb-4">Languages</h3>
                   <div className="space-y-2">
-                    {talent.languages.map((language, index) => (
+                    {talent.languages.map((language: string, index: number) => (
                       <div key={index} className="text-gray-300">{language}</div>
                     ))}
                   </div>
@@ -332,7 +399,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
               <div className="bg-slate-800 rounded-xl p-6 border border-gray-700">
                 <h3 className="text-xl font-bold text-white mb-6">Voice Demos</h3>
                 
-                {user?.id === talentId && (
+                {user?.id === talent.userId && (
                   <div className="mb-8">
                     <AudioUpload
                       userId={user.id}
@@ -344,34 +411,81 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                 )}
 
                 <div className="space-y-4">
-                  {talent.demos.map((demo) => (
-                    <div key={demo.id} className="bg-slate-700 rounded-lg p-4 border border-gray-600">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <motion.button
-                            onClick={() => handlePlayDemo(demo.id)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full transition-colors"
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                          >
-                            {playingDemo === demo.id ? (
-                              <Pause className="h-5 w-5" />
-                            ) : (
-                              <Play className="h-5 w-5" />
-                            )}
-                          </motion.button>
-                          
-                          <div>
-                            <h4 className="text-white font-medium">{demo.name}</h4>
-                            <div className="flex items-center space-x-4 text-sm text-gray-400">
-                              <span>{demo.duration}s</span>
-                              <span>{demo.type}</span>
+                  {/* Display uploaded audio demos */}
+                  {audioDemos.length > 0 && (
+                    <>
+                      <h4 className="text-lg font-medium text-white mb-2">Your Uploaded Demos</h4>
+                      {audioDemos.map((demo) => (
+                        <div key={demo.id} className="bg-slate-700 rounded-lg p-4 border border-gray-600">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                              <motion.button
+                                onClick={() => handlePlayDemo(demo.id)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full transition-colors"
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                              >
+                                {playingDemo === demo.id ? (
+                                  <Pause className="h-5 w-5" />
+                                ) : (
+                                  <Play className="h-5 w-5" />
+                                )}
+                              </motion.button>
+                              
+                              <div>
+                                <h4 className="text-white font-medium">{demo.name}</h4>
+                                <div className="flex items-center space-x-4 text-sm text-gray-400">
+                                  <span>{Math.round(demo.duration)}s</span>
+                                  <span>{demo.type || 'Demo'}</span>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
+                      ))}
+                    </>
+                  )}
+                  
+                  {/* Display default demos if available */}
+                  {talent.demos && talent.demos.length > 0 && (
+                    <>
+                      {audioDemos.length > 0 && <h4 className="text-lg font-medium text-white mb-2 mt-6">Default Demos</h4>}
+                      {talent.demos.map((demo: any) => (
+                        <div key={demo.id} className="bg-slate-700 rounded-lg p-4 border border-gray-600">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                              <motion.button
+                                onClick={() => handlePlayDemo(demo.id)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full transition-colors"
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                              >
+                                {playingDemo === demo.id ? (
+                                  <Pause className="h-5 w-5" />
+                                ) : (
+                                  <Play className="h-5 w-5" />
+                                )}
+                              </motion.button>
+                              
+                              <div>
+                                <h4 className="text-white font-medium">{demo.name}</h4>
+                                <div className="flex items-center space-x-4 text-sm text-gray-400">
+                                  <span>{demo.duration}s</span>
+                                  <span>{demo.type}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  
+                  {audioDemos.length === 0 && (!talent.demos || talent.demos.length === 0) && (
+                    <div className="text-center py-8">
+                      <p className="text-gray-400">No demos available</p>
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             </div>
@@ -382,7 +496,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
               <h3 className="text-xl font-bold text-white mb-6">Client Reviews</h3>
               
               <div className="space-y-6">
-                {talent.recentReviews.map((review) => (
+                {talent.recentReviews && talent.recentReviews.map((review: any) => (
                   <div key={review.id} className="border-b border-gray-700 pb-6 last:border-b-0">
                     <div className="flex items-start justify-between mb-3">
                       <div>
@@ -403,6 +517,12 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                     <p className="text-gray-300">{review.comment}</p>
                   </div>
                 ))}
+                
+                {(!talent.recentReviews || talent.recentReviews.length === 0) && (
+                  <div className="text-center py-8">
+                    <p className="text-gray-400">No reviews yet</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -416,7 +536,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                     <h3 className="text-lg font-semibold text-white">Message {talent.name}</h3>
                   </div>
                   <EnhancedMessagingInterface
-                    recipientId={talentId}
+                    recipientId={talent.userId}
                     projectTitle={`Voice Over Project with ${talent.name}`}
                     onClose={() => setShowMessaging(false)}
                   />
@@ -426,7 +546,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
               {/* Authentication check for escrow */}
               {showEscrow && isAuthenticated && user?.type === 'client' && (
                 <EscrowPaymentManager
-                  talentId={talentId}
+                  talentId={talent.userId}
                   onEscrowCreated={() => {
                     setShowEscrow(false);
                     alert('Escrow payment created successfully!');

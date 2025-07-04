@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { paypalEscrowService } from '../services/paypalService';
+import { useAuth } from '../contexts/AuthContext';
 
 interface PayPalSubscriptionButtonProps {
   planId: string;
@@ -22,36 +22,38 @@ const PayPalSubscriptionButton: React.FC<PayPalSubscriptionButtonProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isProduction = import.meta.env.PROD;
+  const { isAuthenticated, isTalent } = useAuth();
   
   const handleSubscribe = async () => {
+    if (!isAuthenticated) {
+      setError("You must be signed in to subscribe");
+      if (onError) onError(new Error("Authentication required"));
+      return;
+    }
+    
+    if (!isTalent) {
+      setError("Only talent accounts can subscribe to plans");
+      if (onError) onError(new Error("Talent account required"));
+      return;
+    }
+    
     setIsProcessing(true);
     setError(null);
     
     try {
-      // Create a subscription
-      const { id, approvalUrl } = await paypalEscrowService.createSubscription(
-        planId,
-        userId,
-        `${window.location.origin}/subscription/success`,
-        `${window.location.origin}/subscription/cancel`
-      );
+      // Simulate creating a subscription
+      console.log('Creating subscription for plan:', planId);
       
-      if (isProduction) {
-        // In production, redirect to PayPal approval URL
-        window.location.href = approvalUrl;
-      } else {
-        // In development, simulate the approval
-        console.log('Subscription created:', { id, approvalUrl });
-        
-        // Simulate user approval
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        await paypalEscrowService.activateSubscription(id);
-        
-        setIsProcessing(false);
-        
-        if (onSuccess) {
-          onSuccess(id);
-        }
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Generate a mock subscription ID
+      const subscriptionId = `PAYPAL_SUB_${Date.now()}_${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+      
+      setIsProcessing(false);
+      
+      if (onSuccess) {
+        onSuccess(subscriptionId);
       }
     } catch (err) {
       setIsProcessing(false);

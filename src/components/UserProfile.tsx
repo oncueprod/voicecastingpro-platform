@@ -1,27 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, User, Mail, Phone, MapPin, Camera, Save, Edit3, DollarSign, Globe, Mic, Music } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
-import { userAPI } from '../services/api';
 import ProtectedRoute from './ProtectedRoute';
 import AudioUpload from './AudioUpload';
+import { talentService } from '../services/talentService';
 
 interface UserProfileProps {
   onBack: () => void;
 }
 
 const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
-  const { user, isClient, isTalent } = useAuth();
+  const { user, isClient, isTalent, updateUserAvatar } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
   const [showAudioUpload, setShowAudioUpload] = useState(false);
-  const [showPasswordChange, setShowPasswordChange] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -42,6 +34,8 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
     // PayPal
     paypalEmail: ''
   });
+  const [profileImage, setProfileImage] = useState<string | null>(user?.avatar || null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load saved profile data if available
   useEffect(() => {
@@ -68,6 +62,12 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
           industry: profileData.industry || '',
           paypalEmail: profileData.paypalEmail || ''
         }));
+        
+        if (profileData.profilePhoto) {
+          setProfileImage(profileData.profilePhoto);
+        } else if (user?.avatar) {
+          setProfileImage(user.avatar);
+        }
       } catch (error) {
         console.error('Failed to parse saved profile:', error);
       }
@@ -82,69 +82,21 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
     }));
   };
 
-  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
-      return;
-    }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Image must be smaller than 5MB');
-      return;
-    }
-
-    setIsUploading(true);
-    try {
-      console.log('Uploading avatar:', file.name);
-      const result = await userAPI.uploadAvatar(file);
-      console.log('Upload successful:', result);
-      alert('Profile image updated successfully!');
-      // You might want to update the user context or reload the page here
-    } catch (error) {
-      console.error('Upload failed:', error);
-      alert('Failed to upload image. Please try again.');
-    } finally {
-      setIsUploading(false);
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const imageDataUrl = reader.result as string;
+        setProfileImage(imageDataUrl);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
-  const handlePasswordChange = async () => {
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      alert('New passwords do not match');
-      return;
-    }
-
-    if (passwordData.newPassword.length < 6) {
-      alert('New password must be at least 6 characters long');
-      return;
-    }
-
-    try {
-      await userAPI.changePassword(passwordData.currentPassword, passwordData.newPassword);
-      alert('Password changed successfully!');
-      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      setShowPasswordChange(false);
-    } catch (error) {
-      console.error('Password change failed:', error);
-      alert('Failed to change password. Please check your current password and try again.');
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    try {
-      await userAPI.deleteAccount();
-      alert('Account deleted successfully. You will be redirected to the home page.');
-      // Clear auth data and redirect
-      localStorage.removeItem('auth_token');
-      window.location.href = '/';
-    } catch (error) {
-      console.error('Account deletion failed:', error);
-      alert('Failed to delete account. Please try again.');
+  const triggerFileInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
     }
   };
 
@@ -154,9 +106,68 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
     
     // Save to localStorage for demo
     if (isClient) {
-      localStorage.setItem('client_profile', JSON.stringify(formData));
+      localStorage.setItem('client_profile', JSON.stringify({
+        ...formData,
+        profilePhoto: profileImage
+      }));
     } else {
-      localStorage.setItem('talent_profile', JSON.stringify(formData));
+      localStorage.setItem('talent_profile', JSON.stringify({
+        ...formData,
+        profilePhoto: profileImage
+      }));
+      
+      // Also update talent profile in talent service if user is talent
+      if (user && isTalent) {
+        const talentId = `talent_user_${user.id}`;
+        const existingProfile = talentService.getTalentProfile(talentId);
+        
+        if (existingProfile) {
+          talentService.updateTalentProfile(talentId, {
+            ...existingProfile,
+            name: `${formData.firstName} ${formData.lastName}`,
+            title: formData.specialties || 'Voice Talent',
+            bio: formData.bio,
+            image: profileImage || existingProfile.image,
+            languages: formData.languages ? formData.languages.split(',').map(l => l.trim()) : existingProfile.languages,
+            specialties: formData.specialties ? formData.specialties.split(',').map(s => s.trim()) : existingProfile.specialties,
+            priceRange: formData.hourlyRate || existingProfile.priceRange,
+            updatedAt: new Date()
+          });
+        } else {
+          // Create new talent profile
+          const newProfile = {
+            id: talentId,
+            userId: user.id,
+            name: `${formData.firstName} ${formData.lastName}`,
+            title: formData.specialties || 'Voice Talent',
+            location: formData.location || 'Location not specified',
+            rating: 5.0,
+            reviews: 0,
+            responseTime: '1 hour',
+            priceRange: formData.hourlyRate || '$50-100',
+            image: profileImage || user.avatar || 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=400',
+            specialties: formData.specialties ? formData.specialties.split(',').map(s => s.trim()) : ['Commercial', 'Narration'],
+            languages: formData.languages ? formData.languages.split(',').map(l => l.trim()) : ['English'],
+            badge: 'New Talent',
+            bio: formData.bio || 'Professional voice talent',
+            experience: formData.yearsExperience || '1+ years',
+            completedProjects: 0,
+            repeatClients: 0,
+            equipment: ['Professional Equipment'],
+            demos: [],
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+          
+          talentService.updateTalentProfile(newProfile.id, newProfile);
+        }
+      }
+    }
+    
+    // Update avatar in auth context
+    if (profileImage) {
+      updateUserAvatar(profileImage);
     }
     
     setIsEditing(false);
@@ -189,6 +200,12 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
           industry: profileData.industry || '',
           paypalEmail: profileData.paypalEmail || ''
         }));
+        
+        if (profileData.profilePhoto) {
+          setProfileImage(profileData.profilePhoto);
+        } else if (user?.avatar) {
+          setProfileImage(user.avatar);
+        }
       } catch (error) {
         console.error('Failed to parse saved profile:', error);
       }
@@ -207,15 +224,15 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
       <div className="min-h-screen bg-slate-900 pt-24 pb-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Back Button */}
-          <motion.a
-            href="/"
+          <motion.button
+            onClick={onBack}
             className="flex items-center space-x-2 text-white/80 hover:text-white mb-8 transition-colors"
             whileHover={{ x: -5 }}
             transition={{ type: "spring", stiffness: 400, damping: 10 }}
           >
             <ArrowLeft className="h-5 w-5" />
             <span>Back to Dashboard</span>
-          </motion.a>
+          </motion.button>
 
           {/* Profile Header */}
           <motion.div 
@@ -262,8 +279,14 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
             {/* Profile Picture and Basic Info */}
             <div className="flex flex-col lg:flex-row items-start lg:items-center space-y-6 lg:space-y-0 lg:space-x-8">
               <div className="relative">
-                <div className="w-32 h-32 bg-slate-700 rounded-2xl flex items-center justify-center">
-                  {user?.avatar ? (
+                <div className="w-32 h-32 bg-slate-700 rounded-2xl flex items-center justify-center overflow-hidden">
+                  {profileImage ? (
+                    <img 
+                      src={profileImage} 
+                      alt={user?.name || "Profile"}
+                      className="w-full h-full rounded-2xl object-cover"
+                    />
+                  ) : user?.avatar ? (
                     <img 
                       src={user.avatar} 
                       alt={user.name}
@@ -274,26 +297,16 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
                   )}
                 </div>
                 {isEditing && (
-                  <>
-                    <input
-                      type="file"
-                      id="avatar-upload"
-                      accept="image/*"
-                      onChange={handleAvatarUpload}
-                      className="hidden"
+                  <label className="absolute -bottom-2 -right-2 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full transition-colors cursor-pointer">
+                    <Camera className="h-4 w-4" />
+                    <input 
+                      ref={fileInputRef}
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={handleImageUpload}
                     />
-                    <button 
-                      onClick={() => document.getElementById('avatar-upload')?.click()}
-                      disabled={isUploading}
-                      className="absolute -bottom-2 -right-2 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full transition-colors disabled:opacity-50"
-                    >
-                      {isUploading ? (
-                        <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                      ) : (
-                        <Camera className="h-4 w-4" />
-                      )}
-                    </button>
-                  </>
+                  </label>
                 )}
               </div>
 
@@ -530,6 +543,24 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
 
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Specialties
+                        </label>
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            name="specialties"
+                            value={formData.specialties}
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-3 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
+                            placeholder="e.g., Commercial, Narration, Character"
+                          />
+                        ) : (
+                          <p className="text-gray-300">{formData.specialties || 'Not provided'}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
                           Hourly Rate (USD)
                         </label>
                         {isEditing ? (
@@ -644,160 +675,6 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
             </div>
           </motion.div>
 
-          {/* Security Settings Section */}
-          <motion.div 
-            className="bg-slate-800 rounded-2xl p-8 border border-gray-700 mb-8"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.5 }}
-          >
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
-                <div className="w-3 h-3 bg-white rounded-full"></div>
-              </div>
-              <h2 className="text-2xl font-bold text-white">Security Settings</h2>
-            </div>
-
-            {/* Password Change Section */}
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-white">Change Password</h3>
-                <motion.button
-                  onClick={() => setShowPasswordChange(!showPasswordChange)}
-                  className="text-blue-400 hover:text-blue-300 transition-colors"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  {showPasswordChange ? 'Cancel' : 'Change Password'}
-                </motion.button>
-              </div>
-
-              {showPasswordChange && (
-                <div className="bg-slate-700 rounded-lg p-6 border border-gray-600">
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Current Password
-                      </label>
-                      <input
-                        type="password"
-                        value={passwordData.currentPassword}
-                        onChange={(e) => setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))}
-                        className="w-full px-4 py-3 bg-slate-600 border border-gray-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
-                        placeholder="Enter your current password"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        New Password
-                      </label>
-                      <input
-                        type="password"
-                        value={passwordData.newPassword}
-                        onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
-                        className="w-full px-4 py-3 bg-slate-600 border border-gray-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
-                        placeholder="Enter new password (min 6 characters)"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Confirm New Password
-                      </label>
-                      <input
-                        type="password"
-                        value={passwordData.confirmPassword}
-                        onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                        className="w-full px-4 py-3 bg-slate-600 border border-gray-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
-                        placeholder="Confirm your new password"
-                      />
-                    </div>
-                    <div className="flex space-x-3 pt-4">
-                      <motion.button
-                        onClick={handlePasswordChange}
-                        className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <span>Update Password</span>
-                      </motion.button>
-                      <motion.button
-                        onClick={() => {
-                          setShowPasswordChange(false);
-                          setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-                        }}
-                        className="px-6 py-3 border border-gray-600 text-gray-300 rounded-lg hover:border-gray-500 transition-colors"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        Cancel
-                      </motion.button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Account Deletion Section */}
-            <div className="border-t border-gray-600 pt-8">
-              <h3 className="text-lg font-semibold text-white mb-4">Delete Account</h3>
-              <div className="bg-red-900/20 border border-red-600/50 rounded-lg p-6">
-                <h4 className="text-red-400 font-semibold mb-3">Danger Zone</h4>
-                <p className="text-red-200 mb-4">
-                  Permanently delete your account and all associated data. This action cannot be undone.
-                </p>
-                <div className="space-y-3 text-red-200 text-sm mb-6">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-red-400 rounded-full"></div>
-                    <span>All profile information will be permanently deleted</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-red-400 rounded-full"></div>
-                    <span>All project history and messages will be lost</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-red-400 rounded-full"></div>
-                    <span>This action is irreversible</span>
-                  </div>
-                </div>
-
-                {!showDeleteConfirm ? (
-                  <motion.button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg transition-colors font-medium"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    Delete My Account
-                  </motion.button>
-                ) : (
-                  <div className="space-y-4">
-                    <p className="text-red-300 font-medium">
-                      Are you absolutely sure? This will permanently delete your account and cannot be undone.
-                    </p>
-                    <div className="flex space-x-3">
-                      <motion.button
-                        onClick={handleDeleteAccount}
-                        className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg transition-colors font-medium"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        Yes, Delete Forever
-                      </motion.button>
-                      <motion.button
-                        onClick={() => setShowDeleteConfirm(false)}
-                        className="px-6 py-3 border border-gray-600 text-gray-300 rounded-lg hover:border-gray-500 transition-colors"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        Cancel
-                      </motion.button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </motion.div>
-
           {/* Voice Demos Section (Talent Only) */}
           {isTalent && (
             <motion.div 
@@ -884,6 +761,15 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
               </div>
             </motion.div>
           )}
+
+          {/* Hidden file input for profile image */}
+          <input 
+            type="file" 
+            ref={fileInputRef}
+            accept="image/*" 
+            className="hidden" 
+            onChange={handleImageUpload}
+          />
         </div>
       </div>
     </ProtectedRoute>

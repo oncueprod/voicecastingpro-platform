@@ -7,6 +7,8 @@ interface User {
   avatar?: string;
   createdAt: Date;
   lastLogin?: Date;
+  status?: 'active' | 'suspended' | 'banned';
+  suspensionReason?: string;
 }
 
 interface DatabaseSchema {
@@ -19,6 +21,11 @@ class DatabaseService {
 
   constructor() {
     this.data = this.loadFromStorage();
+    
+    // Initialize with some demo users if none exist
+    if (this.data.users.length === 0) {
+      this.initializeDemoUsers();
+    }
   }
 
   private loadFromStorage(): DatabaseSchema {
@@ -45,6 +52,36 @@ class DatabaseService {
 
   private saveToStorage(): void {
     localStorage.setItem(this.storageKey, JSON.stringify(this.data));
+  }
+
+  // Initialize with demo users
+  private initializeDemoUsers(): void {
+    const demoUsers: User[] = [
+      {
+        id: 'client_demo_1',
+        email: 'client@example.com',
+        password: 'password123', // In production, this would be hashed
+        name: 'Demo Client',
+        type: 'client',
+        avatar: 'https://images.pexels.com/photos/614810/pexels-photo-614810.jpeg?auto=compress&cs=tinysrgb&w=100',
+        createdAt: new Date(),
+        status: 'active'
+      },
+      {
+        id: 'talent_demo_1',
+        email: 'talent@example.com',
+        password: 'password123', // In production, this would be hashed
+        name: 'Demo Talent',
+        type: 'talent',
+        avatar: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=100',
+        createdAt: new Date(),
+        status: 'active'
+      }
+    ];
+
+    this.data.users.push(...demoUsers);
+    this.saveToStorage();
+    console.log('Demo users initialized:', demoUsers);
   }
 
   // User management
@@ -78,7 +115,8 @@ class DatabaseService {
       name: name.trim(),
       type,
       avatar: `https://images.pexels.com/photos/${type === 'client' ? '614810' : '415829'}/pexels-photo-${type === 'client' ? '614810' : '415829'}.jpeg?auto=compress&cs=tinysrgb&w=100`,
-      createdAt: new Date()
+      createdAt: new Date(),
+      status: 'active'
     };
 
     this.data.users.push(user);
@@ -105,6 +143,16 @@ class DatabaseService {
     // Check user type matches
     if (user.type !== userType) {
       throw new Error(`This account is registered as a ${user.type}. Please select the correct account type.`);
+    }
+
+    // Check if user is suspended
+    if (user.status === 'suspended') {
+      throw new Error('This account has been suspended. Please contact support for assistance.');
+    }
+
+    // Check if user is banned
+    if (user.status === 'banned') {
+      throw new Error('This account has been banned. Please contact support for assistance.');
     }
 
     // Update last login

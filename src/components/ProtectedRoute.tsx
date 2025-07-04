@@ -17,7 +17,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const { isAuthenticated, isClient, isTalent, isLoading } = useAuth();
 
   const handleBackClick = () => {
-    // Use window.location.href to navigate to home page directly
+    // Navigate to home page
     window.location.href = '/';
   };
 

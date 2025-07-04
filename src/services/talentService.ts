@@ -60,7 +60,17 @@ class TalentService {
   getAllTalentProfiles(): TalentProfile[] {
     try {
       const profiles = JSON.parse(localStorage.getItem(this.talentStorageKey) || '[]');
-      return profiles.map((profile: any) => ({
+      
+      if (profiles.length === 0) {
+        return this.initializeMockTalentProfiles();
+      }
+      
+      // Filter out duplicates by ID using Map
+      const uniqueProfiles = Array.from(
+        new Map(profiles.map((profile: TalentProfile) => [profile.id, profile])).values()
+      );
+      
+      return uniqueProfiles.map((profile: any) => ({
         ...profile,
         createdAt: new Date(profile.createdAt),
         updatedAt: new Date(profile.updatedAt)
@@ -80,7 +90,24 @@ class TalentService {
     const profileIndex = profiles.findIndex(p => p.id === id);
     
     if (profileIndex === -1) {
-      throw new Error('Talent profile not found');
+      // Create new profile if it doesn't exist
+      const newProfile = {
+        id,
+        ...updates,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      } as TalentProfile;
+      
+      profiles.push(newProfile);
+      localStorage.setItem(this.talentStorageKey, JSON.stringify(profiles));
+      
+      // Dispatch storage event to notify other components
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: this.talentStorageKey,
+        newValue: JSON.stringify(profiles)
+      }));
+      
+      return newProfile;
     }
 
     profiles[profileIndex] = {
@@ -89,24 +116,58 @@ class TalentService {
       updatedAt: new Date()
     };
 
-    localStorage.setItem(this.talentStorageKey, JSON.stringify(profiles));
+    // Remove duplicates before saving
+    const uniqueProfiles = Array.from(
+      new Map(profiles.map((profile: TalentProfile) => [profile.id, profile])).values()
+    );
+
+    localStorage.setItem(this.talentStorageKey, JSON.stringify(uniqueProfiles));
+    
+    // Dispatch storage event to notify other components
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: this.talentStorageKey,
+      newValue: JSON.stringify(uniqueProfiles)
+    }));
+    
     return profiles[profileIndex];
   }
 
   deleteTalentProfile(id: string): boolean {
-    const profiles = this.getAllTalentProfiles();
-    const profileIndex = profiles.findIndex(p => p.id === id);
-    
-    if (profileIndex === -1) {
+    try {
+      console.log(`Attempting to delete talent profile with ID: ${id}`);
+      const profiles = this.getAllTalentProfiles();
+      const profileIndex = profiles.findIndex(p => p.id === id);
+      
+      if (profileIndex === -1) {
+        console.error(`Talent profile with ID ${id} not found`);
+        return false;
+      }
+
+      // Get the userId before deleting the profile
+      const userId = profiles[profileIndex].userId;
+      console.log(`Found talent profile at index ${profileIndex} with userId: ${userId}`);
+      
+      // Remove the profile
+      profiles.splice(profileIndex, 1);
+      localStorage.setItem(this.talentStorageKey, JSON.stringify(profiles));
+      console.log(`Deleted talent profile from storage, remaining profiles: ${profiles.length}`);
+      
+      // Dispatch storage event to notify other components
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: this.talentStorageKey,
+        newValue: JSON.stringify(profiles)
+      }));
+      
+      // Clean up related data
+      if (userId) {
+        this.cleanupTalentData(userId);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error deleting talent profile:', error);
       return false;
     }
-
-    profiles.splice(profileIndex, 1);
-    localStorage.setItem(this.talentStorageKey, JSON.stringify(profiles));
-    
-    // Clean up related data
-    this.cleanupTalentData(id);
-    return true;
   }
 
   suspendTalentProfile(id: string, reason: string): boolean {
@@ -137,6 +198,11 @@ class TalentService {
   getAllClientPosts(): ClientPost[] {
     try {
       const posts = JSON.parse(localStorage.getItem(this.postsStorageKey) || '[]');
+      
+      if (posts.length === 0) {
+        return this.initializeMockClientPosts();
+      }
+      
       return posts.map((post: any) => ({
         ...post,
         createdAt: new Date(post.createdAt),
@@ -171,16 +237,21 @@ class TalentService {
   }
 
   deleteClientPost(id: string): boolean {
-    const posts = this.getAllClientPosts();
-    const postIndex = posts.findIndex(p => p.id === id);
-    
-    if (postIndex === -1) {
+    try {
+      const posts = this.getAllClientPosts();
+      const postIndex = posts.findIndex(p => p.id === id);
+      
+      if (postIndex === -1) {
+        return false;
+      }
+
+      posts.splice(postIndex, 1);
+      localStorage.setItem(this.postsStorageKey, JSON.stringify(posts));
+      return true;
+    } catch (error) {
+      console.error('Error deleting client post:', error);
       return false;
     }
-
-    posts.splice(postIndex, 1);
-    localStorage.setItem(this.postsStorageKey, JSON.stringify(posts));
-    return true;
   }
 
   // Initialize mock data
@@ -266,11 +337,104 @@ class TalentService {
         isActive: true,
         createdAt: new Date('2024-01-05'),
         updatedAt: new Date('2024-01-15')
+      },
+      {
+        id: 'talent_004',
+        userId: 'user_talent_004',
+        name: 'David Chen',
+        title: 'Corporate Narrator',
+        location: 'Toronto, Canada',
+        rating: 4.9,
+        reviews: 203,
+        responseTime: '3 hours',
+        priceRange: '$180-350',
+        image: 'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=400',
+        specialties: ['Corporate', 'E-Learning', 'Professional'],
+        languages: ['English (US)', 'Mandarin'],
+        badge: 'Pro Voice',
+        bio: 'Professional voice artist specializing in corporate and e-learning content.',
+        experience: '7+ years',
+        completedProjects: 320,
+        repeatClients: 88,
+        equipment: ['Rode NT1', 'Universal Audio Interface', 'Logic Pro', 'Professional Studio'],
+        demos: [
+          { id: 'demo_007', name: 'Corporate Explainer', duration: 60, type: 'Corporate' },
+          { id: 'demo_008', name: 'E-Learning Module', duration: 90, type: 'E-Learning' }
+        ],
+        isActive: true,
+        createdAt: new Date('2024-01-12'),
+        updatedAt: new Date('2024-01-19')
+      },
+      {
+        id: 'talent_005',
+        userId: 'user_talent_005',
+        name: 'Sophie Laurent',
+        title: 'International Voice Talent',
+        location: 'Paris, France',
+        rating: 4.7,
+        reviews: 134,
+        responseTime: '5 hours',
+        priceRange: '$120-280',
+        image: 'https://images.pexels.com/photos/733872/pexels-photo-733872.jpeg?auto=compress&cs=tinysrgb&w=400',
+        specialties: ['Multilingual', 'Commercial', 'Elegant & Sophisticated'],
+        languages: ['French', 'English (UK)', 'Italian'],
+        badge: 'International',
+        bio: 'Multilingual voice artist with a sophisticated European sound.',
+        experience: '6+ years',
+        completedProjects: 180,
+        repeatClients: 75,
+        equipment: ['Neumann TLM 103', 'RME Babyface', 'Pro Tools', 'Treated Room'],
+        demos: [
+          { id: 'demo_009', name: 'French Commercial', duration: 45, type: 'Commercial' },
+          { id: 'demo_010', name: 'English Narration', duration: 60, type: 'Narration' }
+        ],
+        isActive: true,
+        createdAt: new Date('2024-01-08'),
+        updatedAt: new Date('2024-01-16')
+      },
+      {
+        id: 'talent_006',
+        userId: 'user_talent_006',
+        name: 'James Wilson',
+        title: 'Documentary Voice Over',
+        location: 'Sydney, Australia',
+        rating: 4.8,
+        reviews: 156,
+        responseTime: '4 hours',
+        priceRange: '$160-320',
+        image: 'https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg?auto=compress&cs=tinysrgb&w=400',
+        specialties: ['Documentary', 'Narration', 'Authoritative'],
+        languages: ['English (AU)', 'English (UK)'],
+        badge: 'Documentary Pro',
+        bio: 'Specialized in documentary narration with a warm, authoritative tone.',
+        experience: '9+ years',
+        completedProjects: 220,
+        repeatClients: 82,
+        equipment: ['Sennheiser MKH 416', 'Audient iD14', 'Adobe Audition', 'Professional Booth'],
+        demos: [
+          { id: 'demo_011', name: 'Nature Documentary', duration: 90, type: 'Documentary' },
+          { id: 'demo_012', name: 'Historical Narration', duration: 75, type: 'Narration' }
+        ],
+        isActive: true,
+        createdAt: new Date('2024-01-07'),
+        updatedAt: new Date('2024-01-14')
       }
     ];
 
-    localStorage.setItem(this.talentStorageKey, JSON.stringify(mockProfiles));
-    return mockProfiles;
+    // Filter out duplicates by ID using Map
+    const uniqueProfiles = Array.from(
+      new Map(mockProfiles.map(profile => [profile.id, profile])).values()
+    );
+
+    localStorage.setItem(this.talentStorageKey, JSON.stringify(uniqueProfiles));
+    
+    // Dispatch storage event to notify other components
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: this.talentStorageKey,
+      newValue: JSON.stringify(uniqueProfiles)
+    }));
+    
+    return uniqueProfiles;
   }
 
   private initializeMockClientPosts(): ClientPost[] {
@@ -366,6 +530,8 @@ class TalentService {
   }
 
   private cleanupTalentData(talentId: string): void {
+    console.log(`Cleaning up data for talent ID: ${talentId}`);
+    
     // Remove talent from conversations
     const conversations = JSON.parse(localStorage.getItem('conversations') || '[]');
     const filteredConversations = conversations.filter((c: any) => !c.participants.includes(talentId));
@@ -380,6 +546,11 @@ class TalentService {
     const escrows = JSON.parse(localStorage.getItem('escrow_payments') || '[]');
     const filteredEscrows = escrows.filter((e: any) => e.talentId !== talentId);
     localStorage.setItem('escrow_payments', JSON.stringify(filteredEscrows));
+    
+    // Remove talent audio files
+    const audioFiles = JSON.parse(localStorage.getItem('audio_files') || '[]');
+    const filteredAudioFiles = audioFiles.filter((a: any) => a.userId !== talentId);
+    localStorage.setItem('audio_files', JSON.stringify(filteredAudioFiles));
   }
 
   // Search and filter functions

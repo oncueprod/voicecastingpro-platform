@@ -31,14 +31,15 @@ class EmailService {
   private config: EmailConfig;
 
   constructor() {
+    // Use only import.meta.env for client-side environment variables
     this.config = {
-      smtpHost: import.meta.env.SMTP_HOST || 'mail.voicecastingpro.com',
-      smtpPort: parseInt(import.meta.env.SMTP_PORT || '587'),
-      smtpUser: import.meta.env.MAIL_USER || 'support@voicecastingpro.com',
-      smtpPassword: import.meta.env.MAIL_PASSWORD || '',
-      fromName: import.meta.env.MAIL_FROM_NAME || 'VoiceCastingPro',
-      fromAddress: import.meta.env.MAIL_FROM_ADDRESS || 'noreply@voicecastingpro.com',
-      supportEmail: import.meta.env.SUPPORT_EMAIL || 'support@voicecastingpro.com'
+      smtpHost: import.meta.env.VITE_SMTP_HOST || 'mail.voicecastingpro.com',
+      smtpPort: parseInt(import.meta.env.VITE_SMTP_PORT || '587'),
+      smtpUser: import.meta.env.VITE_SMTP_USER || 'support@voicecastingpro.com',
+      smtpPassword: import.meta.env.VITE_SMTP_PASSWORD || '',
+      fromName: import.meta.env.VITE_MAIL_FROM_NAME || 'VoiceCastingPro',
+      fromAddress: import.meta.env.VITE_MAIL_FROM_ADDRESS || 'noreply@voicecastingpro.com',
+      supportEmail: import.meta.env.VITE_SUPPORT_EMAIL || 'support@voicecastingpro.com'
     };
   }
 
@@ -48,12 +49,22 @@ class EmailService {
       const adminEmail = this.createAdminNotificationEmail(formData);
       const userEmail = this.createUserConfirmationEmail(formData);
 
+      console.log('📧 Sending admin notification email to:', this.config.supportEmail);
+      console.log('📧 Sending user confirmation email to:', formData.email);
+
+      // Log environment variables for debugging
+      console.log('Email Configuration:', {
+        smtpHost: this.config.smtpHost,
+        smtpPort: this.config.smtpPort,
+        smtpUser: this.config.smtpUser,
+        smtpPasswordSet: !!this.config.smtpPassword,
+        fromName: this.config.fromName,
+        fromAddress: this.config.fromAddress,
+        supportEmail: this.config.supportEmail
+      });
+
       // In a real implementation, this would use a proper email service
       // For demo purposes, we'll simulate the email sending
-      console.log('📧 Sending admin notification email:', adminEmail);
-      console.log('📧 Sending user confirmation email:', userEmail);
-
-      // Simulate API call to email service
       const emailData = {
         adminNotification: {
           to: this.config.supportEmail,
@@ -226,6 +237,8 @@ Please respond to the customer within 24 hours.
       `;
     }
     
+    const frontendUrl = import.meta.env.VITE_FRONTEND_URL || 'https://voicecastingpro.com';
+    
     const html = `
       <!DOCTYPE html>
       <html>
@@ -278,8 +291,8 @@ Please respond to the customer within 24 hours.
             <p>While you wait, feel free to explore our platform:</p>
             
             <div style="text-align: center; margin: 25px 0;">
-              <a href="${import.meta.env.VITE_APP_URL || 'https://voicecastingpro.com'}" class="button">Browse Voice Talent</a>
-              <a href="${import.meta.env.VITE_APP_URL || 'https://voicecastingpro.com'}/help-center" class="button" style="background: #059669;">Visit Help Center</a>
+              <a href="${frontendUrl}" class="button">Browse Voice Talent</a>
+              <a href="${frontendUrl}/help-center" class="button" style="background: #059669;">Visit Help Center</a>
             </div>
             
             <p>If you have any urgent questions, you can also reach us at:</p>

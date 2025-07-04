@@ -222,7 +222,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ type, onBack, onSuccess }) => {
                     {isLoading ? (
                       <div className="flex items-center justify-center">
                         <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-800 mr-2"></div>
-                        Sending Reset Link...
+                        <span>Sending Reset Link...</span>
                       </div>
                     ) : (
                       'Send Reset Link'
@@ -421,7 +421,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ type, onBack, onSuccess }) => {
                   {isLoading ? (
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-800 mr-2"></div>
-                      Creating Account...
+                      <span>Creating Account...</span>
                     </div>
                   ) : (
                     'Create Account'
@@ -571,7 +571,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ type, onBack, onSuccess }) => {
                   {isLoading ? (
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-800 mr-2"></div>
-                      Signing In...
+                      <span>Signing In...</span>
                     </div>
                   ) : (
                     'Sign In'

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Check, Shield, CreditCard, Star, HelpCircle, Mic, ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
 import ProtectedRoute from './ProtectedRoute';
@@ -133,7 +133,7 @@ const SubscriptionPlans: React.FC = () => {
   };
 
   // Check for existing subscription on component mount
-  React.useEffect(() => {
+  useEffect(() => {
     const savedSubscription = localStorage.getItem('user_subscription');
     if (savedSubscription) {
       try {

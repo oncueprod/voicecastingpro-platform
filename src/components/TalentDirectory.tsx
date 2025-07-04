@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, Filter, Star, MapPin, Clock, Play, Pause, SlidersHorizontal, ArrowLeft, X } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext';
+import { talentService } from '../services/talentService';
 
 interface TalentDirectoryProps {
   searchQuery?: string;
@@ -15,10 +17,28 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [hasActiveFilters, setHasActiveFilters] = useState(false);
+  const { user } = useAuth();
+  const [talents, setTalents] = useState<any[]>([]);
+  const [userTalentAdded, setUserTalentAdded] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     setLocalSearchQuery(searchQuery);
   }, [searchQuery]);
+
+  // Load talent profiles
+  useEffect(() => {
+    // Get talent profiles from service
+    const talentProfiles = talentService.getAllTalentProfiles();
+    
+    // Filter out duplicates by ID using Map
+    const uniqueProfiles = Array.from(
+      new Map(talentProfiles.map(profile => [profile.id, profile])).values()
+    );
+    
+    setTalents(uniqueProfiles);
+  }, []);
 
   // Check for search query from Services component
   useEffect(() => {
@@ -49,6 +69,64 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
     );
   }, [localSearchQuery, selectedCategory, selectedLanguage]);
 
+  // Add user's talent profile if they are a talent
+  useEffect(() => {
+    if (user && user.type === 'talent' && !userTalentAdded) {
+      const savedProfile = localStorage.getItem('talent_profile');
+      if (savedProfile) {
+        try {
+          const profileData = JSON.parse(savedProfile);
+          
+          // Check if user's profile already exists in talent service
+          const existingProfile = talents.find(t => t.userId === user.id);
+          
+          if (!existingProfile) {
+            // Create a new talent profile based on user data
+            const newProfile = {
+              id: `talent_user_${user.id}`,
+              userId: user.id,
+              name: `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim() || user.name,
+              title: profileData.specialties || 'Voice Talent',
+              location: 'Location not specified',
+              rating: 5.0,
+              reviews: 0,
+              responseTime: '1 hour',
+              priceRange: profileData.hourlyRate || '$50-100',
+              image: profileData.profilePhoto || user.avatar || 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=400',
+              specialties: profileData.specialties ? profileData.specialties.split(',').map((s: string) => s.trim()) : ['Commercial', 'Narration'],
+              languages: profileData.languages ? profileData.languages.split(',').map((l: string) => l.trim()) : ['English'],
+              badge: 'New Talent',
+              bio: profileData.bio || 'Professional voice talent',
+              experience: profileData.yearsExperience || '1+ years',
+              completedProjects: 0,
+              repeatClients: 0,
+              equipment: ['Professional Equipment'],
+              demos: [],
+              isActive: true,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            };
+            
+            // Add to talent service
+            talentService.updateTalentProfile(newProfile.id, newProfile);
+            
+            // Update local state - but ensure we don't add duplicates
+            setTalents(prev => {
+              if (!prev.some(p => p.id === newProfile.id)) {
+                return [...prev, newProfile];
+              }
+              return prev;
+            });
+            
+            setUserTalentAdded(true);
+          }
+        } catch (error) {
+          console.error('Failed to parse saved profile:', error);
+        }
+      }
+    }
+  }, [user, talents, userTalentAdded]);
+
   const categories = [
     { value: 'all', label: 'All Categories' },
     { value: 'commercial', label: 'Commercial' },
@@ -67,123 +145,89 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
     { value: 'german', label: 'German' },
   ];
 
-  // Production-ready talent data structure
-  const talents = [
-    {
-      id: 'talent_1',
-      name: 'Professional Voice Artist',
-      title: 'Commercial Voice Specialist',
-      location: 'Los Angeles, CA',
-      rating: 5.0,
-      reviews: 245,
-      responseTime: '2 hours',
-      price: '$150-300',
-      image: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=400',
-      specialties: ['Commercial', 'Warm & Friendly', 'Corporate'],
-      languages: ['English (US)', 'Spanish'],
-      badge: 'Pro Voice',
-      category: 'commercial',
-    },
-    {
-      id: 'talent_2',
-      name: 'Expert Narrator',
-      title: 'Audiobook Narrator',
-      location: 'New York, NY',
-      rating: 4.9,
-      reviews: 189,
-      responseTime: '4 hours',
-      price: '$200-400',
-      image: 'https://images.pexels.com/photos/614810/pexels-photo-614810.jpeg?auto=compress&cs=tinysrgb&w=400',
-      specialties: ['Audiobooks', 'Documentary', 'Deep & Authoritative'],
-      languages: ['English (US)', 'Portuguese'],
-      badge: 'Top Rated',
-      category: 'audiobook',
-    },
-    {
-      id: 'talent_3',
-      name: 'Character Voice Expert',
-      title: 'Character Voice Artist',
-      location: 'London, UK',
-      rating: 4.8,
-      reviews: 167,
-      responseTime: '6 hours',
-      price: '$100-250',
-      image: 'https://images.pexels.com/photos/762020/pexels-photo-762020.jpeg?auto=compress&cs=tinysrgb&w=400',
-      specialties: ['Animation', 'Video Games', 'Character Voices'],
-      languages: ['English (UK)', 'French'],
-      badge: 'Rising Star',
-      category: 'gaming',
-    },
-    {
-      id: 'talent_4',
-      name: 'Corporate Voice Professional',
-      title: 'Corporate Narrator',
-      location: 'Toronto, Canada',
-      rating: 4.9,
-      reviews: 203,
-      responseTime: '3 hours',
-      price: '$180-350',
-      image: 'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=400',
-      specialties: ['Corporate', 'E-Learning', 'Professional'],
-      languages: ['English (US)', 'Mandarin'],
-      badge: 'Pro Voice',
-      category: 'elearning',
-    },
-    {
-      id: 'talent_5',
-      name: 'Multilingual Voice Artist',
-      title: 'International Voice Talent',
-      location: 'Paris, France',
-      rating: 4.7,
-      reviews: 134,
-      responseTime: '5 hours',
-      price: '$120-280',
-      image: 'https://images.pexels.com/photos/733872/pexels-photo-733872.jpeg?auto=compress&cs=tinysrgb&w=400',
-      specialties: ['Multilingual', 'Commercial', 'Elegant & Sophisticated'],
-      languages: ['French', 'English (UK)', 'Italian'],
-      badge: 'International',
-      category: 'commercial',
-    },
-    {
-      id: 'talent_6',
-      name: 'Documentary Voice Professional',
-      title: 'Documentary Voice Over',
-      location: 'Sydney, Australia',
-      rating: 4.8,
-      reviews: 156,
-      responseTime: '4 hours',
-      price: '$160-320',
-      image: 'https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg?auto=compress&cs=tinysrgb&w=400',
-      specialties: ['Documentary', 'Narration', 'Authoritative'],
-      languages: ['English (AU)', 'English (UK)'],
-      badge: 'Documentary Pro',
-      category: 'documentary',
-    },
-  ];
-
   const filteredTalents = talents.filter(talent => {
     const matchesSearch = localSearchQuery === '' || 
                          talent.name.toLowerCase().includes(localSearchQuery.toLowerCase()) ||
                          talent.title.toLowerCase().includes(localSearchQuery.toLowerCase()) ||
-                         talent.specialties.some(s => s.toLowerCase().includes(localSearchQuery.toLowerCase())) ||
-                         talent.languages.some(l => l.toLowerCase().includes(localSearchQuery.toLowerCase()));
+                         talent.specialties.some((s: string) => s.toLowerCase().includes(localSearchQuery.toLowerCase())) ||
+                         talent.languages.some((l: string) => l.toLowerCase().includes(localSearchQuery.toLowerCase()));
     
-    const matchesCategory = selectedCategory === 'all' || talent.category === selectedCategory;
+    const matchesCategory = selectedCategory === 'all' || talent.specialties.some((s: string) => s.toLowerCase().includes(selectedCategory.toLowerCase()));
     const matchesLanguage = selectedLanguage === 'all' || 
-                           talent.languages.some(lang => lang.toLowerCase().includes(selectedLanguage.replace('-', ' ')));
+                           talent.languages.some((lang: string) => lang.toLowerCase().includes(selectedLanguage.replace('-', ' ')));
     
     return matchesSearch && matchesCategory && matchesLanguage;
   });
 
-  const handlePlayPause = (index: number) => {
+  const handlePlayPause = (index: number, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering the card click
+    
+    // Clear any existing timer
+    if (audioTimerRef.current) {
+      clearTimeout(audioTimerRef.current);
+      audioTimerRef.current = null;
+    }
+    
     if (playingIndex === index) {
+      // Stop playing
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
       setPlayingIndex(null);
     } else {
+      // Stop current audio if playing
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      
+      // Create new audio element
+      const audio = new Audio();
+      
+      // Set up event listeners
+      audio.addEventListener('ended', () => {
+        setPlayingIndex(null);
+      });
+      
+      // In a real app, this would play an actual demo file
+      // For demo purposes, we'll use a silent audio file
+      audio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+      
+      // Set volume and play
+      audio.volume = 0.8;
+      audio.play().catch(err => console.error('Error playing audio:', err));
+      
+      // Store reference and update state
+      audioRef.current = audio;
       setPlayingIndex(index);
+      
+      // Auto-stop after 30 seconds for demo purposes
+      audioTimerRef.current = setTimeout(() => {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+        }
+        setPlayingIndex(null);
+        audioTimerRef.current = null;
+      }, 30000);
     }
   };
 
   const handleTalentClick = (talentId: string) => {
+    // Stop any playing audio before navigating
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setPlayingIndex(null);
+    }
+    
+    // Clear any existing timer
+    if (audioTimerRef.current) {
+      clearTimeout(audioTimerRef.current);
+      audioTimerRef.current = null;
+    }
+    
     // Scroll to top before navigating
     window.scrollTo({ top: 0, behavior: 'smooth' });
     // Small delay to ensure scroll completes before navigation
@@ -196,7 +240,7 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
     if (onBack) {
       onBack();
     } else {
-      // Use window.location.href to ensure consistent navigation
+      // Navigate to home page
       window.location.href = '/';
     }
   };
@@ -206,6 +250,20 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
     setSelectedCategory('all');
     setSelectedLanguage('all');
   };
+
+  // Clean up audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+      
+      if (audioTimerRef.current) {
+        clearTimeout(audioTimerRef.current);
+      }
+    };
+  }, []);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -471,10 +529,7 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
                 <div className="bg-slate-700 rounded-lg p-4 mb-4 border border-gray-600">
                   <div className="flex items-center space-x-3">
                     <motion.button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePlayPause(index);
-                      }}
+                      onClick={(e) => handlePlayPause(index, e)}
                       className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-2 rounded-full hover:shadow-lg hover:shadow-blue-600/20 transition-colors"
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
@@ -509,7 +564,7 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
                 {/* Specialties */}
                 <div className="mb-4">
                   <div className="flex flex-wrap gap-2">
-                    {talent.specialties.map((specialty, idx) => (
+                    {talent.specialties.slice(0, 3).map((specialty: string, idx: number) => (
                       <span
                         key={idx}
                         className="bg-blue-900/50 text-blue-400 text-xs font-medium px-2 py-1 rounded-full border border-blue-800/50"
@@ -517,6 +572,18 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
                         {specialty}
                       </span>
                     ))}
+                    {talent.specialties.length > 3 && (
+                      <span className="bg-slate-700 text-gray-400 text-xs font-medium px-2 py-1 rounded-full">
+                        +{talent.specialties.length - 3} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Languages */}
+                <div className="mb-4">
+                  <div className="text-sm text-gray-400">
+                    Languages: {talent.languages.join(', ')}
                   </div>
                 </div>
 
@@ -527,7 +594,7 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
                     <span>{talent.responseTime}</span>
                   </div>
                   <div className="font-semibold text-white">
-                    {talent.price}
+                    {talent.priceRange}
                   </div>
                 </div>
 

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Play, Pause, Star, MapPin, Clock, Award } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { talentService } from '../services/talentService';
 
 interface FeaturedTalentProps {
   onTalentSelect?: (talentId: string) => void;
@@ -8,62 +9,112 @@ interface FeaturedTalentProps {
 
 const FeaturedTalent: React.FC<FeaturedTalentProps> = ({ onTalentSelect }) => {
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
+  const [talents, setTalents] = useState<any[]>([]);
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const [audioTimer, setAudioTimer] = useState<NodeJS.Timeout | null>(null);
 
-  // Real talent data structure - ready for production API integration
-  const talents = [
-    {
-      id: 'talent_1',
-      name: 'Professional Voice Artist',
-      title: 'Commercial Voice Specialist',
-      location: 'Los Angeles, CA',
-      rating: 5.0,
-      reviews: 245,
-      responseTime: '2 hours',
-      price: '$150-300',
-      image: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=400',
-      specialties: ['Commercial', 'Warm & Friendly', 'Corporate'],
-      languages: ['English (US)', 'Spanish'],
-      badge: 'Pro Voice',
-    },
-    {
-      id: 'talent_2',
-      name: 'Expert Narrator',
-      title: 'Audiobook Narrator',
-      location: 'New York, NY',
-      rating: 4.9,
-      reviews: 189,
-      responseTime: '4 hours',
-      price: '$200-400',
-      image: 'https://images.pexels.com/photos/614810/pexels-photo-614810.jpeg?auto=compress&cs=tinysrgb&w=400',
-      specialties: ['Audiobooks', 'Documentary', 'Deep & Authoritative'],
-      languages: ['English (US)', 'Portuguese'],
-      badge: 'Top Rated',
-    },
-    {
-      id: 'talent_3',
-      name: 'Character Voice Expert',
-      title: 'Character Voice Artist',
-      location: 'London, UK',
-      rating: 4.8,
-      reviews: 167,
-      responseTime: '6 hours',
-      price: '$100-250',
-      image: 'https://images.pexels.com/photos/762020/pexels-photo-762020.jpeg?auto=compress&cs=tinysrgb&w=400',
-      specialties: ['Animation', 'Video Games', 'Character Voices'],
-      languages: ['English (UK)', 'French'],
-      badge: 'Rising Star',
-    },
-  ];
+  // Load talent profiles from service
+  useEffect(() => {
+    const loadTalents = () => {
+      // Get talent profiles from service
+      const allTalents = talentService.getAllTalentProfiles();
+      
+      // Take only the first 3 profiles or fewer if less are available
+      const featuredTalents = allTalents.slice(0, 3);
+      setTalents(featuredTalents);
+    };
+    
+    loadTalents();
+    
+    // Listen for storage changes to update talent list if profiles are deleted
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'talent_profiles') {
+        loadTalents();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
-  const handlePlayPause = (index: number) => {
+  const handlePlayPause = (index: number, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering the card click
+    
+    // Clear any existing timer
+    if (audioTimer) {
+      clearTimeout(audioTimer);
+      setAudioTimer(null);
+    }
+    
     if (playingIndex === index) {
+      // Stop playing
+      if (audioElement) {
+        audioElement.pause();
+        audioElement.currentTime = 0;
+      }
       setPlayingIndex(null);
+      setAudioElement(null);
     } else {
+      // Stop current audio if playing
+      if (audioElement) {
+        audioElement.pause();
+        audioElement.currentTime = 0;
+      }
+      
+      // Create new audio element
+      const audio = new Audio();
+      
+      // Set up event listeners
+      audio.addEventListener('ended', () => {
+        setPlayingIndex(null);
+        setAudioElement(null);
+      });
+      
+      // In a real app, this would play an actual demo file
+      // For demo purposes, we'll use a silent audio file
+      audio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+      
+      // Set volume and play
+      audio.volume = 0.8;
+      audio.play().catch(err => console.error('Error playing audio:', err));
+      
+      // Store reference and update state
+      setAudioElement(audio);
       setPlayingIndex(index);
+      
+      // Auto-stop after 30 seconds for demo purposes
+      const timer = setTimeout(() => {
+        if (audio) {
+          audio.pause();
+          audio.currentTime = 0;
+        }
+        setPlayingIndex(null);
+        setAudioElement(null);
+        setAudioTimer(null);
+      }, 30000);
+      
+      setAudioTimer(timer);
     }
   };
 
   const handleTalentClick = (talentId: string) => {
+    // Stop any playing audio before navigating
+    if (audioElement) {
+      audioElement.pause();
+      audioElement.currentTime = 0;
+      setPlayingIndex(null);
+      setAudioElement(null);
+    }
+    
+    // Clear any existing timer
+    if (audioTimer) {
+      clearTimeout(audioTimer);
+      setAudioTimer(null);
+    }
+    
     // Scroll to top before navigating
     window.scrollTo({ top: 0, behavior: 'smooth' });
     // Small delay to ensure scroll completes before navigation
@@ -71,6 +122,20 @@ const FeaturedTalent: React.FC<FeaturedTalentProps> = ({ onTalentSelect }) => {
       onTalentSelect?.(talentId);
     }, 100);
   };
+
+  // Clean up audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioElement) {
+        audioElement.pause();
+        audioElement.src = '';
+      }
+      
+      if (audioTimer) {
+        clearTimeout(audioTimer);
+      }
+    };
+  }, [audioElement, audioTimer]);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -86,6 +151,11 @@ const FeaturedTalent: React.FC<FeaturedTalentProps> = ({ onTalentSelect }) => {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0 }
   };
+
+  // If no talents are available, don't render the section
+  if (talents.length === 0) {
+    return null;
+  }
 
   return (
     <section className="py-20 bg-slate-900 relative overflow-hidden">
@@ -171,10 +241,7 @@ const FeaturedTalent: React.FC<FeaturedTalentProps> = ({ onTalentSelect }) => {
                 <div className="bg-slate-700 rounded-lg p-4 mb-4 border border-gray-600">
                   <div className="flex items-center space-x-3">
                     <motion.button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePlayPause(index);
-                      }}
+                      onClick={(e) => handlePlayPause(index, e)}
                       className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-2 rounded-full hover:shadow-lg hover:shadow-blue-600/20 transition-colors"
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
@@ -209,7 +276,7 @@ const FeaturedTalent: React.FC<FeaturedTalentProps> = ({ onTalentSelect }) => {
                 {/* Specialties */}
                 <div className="mb-4">
                   <div className="flex flex-wrap gap-2">
-                    {talent.specialties.map((specialty, idx) => (
+                    {talent.specialties.slice(0, 3).map((specialty: string, idx: number) => (
                       <span
                         key={idx}
                         className="bg-blue-900/50 text-blue-400 text-xs font-medium px-2 py-1 rounded-full border border-blue-800/50"
@@ -234,7 +301,7 @@ const FeaturedTalent: React.FC<FeaturedTalentProps> = ({ onTalentSelect }) => {
                     <span>{talent.responseTime}</span>
                   </div>
                   <div className="font-semibold text-white">
-                    {talent.price}
+                    {talent.priceRange}
                   </div>
                 </div>
 

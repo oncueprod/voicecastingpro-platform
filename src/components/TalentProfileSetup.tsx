@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Upload, X, Play, Pause, Save, User, Mail, Globe, DollarSign } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
+import { talentService } from '../services/talentService';
 
 interface TalentProfileSetupProps {
   onBack: () => void;
@@ -9,7 +10,7 @@ interface TalentProfileSetupProps {
 }
 
 const TalentProfileSetup: React.FC<TalentProfileSetupProps> = ({ onBack, onComplete }) => {
-  const { user } = useAuth();
+  const { user, updateUserAvatar } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     firstName: '',
@@ -23,10 +24,38 @@ const TalentProfileSetup: React.FC<TalentProfileSetupProps> = ({ onBack, onCompl
     hourlyRate: '',
     paypalEmail: ''
   });
-  const [profilePhotoPreview, setProfilePhotoPreview] = useState<string | null>(null);
+  const [profilePhotoPreview, setProfilePhotoPreview] = useState<string | null>(user?.avatar || null);
   const [audioFiles, setAudioFiles] = useState<File[]>([]);
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load existing profile data if available
+  useEffect(() => {
+    const savedProfile = localStorage.getItem('talent_profile');
+    if (savedProfile) {
+      try {
+        const profileData = JSON.parse(savedProfile);
+        setFormData(prev => ({
+          ...prev,
+          firstName: profileData.firstName || '',
+          lastName: profileData.lastName || '',
+          email: profileData.email || user?.email || '',
+          bio: profileData.bio || '',
+          languages: profileData.languages || '',
+          specialties: profileData.specialties || '',
+          hourlyRate: profileData.hourlyRate || '',
+          paypalEmail: profileData.paypalEmail || ''
+        }));
+        
+        if (profileData.profilePhoto) {
+          setProfilePhotoPreview(profileData.profilePhoto);
+        }
+      } catch (error) {
+        console.error('Failed to parse saved profile:', error);
+      }
+    }
+  }, [user]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -54,6 +83,12 @@ const TalentProfileSetup: React.FC<TalentProfileSetupProps> = ({ onBack, onCompl
       const reader = new FileReader();
       reader.onload = () => setProfilePhotoPreview(reader.result as string);
       reader.readAsDataURL(file);
+    }
+  };
+
+  const triggerFileInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
     }
   };
 
@@ -145,10 +180,7 @@ const TalentProfileSetup: React.FC<TalentProfileSetupProps> = ({ onBack, onCompl
     setIsSubmitting(true);
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // In production, this would save to your backend
+      // Save profile data
       const profileData = {
         ...formData,
         audioFiles: audioFiles.map(f => ({ name: f.name, size: f.size, type: f.type })),
@@ -157,6 +189,47 @@ const TalentProfileSetup: React.FC<TalentProfileSetupProps> = ({ onBack, onCompl
       };
       
       localStorage.setItem('talent_profile', JSON.stringify(profileData));
+      
+      // Update user avatar in auth context
+      if (profilePhotoPreview) {
+        updateUserAvatar(profilePhotoPreview);
+      }
+      
+      // Create or update talent profile in talent service
+      if (user) {
+        const talentProfile = {
+          id: `talent_user_${user.id}`,
+          userId: user.id,
+          name: `${formData.firstName} ${formData.lastName}`,
+          title: formData.specialties || 'Voice Talent',
+          location: 'Location not specified',
+          rating: 5.0,
+          reviews: 0,
+          responseTime: '1 hour',
+          priceRange: formData.hourlyRate || '$50-100',
+          image: profilePhotoPreview || user.avatar || 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=400',
+          specialties: formData.specialties.split(',').map(s => s.trim()),
+          languages: formData.languages.split(',').map(l => l.trim()),
+          badge: 'New Talent',
+          bio: formData.bio,
+          experience: '1+ years',
+          completedProjects: 0,
+          repeatClients: 0,
+          equipment: ['Professional Equipment'],
+          demos: [],
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        
+        // Check if profile already exists
+        const existingProfile = talentService.getTalentProfile(talentProfile.id);
+        if (existingProfile) {
+          talentService.updateTalentProfile(talentProfile.id, talentProfile);
+        } else {
+          talentService.updateTalentProfile(talentProfile.id, talentProfile);
+        }
+      }
       
       alert('Profile created successfully! Welcome to VoiceCastingPro!');
       onComplete();
@@ -180,15 +253,15 @@ const TalentProfileSetup: React.FC<TalentProfileSetupProps> = ({ onBack, onCompl
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 pt-24 pb-20">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Back Button */}
-        <motion.a
-          href="/"
+        <motion.button
+          onClick={onBack}
           className="flex items-center space-x-2 text-white/80 hover:text-white mb-8 transition-colors"
           whileHover={{ x: -5 }}
           transition={{ type: "spring", stiffness: 400, damping: 10 }}
         >
           <ArrowLeft className="h-5 w-5" />
           <span>Back</span>
-        </motion.a>
+        </motion.button>
 
         {/* Progress Indicator */}
         <div className="mb-8">
@@ -268,6 +341,7 @@ const TalentProfileSetup: React.FC<TalentProfileSetupProps> = ({ onBack, onCompl
                     className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent text-white placeholder-white/60 backdrop-blur-sm"
                     placeholder="your@email.com"
                     required
+                    readOnly={!!user?.email}
                   />
                 </div>
                 <div>
@@ -281,8 +355,14 @@ const TalentProfileSetup: React.FC<TalentProfileSetupProps> = ({ onBack, onCompl
                     onChange={handleInputChange}
                     className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent text-white placeholder-white/60 backdrop-blur-sm"
                     placeholder="Create a secure password"
-                    required
+                    required={!user}
+                    disabled={!!user}
                   />
+                  {user && (
+                    <p className="text-white/60 text-xs mt-1">
+                      Password not required - you're already signed in
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -292,7 +372,7 @@ const TalentProfileSetup: React.FC<TalentProfileSetupProps> = ({ onBack, onCompl
                   Profile Photo (Optional)
                 </label>
                 <div className="flex items-center space-x-6">
-                  <div className="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center border border-white/20">
+                  <div className="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center border border-white/20 overflow-hidden">
                     {profilePhotoPreview ? (
                       <img 
                         src={profilePhotoPreview} 
@@ -304,15 +384,20 @@ const TalentProfileSetup: React.FC<TalentProfileSetupProps> = ({ onBack, onCompl
                     )}
                   </div>
                   <div>
-                    <label className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg cursor-pointer transition-colors">
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif"
+                      onChange={handlePhotoUpload}
+                      className="hidden"
+                      ref={fileInputRef}
+                    />
+                    <button
+                      type="button"
+                      onClick={triggerFileInput}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg cursor-pointer transition-colors"
+                    >
                       Choose File
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/gif"
-                        onChange={handlePhotoUpload}
-                        className="hidden"
-                      />
-                    </label>
+                    </button>
                     <p className="text-white/60 text-sm mt-2">
                       Upload a professional headshot (JPG, PNG, GIF - max 5MB)
                     </p>

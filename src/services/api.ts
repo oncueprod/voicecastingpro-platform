@@ -1,17 +1,6 @@
 import axios from 'axios';
 
-// Auto-detect API URL based on environment
-const getApiUrl = () => {
-  // If we're on localhost, use localhost API
-  if (window.location.hostname === 'localhost') {
-    return 'http://localhost:3000/api';
-  }
-  
-  // If we're on production, use production API
-  return `${window.location.origin}/api`;
-};
-
-const API_URL = getApiUrl();
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 // Create axios instance with base URL
 const api = axios.create({
@@ -36,23 +25,83 @@ api.interceptors.request.use(
 // Auth API
 export const authAPI = {
   register: async (email: string, password: string, name: string, type: 'client' | 'talent') => {
-    const response = await api.post('/auth/register', { email, password, name, type });
-    return response.data;
+    try {
+      // In a real app, this would call the backend API
+      // For now, we'll use the database service directly
+      const { database } = await import('./database');
+      const user = await database.createUser(email, password, name, type);
+      
+      // Generate a mock token
+      const token = btoa(JSON.stringify({ userId: user.id, email: user.email, type }));
+      
+      return { user, token };
+    } catch (error) {
+      throw error;
+    }
   },
   
   login: async (email: string, password: string, userType: 'client' | 'talent') => {
-    const response = await api.post('/auth/login', { email, password, userType });
-    return response.data;
+    try {
+      // In a real app, this would call the backend API
+      // For now, we'll use the database service directly
+      const { database } = await import('./database');
+      const user = await database.authenticateUser(email, password, userType);
+      
+      // Generate a mock token
+      const token = btoa(JSON.stringify({ userId: user.id, email: user.email, type: user.type }));
+      
+      return { user, token };
+    } catch (error) {
+      throw error;
+    }
   },
   
   resetPassword: async (email: string) => {
-    const response = await api.post('/auth/reset-password', { email });
-    return response.data;
+    try {
+      // In a real app, this would call the backend API
+      // For now, we'll simulate a successful password reset request
+      console.log(`Password reset requested for: ${email}`);
+      
+      // Simulate checking if user exists
+      const { database } = await import('./database');
+      const user = await database.getUserByEmail(email);
+      
+      if (!user) {
+        // Don't reveal that the user doesn't exist
+        return { message: 'If an account with this email exists, a password reset link has been sent' };
+      }
+      
+      // In a real app, this would send an email with a reset link
+      console.log(`Password reset link would be sent to: ${email}`);
+      
+      return { message: 'If an account with this email exists, a password reset link has been sent' };
+    } catch (error) {
+      throw error;
+    }
   },
   
   verifyToken: async () => {
-    const response = await api.get('/auth/verify');
-    return response.data;
+    try {
+      // In a real app, this would verify the token with the backend
+      // For now, we'll decode the token and check if the user exists
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        throw new Error('No token found');
+      }
+      
+      const decoded = JSON.parse(atob(token));
+      
+      const { database } = await import('./database');
+      const user = await database.getUserById(decoded.userId);
+      
+      if (!user) {
+        throw new Error('User not found');
+      }
+      
+      return { user };
+    } catch (error) {
+      throw error;
+    }
   }
 };
 
@@ -77,19 +126,6 @@ export const userAPI = {
         'Content-Type': 'multipart/form-data'
       }
     });
-    return response.data;
-  },
-
-  changePassword: async (currentPassword: string, newPassword: string) => {
-    const response = await api.put('/users/change-password', { 
-      currentPassword, 
-      newPassword 
-    });
-    return response.data;
-  },
-
-  deleteAccount: async () => {
-    const response = await api.delete('/users/account');
     return response.data;
   }
 };

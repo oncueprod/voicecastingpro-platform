@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Check, Shield, CreditCard, Star, HelpCircle, Mic, ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext';
 
 interface PublicSubscriptionPlansProps {
   onAuthClick: (type: 'signin' | 'signup') => void;
@@ -9,6 +10,14 @@ interface PublicSubscriptionPlansProps {
 const PublicSubscriptionPlans: React.FC<PublicSubscriptionPlansProps> = ({ onAuthClick }) => {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
   const isProduction = import.meta.env.PROD;
+  const { isAuthenticated, user } = useAuth();
+
+  useEffect(() => {
+    // If user is already authenticated and is talent, redirect to subscription page
+    if (isAuthenticated && user?.type === 'talent') {
+      window.location.href = '/subscription-plans';
+    }
+  }, [isAuthenticated, user]);
 
   const handleAuthClick = (type: 'signin' | 'signup') => {
     // Scroll to top before showing auth modal
@@ -56,7 +65,7 @@ const PublicSubscriptionPlans: React.FC<PublicSubscriptionPlansProps> = ({ onAut
         'Featured profile placement',
         'Direct client contact',
         'Audio demo hosting',
-        'Analytics and insights',
+        'Analytics dashboard',
         'PayPal payment processing',
         'Priority customer support',
         'Advanced portfolio tools'
@@ -75,14 +84,12 @@ const PublicSubscriptionPlans: React.FC<PublicSubscriptionPlansProps> = ({ onAut
       period: 'per month',
       subPeriod: 'billed annually ($348) via PayPal',
       features: [
-        'Unlimited project applications',
-        'Featured profile placement',
-        'Direct client contact',
-        'Audio demo hosting',
-        'Analytics and insights',
-        'PayPal payment processing',
+        'Everything in Monthly Plan',
         'Priority customer support',
-        'Advanced portfolio tools'
+        'Featured profile listing',
+        'Advanced analytics & insights',
+        'Early access to new features',
+        '2 months free!'
       ],
       buttonText: 'Start Annual Plan',
       buttonStyle: 'bg-green-600 hover:bg-green-700 text-white',
@@ -202,19 +209,35 @@ const PublicSubscriptionPlans: React.FC<PublicSubscriptionPlansProps> = ({ onAut
           )}
 
           {/* Sign Up CTA */}
-          <div className="bg-white/10 border border-white/20 rounded-lg p-6 max-w-2xl mx-auto backdrop-blur-sm">
-            <p className="text-white/90 mb-4">
-              <strong>Ready to get started?</strong> Sign up as a voice talent to access these subscription plans.
-            </p>
-            <motion.button 
-              onClick={() => handleAuthClick('signup')}
-              className="bg-white text-blue-800 px-6 py-3 rounded-lg hover:bg-blue-50 transition-all font-medium"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              Sign Up as Voice Talent
-            </motion.button>
-          </div>
+          {!isAuthenticated ? (
+            <div className="bg-white/10 border border-white/20 rounded-lg p-6 max-w-2xl mx-auto backdrop-blur-sm">
+              <p className="text-white/90 mb-4">
+                <strong>Ready to get started?</strong> Sign up as a voice talent to access these subscription plans.
+              </p>
+              <motion.button 
+                onClick={() => handleAuthClick('signup')}
+                className="bg-white text-blue-800 px-6 py-3 rounded-lg hover:bg-blue-50 transition-all font-medium"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                Sign Up as Voice Talent
+              </motion.button>
+            </div>
+          ) : user?.type === 'client' ? (
+            <div className="bg-white/10 border border-white/20 rounded-lg p-6 max-w-2xl mx-auto backdrop-blur-sm">
+              <p className="text-white/90 mb-4">
+                <strong>You're signed in as a client.</strong> These subscription plans are for voice talent accounts.
+              </p>
+              <motion.button 
+                onClick={() => handleAuthClick('signup')}
+                className="bg-white text-blue-800 px-6 py-3 rounded-lg hover:bg-blue-50 transition-all font-medium"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                Create a Voice Talent Account
+              </motion.button>
+            </div>
+          ) : null}
         </motion.div>
 
         {/* Subscription Plans */}
@@ -279,7 +302,18 @@ const PublicSubscriptionPlans: React.FC<PublicSubscriptionPlansProps> = ({ onAut
               </div>
 
               <motion.button 
-                onClick={() => handleAuthClick('signup')}
+                onClick={() => {
+                  if (isAuthenticated && user?.type === 'talent') {
+                    // If already signed in as talent, redirect to subscription page
+                    window.location.href = '/subscription-plans';
+                  } else if (isAuthenticated && user?.type === 'client') {
+                    // If signed in as client, prompt to create a talent account
+                    alert('You need a talent account to subscribe. Please sign up as a voice talent.');
+                  } else {
+                    // If not signed in, show sign up modal
+                    handleAuthClick('signup');
+                  }
+                }}
                 className={`w-full py-4 rounded-lg transition-all font-semibold text-lg ${plan.buttonStyle}`}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -413,22 +447,44 @@ const PublicSubscriptionPlans: React.FC<PublicSubscriptionPlansProps> = ({ onAut
               Join thousands of voice professionals who trust VoiceCastingPro for their career growth.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <motion.button 
-                onClick={() => handleAuthClick('signup')}
-                className="bg-white text-blue-800 px-8 py-3 rounded-lg hover:bg-blue-50 transition-all font-medium"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                Sign Up as Voice Talent
-              </motion.button>
-              <motion.button 
-                onClick={() => handleAuthClick('signin')}
-                className="border border-white/30 text-white px-8 py-3 rounded-lg hover:border-white hover:bg-white/10 transition-colors font-medium"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                Already Have an Account?
-              </motion.button>
+              {!isAuthenticated ? (
+                <>
+                  <motion.button 
+                    onClick={() => handleAuthClick('signup')}
+                    className="bg-white text-blue-800 px-8 py-3 rounded-lg hover:bg-blue-50 transition-all font-medium"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    Sign Up as Voice Talent
+                  </motion.button>
+                  <motion.button 
+                    onClick={() => handleAuthClick('signin')}
+                    className="border border-white/30 text-white px-8 py-3 rounded-lg hover:border-white hover:bg-white/10 transition-colors font-medium"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    Already Have an Account?
+                  </motion.button>
+                </>
+              ) : user?.type === 'talent' ? (
+                <motion.button 
+                  onClick={() => window.location.href = '/subscription-plans'}
+                  className="bg-white text-blue-800 px-8 py-3 rounded-lg hover:bg-blue-50 transition-all font-medium"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  View Subscription Options
+                </motion.button>
+              ) : (
+                <motion.button 
+                  onClick={() => handleAuthClick('signup')}
+                  className="bg-white text-blue-800 px-8 py-3 rounded-lg hover:bg-blue-50 transition-all font-medium"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  Create a Voice Talent Account
+                </motion.button>
+              )}
             </div>
           </div>
         </motion.div>

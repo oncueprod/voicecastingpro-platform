@@ -91,6 +91,11 @@ const ContactUs: React.FC<ContactUsProps> = ({ onPageChange }) => {
         type: file.type
       }));
       
+      console.log('Sending contact form with data:', {
+        ...formData,
+        attachments: attachmentInfo
+      });
+      
       const success = await emailService.sendContactForm({
         ...formData,
         attachments: attachmentInfo

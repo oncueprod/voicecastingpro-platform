@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   Users, 
@@ -35,6 +35,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
@@ -49,6 +50,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
     id?: string;
     callback: () => void;
   } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const currentAdmin = adminService.getCurrentAdmin();
 
@@ -59,8 +61,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
   const loadData = () => {
     setLoading(true);
     try {
+      // Get all users including the current user
       setUsers(adminService.getAllUsers());
-      setTalents(talentService.getAllTalentProfiles());
+      
+      // Get all talent profiles
+      const allTalents = talentService.getAllTalentProfiles();
+      setTalents(allTalents);
+      
       setPosts(talentService.getAllClientPosts());
       setFlaggedMessages(adminService.getFlaggedMessages());
     } catch (error) {
@@ -68,6 +75,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setTimeout(() => {
+      loadData();
+      setRefreshing(false);
+    }, 500);
   };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
@@ -159,10 +174,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
       id: talentId,
       callback: async () => {
         try {
-          talentService.deleteTalentProfile(talentId);
-          loadData();
-          alert('Talent profile deleted successfully');
+          console.log(`Attempting to delete talent profile: ${talentId}`);
+          const success = talentService.deleteTalentProfile(talentId);
+          
+          if (success) {
+            console.log(`Successfully deleted talent profile: ${talentId}`);
+            // Update the talents state directly to avoid a full reload
+            setTalents(prevTalents => prevTalents.filter(t => t.id !== talentId));
+            alert('Talent profile deleted successfully');
+          } else {
+            console.error(`Failed to delete talent profile: ${talentId}`);
+            alert('Failed to delete talent profile');
+          }
         } catch (error) {
+          console.error('Error deleting talent profile:', error);
           alert('Failed to delete talent profile');
         }
         setShowConfirmDialog(false);
@@ -176,16 +201,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
       type: 'delete_all_talents',
       callback: async () => {
         try {
-          // Delete all talent profiles
-          talents.forEach(talent => {
-            talentService.deleteTalentProfile(talent.id);
-          });
-          loadData();
-          alert('All talent profiles deleted successfully');
+          setIsDeleting(true);
+          console.log(`Attempting to delete all ${talents.length} talent profiles`);
+          
+          let successCount = 0;
+          let failCount = 0;
+          
+          // Delete all talent profiles one by one
+          for (const talent of talents) {
+            console.log(`Deleting talent profile: ${talent.id} (${talent.name})`);
+            const success = talentService.deleteTalentProfile(talent.id);
+            if (success) {
+              successCount++;
+              console.log(`Successfully deleted talent profile: ${talent.id}`);
+            } else {
+              failCount++;
+              console.error(`Failed to delete talent profile: ${talent.id}`);
+            }
+          }
+          
+          // Clear the talents state
+          setTalents([]);
+          
+          if (failCount === 0) {
+            alert(`All ${successCount} talent profiles deleted successfully`);
+          } else {
+            alert(`${successCount} talent profiles deleted successfully. ${failCount} profiles failed to delete.`);
+          }
         } catch (error) {
+          console.error('Error deleting talent profiles:', error);
           alert('Failed to delete talent profiles');
+        } finally {
+          setIsDeleting(false);
+          setShowConfirmDialog(false);
         }
-        setShowConfirmDialog(false);
       }
     });
     setShowConfirmDialog(true);
@@ -198,10 +247,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
     
     if (confirmed) {
       try {
-        talentService.deleteClientPost(postId);
-        loadData();
-        alert('Client post deleted successfully');
+        const success = talentService.deleteClientPost(postId);
+        if (success) {
+          // Update the posts state directly to avoid a full reload
+          setPosts(prevPosts => prevPosts.filter(p => p.id !== postId));
+          alert('Client post deleted successfully');
+        } else {
+          alert('Failed to delete client post');
+        }
       } catch (error) {
+        console.error('Error deleting client post:', error);
         alert('Failed to delete client post');
       }
     }
@@ -345,13 +400,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
             </motion.button>
             
             <motion.button
-              onClick={loadData}
-              className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              onClick={handleRefresh}
+              className={`flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors ${refreshing ? 'opacity-75' : ''}`}
+              whileHover={{ scale: refreshing ? 1 : 1.05 }}
+              whileTap={{ scale: refreshing ? 1 : 0.95 }}
+              disabled={refreshing}
             >
-              <RefreshCw className="h-4 w-4" />
-              <span>Refresh</span>
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
             </motion.button>
             
             <motion.button
@@ -754,12 +810,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                 {/* Delete All Talent Profiles Button */}
                 <motion.button
                   onClick={handleDeleteAllTalents}
-                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg transition-colors font-medium flex items-center space-x-2"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                  disabled={isDeleting || talents.length === 0}
+                  className={`bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg transition-colors font-medium flex items-center space-x-2 ${
+                    isDeleting || talents.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                  whileHover={{ scale: isDeleting || talents.length === 0 ? 1 : 1.05 }}
+                  whileTap={{ scale: isDeleting || talents.length === 0 ? 1 : 0.95 }}
                 >
-                  <Trash2 className="h-4 w-4" />
-                  <span>Remove All Fake Profiles</span>
+                  {isDeleting ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      <span>Deleting Profiles...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4" />
+                      <span>Remove All Fake Profiles</span>
+                    </>
+                  )}
                 </motion.button>
               </div>
 
@@ -794,6 +862,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                           {talent.isActive ? 'Active' : 'Suspended'}
                         </span>
                       </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">User ID:</span>
+                        <span className="text-white">{talent.userId}</span>
+                      </div>
                     </div>
 
                     <div className="flex space-x-2">
@@ -816,6 +888,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                   </div>
                 ))}
               </div>
+              
+              {filteredTalents.length === 0 && (
+                <div className="bg-slate-700 rounded-xl p-8 border border-gray-600 text-center">
+                  <p className="text-gray-300 mb-4">No talent profiles found</p>
+                  <p className="text-gray-400 text-sm">Try adjusting your search criteria or refresh the data</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -902,6 +981,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
                     </div>
                   </div>
                 ))}
+                
+                {filteredPosts.length === 0 && (
+                  <div className="bg-slate-700 rounded-xl p-8 border border-gray-600 text-center">
+                    <p className="text-gray-300 mb-4">No client posts found</p>
+                    <p className="text-gray-400 text-sm">Try adjusting your search criteria or refresh the data</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -982,17 +1068,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
             <div className="flex space-x-4">
               <motion.button
                 onClick={confirmAction.callback}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg transition-colors font-medium"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                disabled={isDeleting}
+                className={`flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg transition-colors font-medium ${
+                  isDeleting ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+                whileHover={{ scale: isDeleting ? 1 : 1.05 }}
+                whileTap={{ scale: isDeleting ? 1 : 0.95 }}
               >
-                Yes, Delete
+                {isDeleting ? (
+                  <div className="flex items-center justify-center space-x-2">
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span>Deleting...</span>
+                  </div>
+                ) : (
+                  'Yes, Delete'
+                )}
               </motion.button>
               <motion.button
                 onClick={() => setShowConfirmDialog(false)}
-                className="flex-1 border border-gray-600 text-gray-300 py-3 rounded-lg hover:border-gray-500 transition-colors font-medium"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                disabled={isDeleting}
+                className={`flex-1 border border-gray-600 text-gray-300 py-3 rounded-lg hover:border-gray-500 transition-colors font-medium ${
+                  isDeleting ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+                whileHover={{ scale: isDeleting ? 1 : 1.05 }}
+                whileTap={{ scale: isDeleting ? 1 : 0.95 }}
               >
                 Cancel
               </motion.button>

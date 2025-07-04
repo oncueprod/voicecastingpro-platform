@@ -32,10 +32,13 @@ const Header: React.FC<HeaderProps> = ({ currentPage, onPageChange, onAuthClick 
   // Add keyboard sequence listener for admin access
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Only track specific keys for the sequence
-      if (['a', 'd', 'm', 'i', 'n'].includes(e.key.toLowerCase())) {
+      // Safely get the lowercase key value
+      const keyPressed = e.key?.toLowerCase();
+      
+      // Only track specific keys for the sequence if key is defined
+      if (keyPressed && ['a', 'd', 'm', 'i', 'n'].includes(keyPressed)) {
         setKeySequence(prev => {
-          const newSequence = [...prev, e.key.toLowerCase()];
+          const newSequence = [...prev, keyPressed];
           // Keep only the last 5 keys
           if (newSequence.length > 5) {
             return newSequence.slice(newSequence.length - 5);
@@ -243,17 +246,6 @@ const Header: React.FC<HeaderProps> = ({ currentPage, onPageChange, onAuthClick 
                       <CreditCard className="h-5 w-5" />
                     </motion.button>
                   )}
-
-                  {user?.type === 'talent' && (
-                    <motion.button 
-                      onClick={handleTalentSetupClick}
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors font-medium text-sm"
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      Setup Profile
-                    </motion.button>
-                  )}
                   
                   <motion.button 
                     onClick={signOut}
@@ -356,17 +348,6 @@ const Header: React.FC<HeaderProps> = ({ currentPage, onPageChange, onAuthClick 
                       >
                         Edit Profile
                       </button>
-                      {user?.type === 'talent' && (
-                        <button 
-                          onClick={() => {
-                            handleTalentSetupClick();
-                            setIsMenuOpen(false);
-                          }}
-                          className="text-left py-2 text-sm text-white/90 hover:text-white transition-colors"
-                        >
-                          Setup Profile
-                        </button>
-                      )}
                       <button 
                         onClick={signOut}
                         className="text-left py-2 text-sm text-white/90 hover:text-white transition-colors"

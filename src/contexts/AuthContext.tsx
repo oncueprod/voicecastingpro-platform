@@ -20,6 +20,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isClient: boolean;
   isTalent: boolean;
+  updateUserAvatar: (avatarUrl: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -40,43 +41,61 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-useEffect(() => {
-  // Check for existing token on mount
-  const checkAuth = async () => {
-    console.log('🔍 AuthContext: Starting auth check...');
-    const token = localStorage.getItem('auth_token');
-    console.log('🔍 AuthContext: Token found:', !!token);
-    
-    if (token) {
-      try {
-        console.log('🔍 AuthContext: Calling authAPI.verifyToken()...');
-        const result = await authAPI.verifyToken();
-        console.log('🔍 AuthContext: authAPI.verifyToken() result:', result);
-        
-        const { user } = result;
-        console.log('🔍 AuthContext: Extracted user:', user);
-        
-        setUser(user);
-        console.log('🔍 AuthContext: setUser() called with:', user);
-      } catch (error) {
-        console.error('❌ AuthContext: Failed to verify token:', error);
-        console.error('❌ AuthContext: Error details:', error.response?.data);
-        localStorage.removeItem('auth_token');
+  useEffect(() => {
+    // Check for existing token on mount
+    const checkAuth = async () => {
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        try {
+          const { user } = await authAPI.verifyToken();
+          
+          // Check for profile photo in localStorage
+          const profileKey = user.type === 'client' ? 'client_profile' : 'talent_profile';
+          const savedProfile = localStorage.getItem(profileKey);
+          
+          if (savedProfile) {
+            try {
+              const profileData = JSON.parse(savedProfile);
+              if (profileData.profilePhoto) {
+                user.avatar = profileData.profilePhoto;
+              }
+            } catch (error) {
+              console.error('Failed to parse saved profile:', error);
+            }
+          }
+          
+          setUser(user);
+        } catch (error) {
+          console.error('Failed to verify token:', error);
+          localStorage.removeItem('auth_token');
+        }
       }
-    } else {
-      console.log('🔍 AuthContext: No token found');
-    }
-    setIsLoading(false);
-    console.log('🔍 AuthContext: setIsLoading(false) called');
-  };
+      setIsLoading(false);
+    };
 
-  checkAuth();
-}, []);
+    checkAuth();
+  }, []);
 
   const signIn = async (email: string, password: string, userType: 'client' | 'talent') => {
     setIsLoading(true);
     try {
       const { user, token } = await authAPI.login(email, password, userType);
+      
+      // Check for profile photo in localStorage
+      const profileKey = userType === 'client' ? 'client_profile' : 'talent_profile';
+      const savedProfile = localStorage.getItem(profileKey);
+      
+      if (savedProfile) {
+        try {
+          const profileData = JSON.parse(savedProfile);
+          if (profileData.profilePhoto) {
+            user.avatar = profileData.profilePhoto;
+          }
+        } catch (error) {
+          console.error('Failed to parse saved profile:', error);
+        }
+      }
+      
       setUser(user);
       localStorage.setItem('auth_token', token);
     } catch (error) {
@@ -114,6 +133,29 @@ useEffect(() => {
     setUser(null);
     localStorage.removeItem('auth_token');
   };
+  
+  const updateUserAvatar = (avatarUrl: string) => {
+    if (user) {
+      setUser({
+        ...user,
+        avatar: avatarUrl
+      });
+      
+      // Also update in profile storage
+      const profileKey = user.type === 'client' ? 'client_profile' : 'talent_profile';
+      const savedProfile = localStorage.getItem(profileKey);
+      
+      if (savedProfile) {
+        try {
+          const profileData = JSON.parse(savedProfile);
+          profileData.profilePhoto = avatarUrl;
+          localStorage.setItem(profileKey, JSON.stringify(profileData));
+        } catch (error) {
+          console.error('Failed to update profile photo in storage:', error);
+        }
+      }
+    }
+  };
 
   const value: AuthContextType = {
     user,
@@ -124,7 +166,8 @@ useEffect(() => {
     signOut,
     isAuthenticated: !!user,
     isClient: user?.type === 'client',
-    isTalent: user?.type === 'talent'
+    isTalent: user?.type === 'talent',
+    updateUserAvatar
   };
 
   return (

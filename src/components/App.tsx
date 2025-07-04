@@ -1,34 +1,74 @@
-import React, { useState } from 'react';
-import { AuthProvider } from './contexts/AuthContext';
-import Header from './components/Header';
-import Hero from './components/Hero';
-import FeaturedTalent from './components/FeaturedTalent';
-import Services from './components/Services';
-import WhyChoose from './components/WhyChoose';
-import HowItWorks from './components/HowItWorks';
-import Footer from './components/Footer';
-import TalentDirectory from './components/TalentDirectory';
-import TalentProfile from './components/TalentProfile';
-import PostProject from './components/PostProject';
-import AuthPage from './components/AuthPage';
-import HelpCenter from './components/HelpCenter';
-import ContactUs from './components/ContactUs';
-import TermsOfService from './components/TermsOfService';
-import PrivacyPolicy from './components/PrivacyPolicy';
-import BrowseJobs from './components/BrowseJobs';
-import SubscriptionPlans from './components/SubscriptionPlans';
-import PublicSubscriptionPlans from './components/PublicSubscriptionPlans';
-import UserProfile from './components/UserProfile';
-import TalentProfileSetup from './components/TalentProfileSetup';
-import MessagingSystem from './components/MessagingSystem';
-import PayPalSandboxTester from './components/PayPalSandboxTester';
-import ScrollToTop from './components/ScrollToTop';
+import React, { useState, useEffect, useRef } from 'react';
+import { AuthProvider } from '../contexts/AuthContext';
+import Header from './Header';
+import Hero from './Hero';
+import FeaturedTalent from './FeaturedTalent';
+import Services from './Services';
+import WhyChoose from './WhyChoose';
+import HowItWorks from './HowItWorks';
+import Footer from './Footer';
+import TalentDirectory from './TalentDirectory';
+import TalentProfile from './TalentProfile';
+import PostProject from './PostProject';
+import AuthPage from './AuthPage';
+import HelpCenter from './HelpCenter';
+import ContactUs from './ContactUs';
+import TermsOfService from './TermsOfService';
+import PrivacyPolicy from './PrivacyPolicy';
+import BrowseJobs from './BrowseJobs';
+import SubscriptionPlans from './SubscriptionPlans';
+import PublicSubscriptionPlans from './PublicSubscriptionPlans';
+import UserProfile from './UserProfile';
+import TalentProfileSetup from './TalentProfileSetup';
+import MessagingSystem from './MessagingSystem';
+import PayPalSandboxTester from './PayPalSandboxTester';
+import ScrollToTop from './ScrollToTop';
+import AdminLogin from './AdminLogin';
+import AdminDashboard from './AdminDashboard';
+import CircularSoundwaveBackground from './CircularSoundwaveBackground';
 
 function App() {
   const [currentPage, setCurrentPage] = useState('home');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTalentId, setSelectedTalentId] = useState<string | null>(null);
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const isProduction = import.meta.env.PROD;
+  const [talentProfilesUpdated, setTalentProfilesUpdated] = useState(0);
+
+  // Listen for custom event to show admin login
+  useEffect(() => {
+    const handleShowAdminLogin = () => {
+      setShowAdminLogin(true);
+    };
+    
+    window.addEventListener('showAdminLogin', handleShowAdminLogin);
+    
+    // Secret keyboard shortcut for admin access
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Alt+A for admin access
+      if (e.ctrlKey && e.altKey && e.key === 'a') {
+        setShowAdminLogin(true);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    
+    // Listen for storage changes to update components when talent profiles change
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'talent_profiles') {
+        setTalentProfilesUpdated(prev => prev + 1);
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('showAdminLogin', handleShowAdminLogin);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
   const handleAuthSuccess = () => {
     // Navigate back to home page after successful authentication
@@ -76,6 +116,12 @@ function App() {
     setTimeout(() => {
       setCurrentPage(page);
     }, 100);
+  };
+
+  // Render the background
+  const renderBackground = () => {
+    if (currentPage !== 'home') return null;
+    return <CircularSoundwaveBackground color="blue" intensity="medium" />;
   };
 
   const renderPage = () => {
@@ -167,7 +213,10 @@ function App() {
               <Services onPageChange={handlePageChange} />
             </div>
             <div id="featured-talent">
-              <FeaturedTalent onTalentSelect={handleTalentSelect} />
+              <FeaturedTalent 
+                key={`featured-talent-${talentProfilesUpdated}`} 
+                onTalentSelect={handleTalentSelect} 
+              />
             </div>
             <div id="why-choose">
               <WhyChoose onAuthClick={handleAuthClick} onPageChange={handlePageChange} />
@@ -189,6 +238,25 @@ function App() {
       <div className="min-h-screen bg-slate-900">
         {renderPage()}
         <ScrollToTop />
+        {renderBackground()}
+        
+        {/* Admin Login Modal */}
+        {showAdminLogin && (
+          <AdminLogin
+            onClose={() => setShowAdminLogin(false)}
+            onSuccess={() => {
+              setShowAdminLogin(false);
+              setShowAdminDashboard(true);
+            }}
+          />
+        )}
+
+        {/* Admin Dashboard Modal */}
+        {showAdminDashboard && (
+          <AdminDashboard
+            onClose={() => setShowAdminDashboard(false)}
+          />
+        )}
       </div>
     </AuthProvider>
   );
