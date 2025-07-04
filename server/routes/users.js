@@ -1,4 +1,5 @@
 import express from 'express';
+import bcrypt from 'bcrypt';
 import { authenticateToken } from '../middleware/auth.js';
 import { pool } from '../db/index.js';
 import multer from 'multer';
@@ -49,7 +50,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
     
     // Get user profile
     const profileResult = await pool.query(
-      `SELECT p.*, u.email, u.last_login 
+      `SELECT p.*, u.email
        FROM profiles p 
        JOIN users u ON p.id = u.id 
        WHERE p.id = $1`,
@@ -76,12 +77,13 @@ router.get('/profile', authenticateToken, async (req, res) => {
     }
     
     // Get payment methods
-    const paymentMethodsResult = await pool.query(
-      'SELECT * FROM payment_methods WHERE user_id = $1',
-      [userId]
-    );
+    // const paymentMethodsResult = await pool.query(
+    // 'SELECT * FROM payment_methods WHERE user_id = $1',
+    // [userId]
+    // );
     
-    const paymentMethods = paymentMethodsResult.rows;
+    // const paymentMethods = paymentMethodsResult.rows;
+    const paymentMethods = []; // Empty array for now
     
     res.status(200).json({
       profile: {
@@ -90,10 +92,10 @@ router.get('/profile', authenticateToken, async (req, res) => {
         name: profile.full_name,
         type: profile.user_type,
         avatar: profile.avatar_url,
-        lastLogin: profile.last_login
+        lastLogin: null
       },
       talentProfile,
-      paymentMethods
+      paymentMethods: []
     });
     
   } catch (error) {
@@ -151,23 +153,23 @@ router.put('/profile', authenticateToken, async (req, res) => {
     }
     
     // Update or create payment method if paypalEmail is provided
-    if (paypalEmail) {
+    // if (paypalEmail) {
       // Check if payment method exists
-      const paymentMethodResult = await pool.query(
-        'SELECT * FROM payment_methods WHERE user_id = $1 AND paypal_email = $2',
-        [userId, paypalEmail]
-      );
+     // const paymentMethodResult = await pool.query(
+      //  'SELECT * FROM payment_methods WHERE user_id = $1 AND paypal_email = $2',
+      //  [userId, paypalEmail]
+    //  );
       
-      if (paymentMethodResult.rows.length === 0) {
+    //  if (paymentMethodResult.rows.length === 0) {
         // Create payment method
-        await pool.query(
-          `INSERT INTO payment_methods 
-           (user_id, paypal_email) 
-           VALUES ($1, $2)`,
-          [userId, paypalEmail]
-        );
-      }
-    }
+      //  await pool.query(
+       //   `INSERT INTO payment_methods 
+        //   (user_id, paypal_email) 
+       //    VALUES ($1, $2)`,
+       //   [userId, paypalEmail]
+      //  );
+     // }
+   // }
     
     res.status(200).json({
       message: 'Profile updated successfully',
@@ -214,6 +216,87 @@ router.post('/avatar', authenticateToken, upload.single('avatar'), async (req, r
   } catch (error) {
     console.error('Avatar upload error:', error);
     res.status(500).json({ error: 'Server error while uploading avatar' });
+  }
+});
+
+// Change password
+router.put('/change-password', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { currentPassword, newPassword } = req.body;
+    
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+    
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters long' });
+    }
+    
+    // Get current password from database
+    const userResult = await pool.query(
+      'SELECT password FROM users WHERE id = $1',
+      [userId]
+    );
+    
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Verify current password
+    const isValidPassword = await bcrypt.compare(currentPassword, userResult.rows[0].password);
+    
+    if (!isValidPassword) {
+      return res.status(400).json({ error: 'Current password is incorrect' });
+    }
+    
+    // Hash new password
+    const saltRounds = 10;
+    const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
+    
+    // Update password in database
+    await pool.query(
+      'UPDATE users SET password = $1 WHERE id = $2',
+      [hashedNewPassword, userId]
+    );
+    
+    res.status(200).json({
+      message: 'Password changed successfully'
+    });
+    
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ error: 'Server error while changing password' });
+  }
+});
+
+// Delete account
+router.delete('/account', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    // Get user info for logging
+    const userResult = await pool.query(
+      'SELECT email FROM users WHERE id = $1',
+      [userId]
+    );
+    
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Delete user (cascading deletes will handle related data)
+    await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+    
+    console.log(`User account deleted: ${userResult.rows[0].email} (ID: ${userId})`);
+    
+    res.status(200).json({
+      message: 'Account deleted successfully'
+    });
+    
+  } catch (error) {
+    console.error('Delete account error:', error);
+    res.status(500).json({ error: 'Server error while deleting account' });
   }
 });
 

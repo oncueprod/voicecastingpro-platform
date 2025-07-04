@@ -48,14 +48,12 @@ router.get('/', async (req, res) => {
   try {
     const { category, language, search } = req.query;
     
-    let query = `
-      SELECT tp.*, p.full_name as name, p.avatar_url, p.user_type,
-             (SELECT COUNT(*) FROM audio_demos WHERE user_id = tp.user_id) as demo_count,
-             (SELECT ARRAY_AGG(category) FROM voice_actor_categories WHERE voice_actor_id = tp.user_id) as categories
-      FROM talent_profiles tp
-      JOIN profiles p ON tp.user_id = p.id
-      WHERE 1=1
-    `;
+let query = `
+  SELECT tp.*, p.full_name as name, p.avatar_url, p.user_type, 0 as demo_count
+  FROM talent_profiles tp
+  JOIN profiles p ON tp.user_id = p.id
+  WHERE p.user_type = 'talent'
+`;
     
     const queryParams = [];
     
@@ -66,13 +64,13 @@ router.get('/', async (req, res) => {
     }
     
     // Add category filter
-    if (category && category !== 'all') {
-      queryParams.push(category);
-      query += ` AND EXISTS (
-        SELECT 1 FROM voice_actor_categories
-        WHERE voice_actor_id = tp.user_id AND category = $${queryParams.length}
-      )`;
-    }
+    //  if (category && category !== 'all') {
+      //  queryParams.push(category);
+      //  query += ` AND EXISTS (
+       //   SELECT 1 FROM voice_actor_categories
+        //  WHERE voice_actor_id = tp.user_id AND category = $${queryParams.length}
+     //   )`;
+    //  }
     
     // Add language filter
     if (language && language !== 'all') {

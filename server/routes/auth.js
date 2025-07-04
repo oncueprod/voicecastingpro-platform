@@ -144,10 +144,10 @@ router.post('/login', async (req, res) => {
     );
     
     // Update last login
-    await pool.query(
-      'UPDATE users SET last_login = NOW() WHERE id = $1',
-      [user.id]
-    );
+    // await pool.query(
+    //  'UPDATE users SET last_login = NOW() WHERE id = $1',
+    //  [user.id]
+    // );
     
     // Return user data and token
     res.status(200).json({
