@@ -200,7 +200,7 @@ const AudioUpload: React.FC<AudioUploadProps> = ({
                   </button>
                 </p>
                 <p className="text-xs sm:text-sm text-gray-400">
-                  Supports MP3, WAV, M4A (Max 2MB per file)
+                  Supports MP3, WAV, M4A (Max 5MB per file)
                 </p>
                 <p className="text-xs sm:text-sm text-gray-400 mt-1">
                   Maximum {maxFiles} files allowed
