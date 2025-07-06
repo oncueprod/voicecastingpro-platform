@@ -24,11 +24,9 @@ class AudioService {
         reject(new Error('File must be an audio file'));
         return;
       }
-
-      if (file.size > 50 * 1024 * 1024) { // 50MB limit
-      }
-      if (file.size > 2 * 1024 * 1024) { // 2MB limit
-        reject(new Error('File size must be less than 2MB'));
+ 
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+  reject(new Error('File size must be less than 5MB'));
         return;
       }
 
