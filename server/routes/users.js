@@ -42,25 +42,36 @@ const upload = multer({
   }
 });
 
-// Get user profile
+// Get user profile - DEBUG VERSION
 router.get('/profile', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
     
-    // Get user profile
+    console.log('=== PROFILE DEBUG ===');
+    console.log('JWT userId:', userId);
+    console.log('JWT email:', req.user.email);
+    
+    // Get user profile with detailed logging
     const profileResult = await pool.query(
-      `SELECT p.*, u.email, u.last_login 
+      `SELECT p.*, u.email as users_email, u.last_login,
+              p.email as profiles_email
        FROM profiles p 
        JOIN users u ON p.id = u.id 
        WHERE p.id = $1`,
       [userId]
     );
-      
+    
+    console.log('Profile query result:', profileResult.rows[0]);
+    
     if (profileResult.rows.length === 0) {
       return res.status(404).json({ error: 'User profile not found' });
     }
     
     const profile = profileResult.rows[0];
+    
+    console.log('users table email:', profile.users_email);
+    console.log('profiles table email:', profile.profiles_email);
+    console.log('Emails match:', profile.users_email === profile.profiles_email);
     
     // If talent, get talent profile
     let talentProfile = null;
@@ -86,14 +97,19 @@ router.get('/profile', authenticateToken, async (req, res) => {
     res.status(200).json({
       profile: {
         id: profile.id,
-        email: profile.email,
+        email: profile.users_email, // Use email from users table
         name: profile.full_name,
         type: profile.user_type,
         avatar: profile.avatar_url,
         lastLogin: profile.last_login
       },
       talentProfile,
-      paymentMethods
+      paymentMethods,
+      debug: {
+        usersEmail: profile.users_email,
+        profilesEmail: profile.profiles_email,
+        jwtEmail: req.user.email
+      }
     });
     
   } catch (error) {
