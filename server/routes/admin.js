@@ -387,4 +387,225 @@ router.get('/stats', authenticateToken, authorizeAdmin, async (req, res) => {
   }
 });
 
+
+// =================================================================
+// ADMIN USER MANAGEMENT ROUTES - ADD THESE BEFORE export default router;
+// =================================================================
+
+// Get all admin users (Super Admin only)
+router.get('/admin-users', authenticateToken, authorizeSuperAdmin, async (req, res) => {
+  try {
+    const adminResult = await pool.query(
+      `SELECT id, username, created_at, last_login, is_active 
+       FROM admin_users 
+       ORDER BY created_at DESC`
+    );
+    
+    res.status(200).json({ adminUsers: adminResult.rows });
+  } catch (error) {
+    console.error('Get admin users error:', error);
+    res.status(500).json({ error: 'Server error while fetching admin users' });
+  }
+});
+
+// Create new admin user (Super Admin only)
+router.post('/admin-users', authenticateToken, authorizeSuperAdmin, async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+    
+    // Check if username already exists
+    const existingResult = await pool.query(
+      'SELECT id FROM admin_users WHERE username = $1',
+      [username]
+    );
+    
+    if (existingResult.rows.length > 0) {
+      return res.status(409).json({ error: 'Username already exists' });
+    }
+    
+    // Hash password
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+    
+    // Create admin user
+    const newAdminResult = await pool.query(
+      `INSERT INTO admin_users (username, password_hash, created_at, is_active) 
+       VALUES ($1, $2, NOW(), TRUE) 
+       RETURNING id, username, created_at, is_active`,
+      [username, passwordHash]
+    );
+    
+    // Log admin action
+    await pool.query(
+      `INSERT INTO admin_actions 
+       (admin_id, action_type, target_id, target_type) 
+       VALUES ($1, $2, $3, $4)`,
+      [req.user.userId, 'admin_user_created', newAdminResult.rows[0].id, 'admin_user']
+    );
+    
+    res.status(201).json({ 
+      message: 'Admin user created successfully',
+      adminUser: newAdminResult.rows[0]
+    });
+    
+  } catch (error) {
+    console.error('Create admin user error:', error);
+    res.status(500).json({ error: 'Server error while creating admin user' });
+  }
+});
+
+// Update admin user (Super Admin only)
+router.put('/admin-users/:id', authenticateToken, authorizeSuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { username, password, isActive } = req.body;
+    
+    // Check if admin user exists
+    const adminResult = await pool.query(
+      'SELECT id FROM admin_users WHERE id = $1',
+      [id]
+    );
+    
+    if (adminResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Admin user not found' });
+    }
+    
+    // Don't allow disabling self
+    if (id == req.user.userId && isActive === false) {
+      return res.status(400).json({ error: 'Cannot disable your own admin account' });
+    }
+    
+    let updateQuery = 'UPDATE admin_users SET updated_at = NOW()';
+    let queryParams = [];
+    let paramCount = 1;
+    
+    // Update username if provided
+    if (username) {
+      // Check if new username already exists (excluding current user)
+      const existingResult = await pool.query(
+        'SELECT id FROM admin_users WHERE username = $1 AND id != $2',
+        [username, id]
+      );
+      
+      if (existingResult.rows.length > 0) {
+        return res.status(409).json({ error: 'Username already exists' });
+      }
+      
+      updateQuery += `, username = $${paramCount}`;
+      queryParams.push(username);
+      paramCount++;
+    }
+    
+    // Update password if provided
+    if (password) {
+      const saltRounds = 10;
+      const passwordHash = await bcrypt.hash(password, saltRounds);
+      updateQuery += `, password_hash = $${paramCount}`;
+      queryParams.push(passwordHash);
+      paramCount++;
+    }
+    
+    // Update active status if provided
+    if (typeof isActive === 'boolean') {
+      updateQuery += `, is_active = $${paramCount}`;
+      queryParams.push(isActive);
+      paramCount++;
+    }
+    
+    updateQuery += ` WHERE id = $${paramCount} RETURNING id, username, created_at, last_login, is_active`;
+    queryParams.push(id);
+    
+    const updatedAdminResult = await pool.query(updateQuery, queryParams);
+    
+    // Log admin action
+    await pool.query(
+      `INSERT INTO admin_actions 
+       (admin_id, action_type, target_id, target_type) 
+       VALUES ($1, $2, $3, $4)`,
+      [req.user.userId, 'admin_user_updated', id, 'admin_user']
+    );
+    
+    res.status(200).json({ 
+      message: 'Admin user updated successfully',
+      adminUser: updatedAdminResult.rows[0]
+    });
+    
+  } catch (error) {
+    console.error('Update admin user error:', error);
+    res.status(500).json({ error: 'Server error while updating admin user' });
+  }
+});
+
+// Delete admin user (Super Admin only)
+router.delete('/admin-users/:id', authenticateToken, authorizeSuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if admin user exists
+    const adminResult = await pool.query(
+      'SELECT id, username FROM admin_users WHERE id = $1',
+      [id]
+    );
+    
+    if (adminResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Admin user not found' });
+    }
+    
+    // Don't allow deletion of self
+    if (id == req.user.userId) {
+      return res.status(400).json({ error: 'Cannot delete your own admin account' });
+    }
+    
+    // Log admin action before deletion
+    await pool.query(
+      `INSERT INTO admin_actions 
+       (admin_id, action_type, target_id, target_type, reason) 
+       VALUES ($1, $2, $3, $4, $5)`,
+      [req.user.userId, 'admin_user_deleted', id, 'admin_user', `Deleted admin user: ${adminResult.rows[0].username}`]
+    );
+    
+    // Delete admin sessions first
+    await pool.query('DELETE FROM admin_sessions WHERE admin_user_id = $1', [id]);
+    
+    // Delete admin user
+    await pool.query('DELETE FROM admin_users WHERE id = $1', [id]);
+    
+    res.status(200).json({ message: 'Admin user deleted successfully' });
+    
+  } catch (error) {
+    console.error('Delete admin user error:', error);
+    res.status(500).json({ error: 'Server error while deleting admin user' });
+  }
+});
+
+// Get admin actions log (Super Admin only)
+router.get('/admin-actions', authenticateToken, authorizeSuperAdmin, async (req, res) => {
+  try {
+    const { limit = 50, offset = 0 } = req.query;
+    
+    const actionsResult = await pool.query(
+      `SELECT aa.*, au.username as admin_username
+       FROM admin_actions aa
+       LEFT JOIN admin_users au ON aa.admin_id = au.id
+       ORDER BY aa.created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    
+    res.status(200).json({ actions: actionsResult.rows });
+  } catch (error) {
+    console.error('Get admin actions error:', error);
+    res.status(500).json({ error: 'Server error while fetching admin actions' });
+  }
+});
+
+// =================================================================
+// END OF ADMIN USER MANAGEMENT ROUTES
+// =================================================================
+
+
 export default router;
