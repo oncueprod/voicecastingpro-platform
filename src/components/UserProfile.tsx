@@ -18,7 +18,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
-    email: user?.email || '',
+    email: '', // Fixed: Changed from user?.email || '' to ''
     phone: user?.phone || '',
     location: user?.location || '',
     bio: '',
@@ -38,43 +38,98 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
   const [profileImage, setProfileImage] = useState<string | null>(user?.avatar || null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [audioFiles, setAudioFiles] = useState<any[]>([]);
+  const [audioUploadError, setAudioUploadError] = useState<string>(''); // Fixed: Added missing state
 
-  // Load saved profile data if available
+  // Fixed: Added useEffect to load profile data from API
   useEffect(() => {
-    const savedProfile = isClient 
-      ? localStorage.getItem('client_profile')
-      : localStorage.getItem('talent_profile');
-    
-    if (savedProfile) {
+    const fetchProfile = async () => {
       try {
-        const profileData = JSON.parse(savedProfile);
-        setFormData(prev => ({
-          ...prev,
-          firstName: profileData.firstName || '',
-          lastName: profileData.lastName || '',
-          email: profileData.email || user?.email || '',
-          phone: profileData.phone || '',
-          location: profileData.location || '',
-          bio: profileData.bio || '',
-          website: profileData.website || '',
-          company: profileData.company || '',
-          languages: profileData.languages || '',
-          yearsExperience: profileData.yearsExperience || '',
-          hourlyRate: profileData.hourlyRate || '',
-          industry: profileData.industry || '',
-          paypalEmail: profileData.paypalEmail || ''
-        }));
-        
-        if (profileData.profilePhoto) {
-          setProfileImage(profileData.profilePhoto);
-        } else if (user?.avatar) {
-          setProfileImage(user.avatar);
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+
+        const response = await fetch('/api/users/profile', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const profile = data.profile;
+          
+          setFormData(prev => ({
+            ...prev,
+            firstName: profile.name?.split(' ')[0] || '',
+            lastName: profile.name?.split(' ').slice(1).join(' ') || '',
+            email: profile.email || '',
+            phone: profile.phone || '',
+            location: profile.location || '',
+            bio: profile.bio || '',
+            website: profile.website || '',
+            company: profile.company || '',
+            languages: profile.languages || '',
+            yearsExperience: profile.yearsExperience || '',
+            hourlyRate: profile.hourlyRate || '',
+            industry: profile.industry || '',
+            paypalEmail: profile.paypalEmail || ''
+          }));
+          
+          if (profile.avatar) {
+            setProfileImage(profile.avatar);
+          }
         }
       } catch (error) {
-        console.error('Failed to parse saved profile:', error);
+        console.error('Failed to fetch profile:', error);
       }
+    };
+
+    fetchProfile();
+  }, []);
+
+  const handleSave = async () => {
+    console.log('Saving profile:', formData);
+    
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        alert('Please log in again');
+        return;
+      }
+
+      const response = await fetch('/api/users/profile', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: `${formData.firstName} ${formData.lastName}`.trim(),
+          bio: formData.bio,
+          location: formData.location,
+          phone: formData.phone,
+          website: formData.website,
+          company: formData.company,
+          languages: formData.languages,
+          hourlyRate: formData.hourlyRate,
+          industry: formData.industry,
+          paypalEmail: formData.paypalEmail
+        })
+      });
+
+      if (response.ok) {
+        alert('Profile updated successfully!');
+        setIsEditing(false);
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to update profile: ${errorData.error}`);
+      }
+    } catch (error) {
+      console.error('Profile update error:', error);
+      alert('Failed to update profile. Please try again.');
     }
-  }, [isClient, isTalent, user]);
+  }; // Fixed: Added missing closing brace
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -102,115 +157,48 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
     }
   };
 
-  const handleSave = () => {
-    // In production, this would update the user profile via API
-    console.log('Saving profile:', formData);
-    
-    // Save to localStorage for demo
-    if (isClient) {
-      localStorage.setItem('client_profile', JSON.stringify({
-        ...formData,
-        profilePhoto: profileImage
-      }));
-    } else {
-      localStorage.setItem('talent_profile', JSON.stringify({
-        ...formData,
-        profilePhoto: profileImage
-      }));
-      
-      // Also update talent profile in talent service if user is talent
-      if (user && isTalent) {
-        const talentId = `talent_user_${user.id}`;
-        const existingProfile = talentService.getTalentProfile(talentId);
-        
-        if (existingProfile) {
-          talentService.updateTalentProfile(talentId, {
-            ...existingProfile,
-            name: `${formData.firstName} ${formData.lastName}`,
-            title: formData.specialties || 'Voice Talent',
-            bio: formData.bio,
-            image: profileImage || existingProfile.image,
-            languages: formData.languages ? formData.languages.split(',').map(l => l.trim()) : existingProfile.languages,
-            specialties: formData.specialties ? formData.specialties.split(',').map(s => s.trim()) : existingProfile.specialties,
-            priceRange: formData.hourlyRate || existingProfile.priceRange,
-            updatedAt: new Date()
-          });
-        } else {
-          // Create new talent profile
-          const newProfile = {
-            id: talentId,
-            userId: user.id,
-            name: `${formData.firstName} ${formData.lastName}`,
-            title: formData.specialties || 'Voice Talent',
-            location: formData.location || 'Location not specified',
-            rating: 5.0,
-            reviews: 0,
-            responseTime: '1 hour',
-            priceRange: formData.hourlyRate || '$50-100',
-            image: profileImage || user.avatar || 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=400',
-            specialties: formData.specialties ? formData.specialties.split(',').map(s => s.trim()) : ['Commercial', 'Narration'],
-            languages: formData.languages ? formData.languages.split(',').map(l => l.trim()) : ['English'],
-            badge: 'New Talent',
-            bio: formData.bio || 'Professional voice talent',
-            experience: formData.yearsExperience || '1+ years',
-            completedProjects: 0,
-            repeatClients: 0,
-            equipment: ['Professional Equipment'],
-            demos: [],
-            isActive: true,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          };
-          
-          talentService.updateTalentProfile(newProfile.id, newProfile);
-        }
-      }
-    }
-    
-    // Update avatar in auth context
-    if (profileImage) {
-      updateUserAvatar(profileImage);
-    }
-    
-    setIsEditing(false);
-    // Show success message
-    alert('Profile updated successfully!');
-  };
+  // Fixed: Replaced entire handleCancel function to use API instead of localStorage
+  const handleCancel = async () => {
+    // Re-fetch profile data from API to reset form
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) return;
 
-  const handleCancel = () => {
-    // Reset form data to original values
-    const savedProfile = isClient 
-      ? localStorage.getItem('client_profile')
-      : localStorage.getItem('talent_profile');
-    
-    if (savedProfile) {
-      try {
-        const profileData = JSON.parse(savedProfile);
+      const response = await fetch('/api/users/profile', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const profile = data.profile;
+        
         setFormData(prev => ({
           ...prev,
-          firstName: profileData.firstName || '',
-          lastName: profileData.lastName || '',
-          email: profileData.email || user?.email || '',
-          phone: profileData.phone || '',
-          location: profileData.location || '',
-          bio: profileData.bio || '',
-          website: profileData.website || '',
-          company: profileData.company || '',
-          languages: profileData.languages || '',
-          yearsExperience: profileData.yearsExperience || '',
-          hourlyRate: profileData.hourlyRate || '',
-          industry: profileData.industry || '',
-          paypalEmail: profileData.paypalEmail || ''
+          firstName: profile.name?.split(' ')[0] || '',
+          lastName: profile.name?.split(' ').slice(1).join(' ') || '',
+          email: profile.email || '',
+          phone: profile.phone || '',
+          location: profile.location || '',
+          bio: profile.bio || '',
+          website: profile.website || '',
+          company: profile.company || '',
+          languages: profile.languages || '',
+          yearsExperience: profile.yearsExperience || '',
+          hourlyRate: profile.hourlyRate || '',
+          industry: profile.industry || '',
+          paypalEmail: profile.paypalEmail || ''
         }));
         
-        if (profileData.profilePhoto) {
-          setProfileImage(profileData.profilePhoto);
-        } else if (user?.avatar) {
-          setProfileImage(user.avatar);
+        if (profile.avatar) {
+          setProfileImage(profile.avatar);
         }
-      } catch (error) {
-        console.error('Failed to parse saved profile:', error);
       }
+    } catch (error) {
+      console.error('Failed to fetch profile:', error);
     }
     
     setIsEditing(false);
