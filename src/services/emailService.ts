@@ -1,3 +1,7 @@
+// ============================================================================
+// UPDATED emailService.ts - Replace your current file with this version
+// ============================================================================
+
 interface EmailTemplate {
   subject: string;
   html: string;
@@ -31,85 +35,41 @@ class EmailService {
   private config: EmailConfig;
 
   constructor() {
-    // Use only import.meta.env for client-side environment variables
-    this.config = {
-      smtpHost: import.meta.env.VITE_SMTP_HOST || 'mail.voicecastingpro.com',
-      smtpPort: parseInt(import.meta.env.VITE_SMTP_PORT || '587'),
-      smtpUser: import.meta.env.VITE_SMTP_USER || 'support@voicecastingpro.com',
-      smtpPassword: import.meta.env.VITE_SMTP_PASSWORD || '',
-      fromName: import.meta.env.VITE_MAIL_FROM_NAME || 'VoiceCastingPro',
-      fromAddress: import.meta.env.VITE_MAIL_FROM_ADDRESS || 'noreply@voicecastingpro.com',
-      supportEmail: import.meta.env.VITE_SUPPORT_EMAIL || 'support@voicecastingpro.com'
-    };
+    // NEW: Simplified constructor - no config needed since we use backend API
+    this.config = {} as EmailConfig;
   }
 
+  // NEW: Updated sendContactForm method that actually calls your backend API
   async sendContactForm(formData: ContactFormData): Promise<boolean> {
     try {
-      // Create email templates
-      const adminEmail = this.createAdminNotificationEmail(formData);
-      const userEmail = this.createUserConfirmationEmail(formData);
+      console.log('📧 Sending contact form to API:', formData);
 
-      console.log('📧 Sending admin notification email to:', this.config.supportEmail || 'support@voicecastingpro.com');
-      console.log('📧 Sending user confirmation email to:', formData.email);
-
-      // Log environment variables for debugging
-      console.log('Email Configuration:', {
-        smtpHost: this.config.smtpHost,
-        smtpPort: this.config.smtpPort,
-        smtpUser: this.config.smtpUser,
-        smtpPasswordSet: !!this.config.smtpPassword,
-        fromName: this.config.fromName,
-        fromAddress: this.config.fromAddress,
-        supportEmail: this.config.supportEmail
-      });
-
-      // In a real implementation, this would use a proper email service
-      // For demo purposes, we'll simulate the email sending
-      const emailData = {
-        adminNotification: {
-          to: this.config.supportEmail || 'support@voicecastingpro.com',
-          from: `${this.config.fromName} <${this.config.fromAddress}>`,
-          subject: adminEmail.subject,
-          html: adminEmail.html,
-          text: adminEmail.text,
-          attachments: formData.attachments || []
+      // Make API call to your backend
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        userConfirmation: {
-          to: formData.email,
-          from: `${this.config.fromName} <${this.config.fromAddress}>`,
-          subject: userEmail.subject,
-          html: userEmail.html,
-          text: userEmail.text
-        }
-      };
-
-      // Store email in localStorage for demo (in production, this would be sent via SMTP)
-      const sentEmails = JSON.parse(localStorage.getItem('sent_emails') || '[]');
-      sentEmails.push({
-        id: `email_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-        timestamp: new Date().toISOString(),
-        type: 'contact_form',
-        data: emailData,
-        formData
+        body: JSON.stringify(formData)
       });
-      localStorage.setItem('sent_emails', JSON.stringify(sentEmails));
 
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('API Error:', errorData);
+        throw new Error(errorData.error || 'Failed to send email');
+      }
+
+      const result = await response.json();
+      console.log('✅ Contact form sent successfully:', result);
       
-      // Log success message
-      console.log('✅ Contact form emails sent successfully!', {
-        adminEmail: emailData.adminNotification.to,
-        userEmail: emailData.userConfirmation.to
-      });
-
-      return true;
+      return result.success;
     } catch (error) {
-      console.error('Failed to send contact form email:', error);
+      console.error('Failed to send contact form:', error);
       return false;
     }
   }
 
+  // Keep the rest of your methods unchanged (they're not used anyway)
   private createAdminNotificationEmail(formData: ContactFormData): EmailTemplate {
     const subject = `New Contact Form Submission: ${formData.category} - ${formData.subject}`;
     
@@ -374,3 +334,53 @@ Connecting voices with opportunities worldwide
 
 export const emailService = new EmailService();
 export type { ContactFormData };
+
+// ============================================================================
+// WHAT CHANGED:
+// ============================================================================
+// 
+// OLD constructor:
+// constructor() {
+//   this.config = {
+//     smtpHost: import.meta.env.VITE_SMTP_HOST || 'mail.voicecastingpro.com',
+//     smtpPort: parseInt(import.meta.env.VITE_SMTP_PORT || '587'),
+//     // ... lots of environment variables
+//   };
+// }
+//
+// NEW constructor:
+// constructor() {
+//   this.config = {} as EmailConfig;
+// }
+//
+// ============================================================================
+//
+// OLD sendContactForm method (FAKE - just stored in localStorage):
+// async sendContactForm(formData: ContactFormData): Promise<boolean> {
+//   try {
+//     // ... creates email templates ...
+//     
+//     // Store email in localStorage for demo (in production, this would be sent via SMTP)
+//     const sentEmails = JSON.parse(localStorage.getItem('sent_emails') || '[]');
+//     sentEmails.push({...});
+//     localStorage.setItem('sent_emails', JSON.stringify(sentEmails));
+//     
+//     return true; // Always returned true, never sent real emails!
+//   }
+// }
+//
+// NEW sendContactForm method (REAL - calls your backend API):
+// async sendContactForm(formData: ContactFormData): Promise<boolean> {
+//   try {
+//     const response = await fetch('/api/contact', {
+//       method: 'POST',
+//       headers: { 'Content-Type': 'application/json' },
+//       body: JSON.stringify(formData)
+//     });
+//     
+//     const result = await response.json();
+//     return result.success;
+//   }
+// }
+//
+// ============================================================================
