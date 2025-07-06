@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, MessageCircle, Send, CheckCircle, AlertCircle, ArrowLeft, Paperclip, X, Download, HelpCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { ContactFormData } from '../services/emailService';
+import { emailService, ContactFormData } from '../services/emailService';
 
 interface ContactUsProps {
   onPageChange?: (page: string) => void;
@@ -91,33 +91,30 @@ const ContactUs: React.FC<ContactUsProps> = ({ onPageChange }) => {
         type: file.type
       }));
       
- const response = await fetch('/api/contact', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    ...formData,
-    attachments: attachmentInfo
-  })
-});
-
-const result = await response.json();
-
-if (response.ok && result.success) {
-  setSubmitStatus('success');
-  // Reset form after successful submission
-  setFormData({
-    name: '',
-    email: '',
-    subject: '',
-    message: '',
-    category: 'general'
-  });
-  setAttachments([]);
-} else {
-  throw new Error(result.error || 'Failed to send message');
-}
+      console.log('Sending contact form with data:', {
+        ...formData,
+        attachments: attachmentInfo
+      });
+      
+      const success = await emailService.sendContactForm({
+        ...formData,
+        attachments: attachmentInfo
+      });
+      
+      if (success) {
+        setSubmitStatus('success');
+        // Reset form after successful submission
+        setFormData({
+          name: '',
+          email: '',
+          subject: '',
+          message: '',
+          category: 'general'
+        });
+        setAttachments([]);
+      } else {
+        throw new Error('Failed to send message');
+      }
     } catch (error) {
       setSubmitStatus('error');
       setErrorMessage('Failed to send your message. Please try again or contact us directly.');
@@ -133,9 +130,10 @@ if (response.ok && result.success) {
   };
 
   const handleHelpCenterClick = () => {
-    // Use the onPageChange prop to navigate to the help center
     if (onPageChange) {
       onPageChange('help-center');
+    } else {
+      window.location.href = '/help-center';
     }
   };
 
@@ -215,7 +213,7 @@ if (response.ok && result.success) {
         {/* Back Button */}
         <motion.button
           onClick={handleBackClick}
-          className="flex items-center space-x-2 text-white/80 hover:text-white mb-8 transition-colors"
+          className="flex items-center space-x-2 text-white/80 hover:text-white mb-6 lg:mb-8 transition-colors"
           whileHover={{ x: -5 }}
           transition={{ type: "spring", stiffness: 400, damping: 10 }}
         >
@@ -225,44 +223,52 @@ if (response.ok && result.success) {
         
         {/* Header */}
         <motion.div 
-          className="text-center mb-16"
+          className="text-center mb-10 lg:mb-16"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-6">
+          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4 sm:mb-6">
             Contact Us
           </h1>
-          <p className="text-xl text-gray-300 max-w-3xl mx-auto">
+          <p className="text-lg sm:text-xl text-gray-300 max-w-3xl mx-auto">
             Have questions or need support? We're here to help you succeed on VoiceCastingPro
           </p>
         </motion.div>
 
-        <div className="grid lg:grid-cols-2 gap-12">
+        <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
           {/* Contact Form */}
           <motion.div 
-            className="bg-slate-800 rounded-2xl p-8 border border-gray-700"
+            className="bg-slate-800 rounded-xl sm:rounded-2xl p-6 sm:p-8 border border-gray-700"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
           >
-            <h2 className="text-2xl font-bold text-white mb-6">
+            <h2 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6">
               Send us a Message
             </h2>
             
             {/* Success Message */}
             {submitStatus === 'success' && (
               <motion.div 
-                className="bg-green-500/20 border border-green-400 text-green-100 px-4 py-3 rounded-lg mb-6 flex items-center space-x-2"
+                className="bg-green-500/20 border border-green-400 text-green-100 px-4 py-3 rounded-lg mb-6"
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                <CheckCircle className="h-5 w-5 flex-shrink-0" />
-                <div>
+                <div className="flex items-center space-x-2 mb-2">
+                  <CheckCircle className="h-5 w-5 flex-shrink-0" />
                   <p className="font-medium">Message sent successfully!</p>
-                  <p className="text-sm">We'll get back to you within 24 hours.</p>
                 </div>
+                <p className="text-sm">
+                  Thank you for contacting us! We've sent a confirmation to your email and our team will get back to you within 24 hours.
+                </p>
+                <motion.button 
+                  onClick={handleHelpCenterClick}
+                  className="mt-4 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-500 transition-colors"
+                >
+                  Visit Help Center
+                </motion.button>
               </motion.div>
             )}
 
@@ -280,7 +286,7 @@ if (response.ok && result.success) {
             )}
             
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid md:grid-cols-2 gap-6">
+              <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Full Name *
@@ -312,7 +318,7 @@ if (response.ok && result.success) {
                 </div>
               </div>
 
-              <div>
+              <div className="space-y-1">
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Category
                 </label>
@@ -330,7 +336,7 @@ if (response.ok && result.success) {
                 </select>
               </div>
 
-              <div>
+              <div className="space-y-1">
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Subject *
                 </label>
@@ -345,7 +351,7 @@ if (response.ok && result.success) {
                 />
               </div>
 
-              <div>
+              <div className="space-y-1">
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Message *
                 </label>
@@ -361,7 +367,7 @@ if (response.ok && result.success) {
               </div>
 
               {/* File Attachment Section */}
-              <div>
+              <div className="space-y-1">
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Attachments (Optional)
                 </label>
@@ -419,10 +425,10 @@ if (response.ok && result.success) {
                 </div>
               )}
 
-              <motion.button
+              <motion.button 
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-lg hover:shadow-lg hover:shadow-blue-600/20 transition-all font-semibold flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-2 sm:py-3 rounded-lg hover:shadow-lg hover:shadow-blue-600/20 transition-all font-semibold flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
                 whileHover={{ scale: isSubmitting ? 1 : 1.02 }}
                 whileTap={{ scale: isSubmitting ? 1 : 0.98 }}
               >
@@ -441,8 +447,8 @@ if (response.ok && result.success) {
             </form>
 
             {/* Email Info */}
-            <div className="mt-6 p-4 bg-blue-900/30 rounded-lg border border-blue-600/50">
-              <p className="text-blue-300 text-sm">
+            <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-blue-900/30 rounded-lg border border-blue-600/50">
+              <p className="text-blue-300 text-xs sm:text-sm">
                 <strong>📧 Email Confirmation:</strong> You'll receive an automatic confirmation email 
                 after submitting this form, and our team will respond within 24 hours.
               </p>
@@ -451,30 +457,30 @@ if (response.ok && result.success) {
 
           {/* Contact Information */}
           <motion.div 
-            className="space-y-8"
+            className="space-y-6 lg:space-y-8"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
           >
             {/* Contact Methods */}
             <div>
-              <h2 className="text-2xl font-bold text-white mb-6">
+              <h2 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6 text-center lg:text-left">
                 Get in Touch
               </h2>
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {contactMethods.map((method, index) => {
                   const IconComponent = method.icon;
                   return (
-                    <div key={index} className="bg-slate-800 rounded-xl p-6 border border-gray-700 hover:border-blue-600 transition-colors">
-                      <div className="flex items-start space-x-4">
+                    <div key={index} className="bg-slate-800 rounded-xl p-5 sm:p-6 border border-gray-700 hover:border-blue-600 transition-colors">
+                      <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-3 sm:space-y-0 sm:space-x-4">
                         <div className={`p-3 rounded-lg bg-gradient-to-r ${method.color}`}>
                           <IconComponent className="h-6 w-6 text-white" />
                         </div>
-                        <div>
-                          <h3 className="text-lg font-semibold text-white mb-1">
+                        <div className="text-center sm:text-left">
+                          <h3 className="text-base sm:text-lg font-semibold text-white mb-1">
                             {method.title}
                           </h3>
-                          <p className="text-gray-400 text-sm mb-2">
+                          <p className="text-gray-400 text-xs sm:text-sm mb-2">
                             {method.description}
                           </p>
                           {method.link ? (
@@ -498,27 +504,29 @@ if (response.ok && result.success) {
             </div>
 
             {/* Help Center Link */}
-            <div className="bg-slate-800 rounded-2xl p-8 border border-gray-700">
-              <div className="flex items-center space-x-3 mb-4">
+            <div className="bg-slate-800 rounded-xl sm:rounded-2xl p-6 sm:p-8 border border-gray-700">
+              <div className="flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:space-x-3 mb-4 text-center sm:text-left">
                 <div className="bg-indigo-900/50 p-3 rounded-lg">
                   <HelpCircle className="h-6 w-6 text-indigo-400" />
                 </div>
-                <h3 className="text-xl font-bold text-white">
+                <h3 className="text-lg sm:text-xl font-bold text-white">
                   Need Quick Answers?
                 </h3>
               </div>
-              <p className="text-gray-300 mb-6">
+              <p className="text-gray-300 mb-4 sm:mb-6 text-center sm:text-left text-sm sm:text-base">
                 Our Help Center has answers to frequently asked questions and detailed guides to help you get the most out of VoiceCastingPro.
               </p>
-              <motion.button 
-                onClick={handleHelpCenterClick}
-                className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-lg hover:shadow-lg hover:shadow-indigo-600/20 transition-all font-medium inline-flex items-center space-x-2"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <HelpCircle className="h-5 w-5" />
-                <span>Browse Help Center</span>
-              </motion.button>
+              <div className="text-center sm:text-left">
+                <motion.button 
+                  onClick={handleHelpCenterClick}
+                  className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-5 sm:px-6 py-2 sm:py-3 rounded-lg hover:shadow-lg hover:shadow-indigo-600/20 transition-all font-medium inline-flex items-center space-x-2 text-sm sm:text-base"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <HelpCircle className="h-5 w-5" />
+                  <span>Browse Help Center</span>
+                </motion.button>
+              </div>
             </div>
           </motion.div>
         </div>

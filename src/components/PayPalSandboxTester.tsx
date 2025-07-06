@@ -8,7 +8,7 @@ interface PayPalSandboxTesterProps {
 
 const PayPalSandboxTester: React.FC<PayPalSandboxTesterProps> = ({ onBack }) => {
   const [paypalConfig, setPaypalConfig] = useState({
-    clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || '',
+    clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || 'sb',
     clientSecret: '**********', // Never display the actual secret
     environment: import.meta.env.VITE_PAYPAL_ENVIRONMENT || 'sandbox',
     escrowEmail: import.meta.env.VITE_PAYPAL_ESCROW_EMAIL || 'escrow@voicecastingpro.com'
@@ -24,18 +24,41 @@ const PayPalSandboxTester: React.FC<PayPalSandboxTesterProps> = ({ onBack }) => 
   
   // Simulate loading the PayPal SDK
   const [sdkReady, setSdkReady] = useState(false);
+  const [sdkError, setSdkError] = useState<string | null>(null);
   
   useEffect(() => {
     // Simulate loading the PayPal SDK
     const loadPayPalScript = async () => {
-      // In a real implementation, you would load the actual PayPal SDK
-      // For the sandbox tester, we'll just simulate it
-      setTimeout(() => {
-        setSdkReady(true);
-      }, 1500);
+      try {
+        const clientId = import.meta.env.VITE_PAYPAL_CLIENT_ID || 'sb';
+        const script = document.createElement('script');
+        script.type = 'text/javascript';
+        script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD`;
+        script.async = true;
+        script.onload = () => {
+          setSdkReady(true);
+          console.log('PayPal SDK loaded successfully');
+        };
+        script.onerror = () => {
+          setSdkError('Failed to load PayPal SDK. Check your client ID and internet connection.');
+          console.error('Failed to load PayPal SDK');
+        };
+        document.body.appendChild(script);
+      } catch (error) {
+        console.error('Error loading PayPal SDK:', error);
+        setSdkError('Error initializing PayPal SDK');
+      }
     };
     
     loadPayPalScript();
+    
+    // Cleanup
+    return () => {
+      const script = document.querySelector('script[src*="paypal.com/sdk/js"]');
+      if (script) {
+        document.body.removeChild(script);
+      }
+    };
   }, []);
   
   const handleCreateTransaction = async () => {
@@ -453,9 +476,15 @@ const PayPalSandboxTester: React.FC<PayPalSandboxTesterProps> = ({ onBack }) => 
           <div className="mt-4 flex items-center space-x-2">
             <div className={`w-3 h-3 rounded-full ${sdkReady ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
             <span className="text-sm text-gray-400">
-              {sdkReady ? 'PayPal SDK Ready (Simulated)' : 'Loading PayPal SDK...'}
+              {sdkReady ? 'PayPal SDK Ready' : 'Loading PayPal SDK...'}
             </span>
           </div>
+          
+          {sdkError && (
+            <div className="mt-2 bg-red-900/30 border border-red-600/50 rounded-lg p-3 text-sm">
+              <p className="text-red-300">{sdkError}</p>
+            </div>
+          )}
         </motion.div>
         
         {/* Test Mode Selector */}
@@ -625,6 +654,28 @@ const PayPalSandboxTester: React.FC<PayPalSandboxTesterProps> = ({ onBack }) => 
               <p className="text-red-300">{errorMessage}</p>
             </div>
           )}
+          
+          <div className="text-center">
+            <p className="text-gray-300 mb-4">No payment history available</p>
+          </div>
+          
+          {/* PayPal Client ID Status */}
+          <div className="mt-4 bg-blue-900/30 border border-blue-600/50 rounded-lg p-4">
+            <h4 className="text-lg font-medium text-white mb-3">PayPal Client ID Status</h4>
+            <div className="flex items-center space-x-2">
+              <div className={`w-3 h-3 rounded-full ${paypalConfig.clientId && paypalConfig.clientId !== 'sb' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+              <span className="text-sm text-gray-300">
+                {paypalConfig.clientId && paypalConfig.clientId !== 'sb' 
+                  ? 'Custom PayPal Client ID detected' 
+                  : 'Using PayPal Sandbox default client ID (sb)'}
+              </span>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">
+              {paypalConfig.clientId && paypalConfig.clientId !== 'sb'
+                ? 'Your custom PayPal Client ID is configured correctly.'
+                : 'For full functionality, add your PayPal Client ID to the .env file as VITE_PAYPAL_CLIENT_ID'}
+            </p>
+          </div>
         </motion.div>
         
         {/* Documentation */}
@@ -643,10 +694,12 @@ const PayPalSandboxTester: React.FC<PayPalSandboxTesterProps> = ({ onBack }) => 
                 <p className="text-gray-300 text-sm mb-2">Add these variables to your <code className="bg-slate-800 px-2 py-1 rounded">.env</code> file:</p>
                 <pre className="bg-slate-800 p-3 rounded text-gray-300 text-sm overflow-x-auto">
                   <code>
-                    VITE_PAYPAL_CLIENT_ID=your_paypal_client_id_here<br/>
-                    VITE_PAYPAL_CLIENT_SECRET=your_paypal_client_secret_here<br/>
-                    VITE_PAYPAL_ENVIRONMENT=sandbox<br/>
+                    VITE_PAYPAL_CLIENT_ID=your_paypal_client_id_here
+                    VITE_PAYPAL_CLIENT_SECRET=your_paypal_client_secret_here
+                    VITE_PAYPAL_ENVIRONMENT=sandbox
                     VITE_PAYPAL_ESCROW_EMAIL=escrow@voicecastingpro.com
+                    VITE_PAYPAL_MONTHLY_PLAN_ID=P-MONTHLY-PLAN-ID
+                    VITE_PAYPAL_ANNUAL_PLAN_ID=P-ANNUAL-PLAN-ID
                   </code>
                 </pre>
               </div>
@@ -661,7 +714,7 @@ const PayPalSandboxTester: React.FC<PayPalSandboxTesterProps> = ({ onBack }) => 
                     {`// Add this to your component\n`}
                     {`useEffect(() => {\n`}
                     {`  const script = document.createElement('script');\n`}
-                    {`  script.src = \`https://www.paypal.com/sdk/js?client-id=\${import.meta.env.VITE_PAYPAL_CLIENT_ID}&currency=USD\`;\n`}
+                    {`  script.src = \`https://www.paypal.com/sdk/js?client-id=\${import.meta.env.VITE_PAYPAL_CLIENT_ID}&currency=USD&intent=subscription\`;\n`}
                     {`  script.async = true;\n`}
                     {`  document.body.appendChild(script);\n`}
                     {`}, []);`}
@@ -679,7 +732,7 @@ const PayPalSandboxTester: React.FC<PayPalSandboxTesterProps> = ({ onBack }) => 
                     {`// Example Node.js endpoint for creating an order\n`}
                     {`app.post('/api/create-paypal-order', async (req, res) => {\n`}
                     {`  try {\n`}
-                    {`    const { amount, currency } = req.body;\n`}
+                    {`    const { amount, currency = 'USD' } = req.body;\n`}
                     {`    const response = await fetch(\`\${PAYPAL_API}/v2/checkout/orders\`, {\n`}
                     {`      method: 'POST',\n`}
                     {`      headers: {\n`}
@@ -702,6 +755,40 @@ const PayPalSandboxTester: React.FC<PayPalSandboxTesterProps> = ({ onBack }) => 
                     {`    res.status(500).json({ error: error.message });\n`}
                     {`  }\n`}
                     {`});`}
+                  </code>
+                </pre>
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-medium text-white mb-2">Subscription Implementation</h3>
+              <div className="bg-slate-700 rounded-lg p-4 border border-gray-600">
+                <p className="text-gray-300 text-sm mb-2">Example code for implementing PayPal subscriptions:</p>
+                <pre className="bg-slate-800 p-3 rounded text-gray-300 text-sm overflow-x-auto">
+                  <code>
+                    {`// Create a PayPal subscription button\n`}
+                    {`window.paypal.Buttons({\n`}
+                    {`  style: {\n`}
+                    {`    shape: 'rect',\n`}
+                    {`    color: 'blue',\n`}
+                    {`    layout: 'vertical',\n`}
+                    {`    label: 'subscribe'\n`}
+                    {`  },\n`}
+                    {`  createSubscription: (data, actions) => {\n`}
+                    {`    return actions.subscription.create({\n`}
+                    {`      'plan_id': 'P-PLAN-ID-FROM-PAYPAL',\n`}
+                    {`      'application_context': {\n`}
+                    {`        'shipping_preference': 'NO_SHIPPING',\n`}
+                    {`        'user_action': 'SUBSCRIBE_NOW'\n`}
+                    {`      }\n`}
+                    {`    });\n`}
+                    {`  },\n`}
+                    {`  onApprove: (data, actions) => {\n`}
+                    {`    console.log('Subscription approved:', data.subscriptionID);\n`}
+                    {`    // Handle successful subscription\n`}
+                    {`    return actions.order.capture();\n`}
+                    {`  }\n`}
+                    {`}).render('#paypal-button-container');`}
                   </code>
                 </pre>
               </div>

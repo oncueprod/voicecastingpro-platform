@@ -78,25 +78,42 @@ input, textarea, select {
 }
 
 .text-gradient {
-  @apply bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent;
+  background: linear-gradient(to right, #3b82f6, #6366f1);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .btn-gradient {
-  @apply bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700;
+  background: linear-gradient(to right, #3b82f6, #6366f1);
 }
 
 .card-hover {
-  @apply transition-all duration-300 hover:shadow-lg hover:shadow-blue-600/10 hover:-translate-y-1;
+  transition: all 0.3s;
+}
+.card-hover:hover {
+  box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.1);
+  transform: translateY(-4px);
 }
 
 .waveform-bar {
-  @apply rounded-full transition-all duration-300;
+  border-radius: 9999px;
+  transition: all 0.3s;
   animation: waveform 1.5s ease-in-out infinite;
   animation-play-state: paused;
 }
 
 .playing .waveform-bar {
   animation-play-state: running;
+}
+
+@keyframes waveform {
+  0%, 100% {
+    height: 8px;
+  }
+  50% {
+    height: 24px;
+  }
 }
 
 @keyframes waveform {
@@ -203,4 +220,46 @@ input, textarea, select {
 .gradient-morph {
   background-size: 200% 200%;
   animation: gradient-morph 15s ease infinite;
+}
+
+/* Responsive design improvements */
+@media (max-width: 768px) {
+  h1 {
+    font-size: 2rem !important;
+  }
+  
+  h2 {
+    font-size: 1.75rem !important;
+  }
+  
+  .text-xl {
+    font-size: 1.125rem !important;
+  }
+  
+  .text-lg {
+    font-size: 1rem !important;
+  }
+}
+
+/* Mobile-specific adjustments */
+@media (max-width: 640px) {
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  .py-20 {
+    padding-top: 3rem;
+    padding-bottom: 3rem;
+  }
+  
+  .py-16 {
+    padding-top: 2.5rem;
+    padding-bottom: 2.5rem;
+  }
+  
+  .py-12 {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+  }
 }

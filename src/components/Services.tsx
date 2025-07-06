@@ -100,7 +100,7 @@ const Services: React.FC<ServicesProps> = ({ onPageChange }) => {
         </motion.div>
 
         <motion.div 
-          className="grid md:grid-cols-2 lg:grid-cols-3 gap-8"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8"
           variants={containerVariants}
           initial="hidden"
           whileInView="visible"
@@ -111,7 +111,7 @@ const Services: React.FC<ServicesProps> = ({ onPageChange }) => {
             return (
               <motion.div
                 key={index}
-                className={`relative bg-slate-700 rounded-xl p-8 border transition-all duration-300 hover:-translate-y-2 hover:shadow-xl ${
+                className={`relative bg-slate-700 rounded-xl p-6 sm:p-8 border transition-all duration-300 hover:-translate-y-2 hover:shadow-xl ${
                   service.popular
                     ? 'border-blue-600 shadow-lg shadow-blue-600/20'
                     : 'border-gray-600 hover:border-blue-600'

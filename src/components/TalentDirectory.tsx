@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, Filter, Star, MapPin, Clock, Play, Pause, SlidersHorizontal, ArrowLeft, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
-import { talentService } from '../services/talentService';
+import { talentService, TalentProfile } from '../services/talentService';
+import { audioService, AudioFile } from '../services/audioService';
 
 interface TalentDirectoryProps {
   searchQuery?: string;
@@ -14,13 +15,15 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
   const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedLanguage, setSelectedLanguage] = useState('all');
-  const [playingIndex, setPlayingIndex] = useState<number | null>(null);
+  const [playingTalentId, setPlayingTalentId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [hasActiveFilters, setHasActiveFilters] = useState(false);
   const { user } = useAuth();
-  const [talents, setTalents] = useState<any[]>([]);
+  const [talents, setTalents] = useState<TalentProfile[]>([]);
   const [userTalentAdded, setUserTalentAdded] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [talentDemos, setTalentDemos] = useState<{[key: string]: AudioFile[]}>({});
+  const [audioElements, setAudioElements] = useState<{[key: string]: HTMLAudioElement}>({});
   const audioTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -38,6 +41,34 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
     );
     
     setTalents(uniqueProfiles);
+    
+    // Load demo files for each talent
+    const demos: {[key: string]: AudioFile[]} = {};
+    uniqueProfiles.forEach(talent => {
+      // Try to get real demos first
+      if (talent.userId) {
+        const talentDemos = audioService.getUserDemos(talent.userId);
+        if (talentDemos.length > 0) {
+          demos[talent.id] = talentDemos;
+          return;
+        }
+      }
+      
+      // If no real demos, create a mock demo with a reliable sample URL
+      demos[talent.id] = [
+        {
+          id: `demo_${talent.id}_1`,
+          name: 'Commercial Demo',
+          url: audioService.getSampleAudioUrl(),
+          duration: 30,
+          size: 1024000,
+          uploadedAt: new Date(),
+          userId: talent.userId || 'mock_user',
+          type: 'demo'
+        }
+      ];
+    });
+    setTalentDemos(demos);
   }, []);
 
   // Check for search query from Services component
@@ -159,8 +190,116 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
     return matchesSearch && matchesCategory && matchesLanguage;
   });
 
-  const handlePlayPause = (index: number, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent triggering the card click
+  const handlePlayPause = (talentId: string, e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent triggering the card click
+    e.stopPropagation();
+
+    try {
+      // Clear any existing timer
+      if (audioTimerRef.current) {
+        clearTimeout(audioTimerRef.current);
+        audioTimerRef.current = null;
+      }
+      
+      const demos = talentDemos[talentId] || [];
+      
+      // Reset any previous playback errors
+      setPlaybackError(null);
+      
+      if (demos.length === 0) {
+        console.log('No demo files available for talent:', talentId);
+        return;
+      }
+      
+      // Use the first demo file
+      const demo = demos[0];
+      console.log('Demo file:', demo);
+      
+      if (playingTalentId === talentId) {
+        // Stop playing
+        const audio = audioElements[talentId];
+        if (audio) {
+          audio.pause();
+          audio.currentTime = 0;
+        }
+        setPlayingTalentId(null);
+      } else {
+        // Stop current audio if playing
+        if (playingTalentId && audioElements[playingTalentId]) {
+          audioElements[playingTalentId].pause();
+          audioElements[playingTalentId].currentTime = 0;
+        }
+        
+        // Create new audio element
+        let audio = audioElements[talentId];
+        
+        // Create a new audio element if one doesn't exist
+        if (!audio) {
+          try {
+            audio = new Audio();
+            
+            // Set up event listeners
+            audio.addEventListener('ended', () => {
+              setPlayingTalentId(null);
+            });
+            
+            audio.addEventListener('error', (e) => {
+              console.error('Audio playback error:', e);
+              setPlayingTalentId(null);
+              setPlaybackError(`Unable to play demo for ${talents.find(t => t.id === talentId)?.name}. The file may be corrupted.`);
+            });
+            
+            // Store reference
+            setAudioElements(prev => ({
+              ...prev,
+              [talentId]: audio
+            }));
+          } catch (error) {
+            console.error('Error creating audio element:', error);
+            setPlaybackError('Failed to create audio player');
+            return;
+          }
+        }
+        
+        try {
+          // Set source and play
+          audio.src = demo.url;
+          audio.volume = 0.8;
+          
+          // Play the audio with error handling
+          audio.play().catch(err => {
+            console.error('Error playing audio:', err);
+            setPlayingTalentId(null);
+            setPlaybackError(`Unable to play demo for ${talents.find(t => t.id === talentId)?.name}. Please try again.`);
+          });
+          
+          // Update state
+          setPlayingTalentId(talentId);
+          
+          // Auto-stop after the duration of the demo or 30 seconds max
+          audioTimerRef.current = setTimeout(() => {
+            if (audio && !audio.paused) {
+              audio.pause();
+              audio.currentTime = 0;
+            }
+            setPlayingTalentId(null);
+            audioTimerRef.current = null;
+          }, Math.min(demo.duration * 1000, 30000));
+        } catch (error) {
+          console.error('Error setting up audio playback:', error);
+          setPlaybackError('Failed to play audio demo');
+        }
+      }
+    } catch (error) {
+      console.error('Error in handlePlayPause:', error);
+      setPlaybackError('An error occurred while trying to play the audio');
+    }
+  };
+
+  // Original handlePlayPause function - keeping as reference but not using it
+  const handlePlayPauseOriginal = (talentId: string, e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent triggering the card click
+    e.stopPropagation();
     
     // Clear any existing timer
     if (audioTimerRef.current) {
@@ -168,58 +307,106 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
       audioTimerRef.current = null;
     }
     
-    if (playingIndex === index) {
+    const demos = talentDemos[talentId] || [];
+    
+    // Reset any previous playback errors
+    setPlaybackError(null);
+    
+    if (demos.length === 0) {
+      console.log('No demo files available for talent:', talentId);
+      return;
+    }
+    
+    // Use the first demo file
+    const demo = demos[0];
+    console.log('Demo file:', demo);
+    
+    if (playingTalentId === talentId) {
       // Stop playing
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
+      const audio = audioElements[talentId];
+      if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
       }
-      setPlayingIndex(null);
+      setPlayingTalentId(null);
     } else {
       // Stop current audio if playing
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
+      if (playingTalentId && audioElements[playingTalentId]) {
+        audioElements[playingTalentId].pause();
+        audioElements[playingTalentId].currentTime = 0;
       }
       
-      // Create new audio element
-      const audio = new Audio();
+      let audio = audioElements[talentId];
       
-      // Set up event listeners
-      audio.addEventListener('ended', () => {
-        setPlayingIndex(null);
-      });
-      
-      // In a real app, this would play an actual demo file
-      // For demo purposes, we'll use a silent audio file
-      audio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-      
-      // Set volume and play
-      audio.volume = 0.8;
-      audio.play().catch(err => console.error('Error playing audio:', err));
-      
-      // Store reference and update state
-      audioRef.current = audio;
-      setPlayingIndex(index);
-      
-      // Auto-stop after 30 seconds for demo purposes
-      audioTimerRef.current = setTimeout(() => {
-        if (audioRef.current) {
-          audioRef.current.pause();
-          audioRef.current.currentTime = 0;
+      // Create a new audio element if one doesn't exist
+      if (!audio) {
+        try {
+          audio = new Audio();
+          
+          // Set up event listeners
+          audio.addEventListener('ended', () => {
+            setPlayingTalentId(null);
+          });
+          
+          audio.addEventListener('error', (e) => {
+            console.error('Audio playback error:', e);
+            setPlayingTalentId(null);
+            setPlaybackError(`Unable to play demo for ${talents.find(t => t.id === talentId)?.name}. The file may be corrupted.`);
+          });
+          
+          // Store reference
+          setAudioElements(prev => ({
+            ...prev,
+            [talentId]: audio
+          }));
+        } catch (error) {
+          console.error('Error creating audio element:', error);
+          setPlaybackError('Failed to create audio player');
+          return;
         }
-        setPlayingIndex(null);
-        audioTimerRef.current = null;
-      }, 30000);
+      }
+      
+      try {
+        // Set source and play
+        audio.src = demo.url;
+        audio.volume = 0.8;
+        
+        // Play the audio with error handling
+        audio.play().catch(err => {
+          console.error('Error playing audio:', err);
+          setPlayingTalentId(null);
+          setPlaybackError(`Unable to play demo for ${talents.find(t => t.id === talentId)?.name}. Please try again.`);
+        });
+        
+        // Update state
+        setPlayingTalentId(talentId);
+        
+        // Auto-stop after the duration of the demo or 30 seconds max
+        audioTimerRef.current = setTimeout(() => {
+          if (audio && !audio.paused) {
+            audio.pause();
+            audio.currentTime = 0;
+          }
+          setPlayingTalentId(null);
+          audioTimerRef.current = null;
+        }, Math.min(demo.duration * 1000, 30000));
+      } catch (error) {
+        console.error('Error setting up audio playback:', error);
+        setPlaybackError('Failed to play audio demo');
+      }
     }
   };
 
   const handleTalentClick = (talentId: string) => {
     // Stop any playing audio before navigating
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      setPlayingIndex(null);
+    if (playingTalentId && audioElements[playingTalentId]) {
+      try {
+        audioElements[playingTalentId].pause();
+        audioElements[playingTalentId].currentTime = 0;
+      } catch (error) {
+        console.error('Error stopping audio:', error);
+      }
+      setPlayingTalentId(null);
     }
     
     // Clear any existing timer
@@ -254,16 +441,17 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
   // Clean up audio on unmount
   useEffect(() => {
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = '';
-      }
+      // Clean up all audio elements
+      Object.values(audioElements).forEach(audio => {
+        audio.pause();
+        audio.src = '';
+      });
       
       if (audioTimerRef.current) {
         clearTimeout(audioTimerRef.current);
       }
     };
-  }, []);
+  }, [audioElements]);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -286,7 +474,7 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
         {/* Back Button */}
         <motion.button
           onClick={handleBackClick}
-          className="flex items-center space-x-2 text-white/80 hover:text-white mb-8 transition-colors"
+          className="flex items-center space-x-2 text-white/80 hover:text-white mb-6 lg:mb-8 transition-colors"
           whileHover={{ x: -5 }}
           transition={{ type: "spring", stiffness: 400, damping: 10 }}
         >
@@ -311,13 +499,13 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
 
         {/* Search and Filters */}
         <motion.div 
-          className="bg-slate-800 rounded-xl shadow-lg border border-gray-700 p-6 mb-8"
+          className="bg-slate-800 rounded-xl shadow-lg border border-gray-700 p-4 sm:p-6 mb-6 lg:mb-8"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
         >
           {/* Search Bar */}
-          <div className="flex flex-col lg:flex-row gap-4 mb-4">
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-500" />
               <input
@@ -338,7 +526,7 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
             </div>
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="lg:hidden flex items-center space-x-2 px-4 py-3 bg-slate-700 border border-gray-600 rounded-lg hover:border-blue-500 transition-colors"
+              className="sm:hidden flex items-center space-x-2 px-4 py-3 bg-slate-700 border border-gray-600 rounded-lg hover:border-blue-500 transition-colors"
             >
               <SlidersHorizontal className="h-5 w-5 text-gray-400" />
               <span className="text-gray-300">Filters</span>
@@ -346,7 +534,7 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
           </div>
 
           {/* Filters */}
-          <div className={`grid md:grid-cols-2 lg:grid-cols-3 gap-4 ${showFilters ? 'block' : 'hidden lg:grid'}`}>
+          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 ${showFilters ? 'block' : 'hidden sm:grid'}`}>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Category
@@ -475,9 +663,21 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
           </p>
         </motion.div>
 
+        {/* Playback Error Message */}
+        {playbackError && (
+          <motion.div 
+            className="mb-6 bg-red-900/30 border border-red-600/50 rounded-lg p-4"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <p className="text-red-300 text-sm">{playbackError}</p>
+          </motion.div>
+        )}
+
         {/* Talent Grid */}
         <motion.div 
-          className="grid md:grid-cols-2 lg:grid-cols-3 gap-8"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8"
           variants={containerVariants}
           initial="hidden"
           animate="visible"
@@ -485,7 +685,7 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
           {filteredTalents.map((talent, index) => (
             <motion.div
               key={talent.id}
-              className="bg-slate-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group hover:-translate-y-1 border border-gray-700 hover:border-blue-600 cursor-pointer"
+              className="bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group hover:-translate-y-1 border border-gray-700 hover:border-blue-600 cursor-pointer"
               variants={itemVariants}
               onClick={() => handleTalentClick(talent.id)}
             >
@@ -493,8 +693,8 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
               <div className="relative">
                 <img
                   src={talent.image}
-                  alt={talent.name}
-                  className="w-full h-48 object-cover"
+                  alt={talent.name} 
+                  className="w-full h-40 sm:h-48 object-cover"
                 />
                 <div className="absolute top-4 left-4">
                   <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">
@@ -503,13 +703,13 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
                 </div>
               </div>
 
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 {/* Name and title */}
                 <div className="mb-4">
-                  <h3 className="text-xl font-bold text-white mb-1">
+                  <h3 className="text-lg sm:text-xl font-bold text-white mb-1">
                     {talent.name}
                   </h3>
-                  <p className="text-gray-400">{talent.title}</p>
+                  <p className="text-gray-400 text-sm sm:text-base">{talent.title}</p>
                 </div>
 
                 {/* Rating and location */}
@@ -526,43 +726,47 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
                 </div>
 
                 {/* Audio player */}
-                <div className="bg-slate-700 rounded-lg p-4 mb-4 border border-gray-600">
-                  <div className="flex items-center space-x-3">
+                <div className="bg-slate-700 rounded-lg p-3 sm:p-4 mb-3 sm:mb-4 border border-gray-600">
+                  <div className="flex items-center space-x-2 sm:space-x-3">
                     <motion.button
-                      onClick={(e) => handlePlayPause(index, e)}
+                      onClick={(e) => handlePlayPause(talent.id, e)}
                       className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-2 rounded-full hover:shadow-lg hover:shadow-blue-600/20 transition-colors"
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
                     >
-                      {playingIndex === index ? (
+                      {playingTalentId === talent.id ? (
                         <Pause className="h-4 w-4" />
                       ) : (
                         <Play className="h-4 w-4" />
                       )}
                     </motion.button>
                     <div className="flex-1">
-                      <div className={`flex items-center space-x-1 ${playingIndex === index ? 'playing' : ''}`}>
+                      <div className={`flex items-center space-x-1 ${playingTalentId === talent.id ? 'playing' : ''}`}>
                         {[...Array(12)].map((_, i) => (
                           <div
                             key={i}
                             className={`waveform-bar ${
-                              playingIndex === index ? 'bg-blue-500' : 'bg-gray-600'
+                              playingTalentId === talent.id ? 'bg-blue-500' : 'bg-gray-600'
                             }`}
                             style={{
                               width: '3px',
                               height: `${Math.random() * 20 + 8}px`,
-                              animationDelay: `${i * 0.05}s`
+                              animationDelay: playingTalentId === talent.id ? `${i * 0.05}s` : '0s'
                             }}
                           ></div>
                         ))}
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">Voice Demo - 0:30</div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {talentDemos[talent.id]?.length > 0 
+                          ? `${talentDemos[talent.id][0].name} - ${Math.floor(talentDemos[talent.id][0].duration)}s` 
+                          : 'Voice Demo - 0:30'}
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Specialties */}
-                <div className="mb-4">
+                <div className="mb-3 sm:mb-4">
                   <div className="flex flex-wrap gap-2">
                     {talent.specialties.slice(0, 3).map((specialty: string, idx: number) => (
                       <span
@@ -581,25 +785,25 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
                 </div>
 
                 {/* Languages */}
-                <div className="mb-4">
-                  <div className="text-sm text-gray-400">
+                <div className="mb-3 sm:mb-4">
+                  <div className="text-xs sm:text-sm text-gray-400">
                     Languages: {talent.languages.join(', ')}
                   </div>
                 </div>
 
                 {/* Stats */}
-                <div className="flex items-center justify-between mb-6 text-sm">
+                <div className="flex items-center justify-between mb-4 sm:mb-6 text-xs sm:text-sm">
                   <div className="flex items-center space-x-1 text-gray-400">
                     <Clock className="h-4 w-4" />
                     <span>{talent.responseTime}</span>
                   </div>
                   <div className="font-semibold text-white">
-                    {talent.priceRange}
+                    ${talent.priceRange.replace(/\$/g, '')}
                   </div>
                 </div>
 
                 {/* Actions */}
-                <div className="space-y-2">
+                <div className="space-y-1 sm:space-y-2">
                   <motion.button 
                     onClick={(e) => {
                       e.stopPropagation();
@@ -631,14 +835,14 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onT
         {/* Load More */}
         {filteredTalents.length > 0 && (
           <motion.div 
-            className="text-center mt-12"
+            className="text-center mt-8 lg:mt-12"
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.1 }}
             transition={{ duration: 0.6 }}
           >
             <motion.button 
-              className="bg-slate-800 border border-gray-700 text-gray-300 px-8 py-4 rounded-xl hover:border-blue-600 hover:text-blue-400 transition-colors font-semibold text-lg"
+              className="bg-slate-800 border border-gray-700 text-gray-300 px-6 sm:px-8 py-3 sm:py-4 rounded-xl hover:border-blue-600 hover:text-blue-400 transition-colors font-semibold text-base sm:text-lg"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >

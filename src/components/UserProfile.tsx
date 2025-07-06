@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, User, Mail, Phone, MapPin, Camera, Save, Edit3, DollarSign, Globe, Mic, Music } from 'lucide-react';
+import { ArrowLeft, User, Mail, Phone, MapPin, Camera, Save, Edit3, DollarSign, Globe, Mic, Music, Upload } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import ProtectedRoute from './ProtectedRoute';
 import AudioUpload from './AudioUpload';
+import { audioService } from '../services/audioService';
 import { talentService } from '../services/talentService';
 
 interface UserProfileProps {
@@ -18,8 +19,8 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
     firstName: '',
     lastName: '',
     email: user?.email || '',
-    phone: '',
-    location: '',
+    phone: user?.phone || '',
+    location: user?.location || '',
     bio: '',
     website: '',
     company: '',
@@ -36,6 +37,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
   });
   const [profileImage, setProfileImage] = useState<string | null>(user?.avatar || null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [audioFiles, setAudioFiles] = useState<any[]>([]);
 
   // Load saved profile data if available
   useEffect(() => {
@@ -219,6 +221,40 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
     alert('Audio demo uploaded successfully!');
   };
 
+  const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    
+    if (files.length === 0) {
+      return;
+    }
+    
+    // Check if we're already at the maximum
+    const maxFiles = 5;
+    if (audioFiles.length >= maxFiles) {
+      setAudioUploadError(`Maximum ${maxFiles} audio files allowed. Please remove some files first.`);
+      return;
+    }
+    
+    // Check if adding these would exceed the maximum
+    if (audioFiles.length + files.length > maxFiles) {
+      setAudioUploadError(`You can only add ${maxFiles - audioFiles.length} more files to stay within the limit of ${maxFiles}.`);
+      // Only take as many files as we can add
+      files.splice(maxFiles - audioFiles.length);
+    }
+    
+    for (const file of files) {
+      if (file.size > 50 * 1024 * 1024) {
+        setAudioUploadError(`File ${file.name} is too large. Maximum size is 50MB.`);
+        continue;
+      }
+      
+      if (!['audio/mpeg', 'audio/wav', 'audio/mp3'].includes(file.type)) {
+        setAudioUploadError(`File ${file.name} is not a supported audio format. Please upload MP3 or WAV files.`);
+        continue;
+      }
+    }
+  };
+
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-slate-900 pt-24 pb-20">
@@ -226,7 +262,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
           {/* Back Button */}
           <motion.button
             onClick={onBack}
-            className="flex items-center space-x-2 text-white/80 hover:text-white mb-8 transition-colors"
+            className="flex items-center space-x-2 text-white/80 hover:text-white mb-6 lg:mb-8 transition-colors"
             whileHover={{ x: -5 }}
             transition={{ type: "spring", stiffness: 400, damping: 10 }}
           >
@@ -236,17 +272,17 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
 
           {/* Profile Header */}
           <motion.div 
-            className="bg-slate-800 rounded-2xl p-8 mb-8 border border-gray-700"
+            className="bg-slate-800 rounded-xl sm:rounded-2xl p-6 sm:p-8 mb-6 sm:mb-8 border border-gray-700"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <div className="flex items-center justify-between mb-6">
-              <h1 className="text-3xl font-bold text-white">My Profile</h1>
+            <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
+              <h1 className="text-2xl sm:text-3xl font-bold text-white">My Profile</h1>
               {!isEditing ? (
                 <motion.button
                   onClick={() => setIsEditing(true)}
-                  className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors font-medium"
+                  className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg transition-colors font-medium text-sm sm:text-base"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
@@ -254,10 +290,10 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
                   <span>Edit Profile</span>
                 </motion.button>
               ) : (
-                <div className="flex space-x-3">
+                <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
                   <motion.button
                     onClick={handleSave}
-                    className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors font-medium"
+                    className="flex items-center justify-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg transition-colors font-medium text-sm sm:text-base"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -266,7 +302,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
                   </motion.button>
                   <motion.button
                     onClick={handleCancel}
-                    className="px-6 py-3 border border-gray-600 text-gray-300 rounded-lg hover:border-red-600 hover:text-red-400 transition-colors font-medium"
+                    className="px-4 sm:px-6 py-2 sm:py-3 border border-gray-600 text-gray-300 rounded-lg hover:border-red-600 hover:text-red-400 transition-colors font-medium text-sm sm:text-base"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -277,8 +313,8 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
             </div>
 
             {/* Profile Picture and Basic Info */}
-            <div className="flex flex-col lg:flex-row items-start lg:items-center space-y-6 lg:space-y-0 lg:space-x-8">
-              <div className="relative">
+            <div className="flex flex-col lg:flex-row items-center lg:items-start space-y-6 lg:space-y-0 lg:space-x-8">
+              <div className="relative mx-auto lg:mx-0">
                 <div className="w-32 h-32 bg-slate-700 rounded-2xl flex items-center justify-center overflow-hidden">
                   {profileImage ? (
                     <img 
@@ -311,7 +347,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
               </div>
 
               <div className="flex-1">
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       First Name
@@ -377,17 +413,17 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
 
           {/* Profile Details */}
           <motion.div 
-            className="bg-slate-800 rounded-2xl p-8 border border-gray-700 mb-8"
+            className="bg-slate-800 rounded-xl sm:rounded-2xl p-6 sm:p-8 border border-gray-700 mb-6 sm:mb-8"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
           >
-            <h2 className="text-2xl font-bold text-white mb-6">Profile Details</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6">Profile Details</h2>
 
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Contact Information */}
               <div>
-                <h3 className="text-lg font-semibold text-white mb-4">Contact Information</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4">Contact Information</h3>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -447,7 +483,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
 
               {/* Professional Information */}
               <div>
-                <h3 className="text-lg font-semibold text-white mb-4">
+                <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4">
                   {isClient ? 'Business Information' : 'Professional Information'}
                 </h3>
                 <div className="space-y-4">
@@ -589,7 +625,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
 
             {/* Bio Section */}
             <div className="mt-8">
-              <h3 className="text-lg font-semibold text-white mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4">
                 {isClient ? 'About Your Business' : 'Professional Bio'}
               </h3>
               {isEditing ? (
@@ -614,17 +650,17 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
 
           {/* PayPal Integration Section */}
           <motion.div 
-            className="bg-slate-800 rounded-2xl p-8 border border-gray-700 mb-8"
+            className="bg-slate-800 rounded-xl sm:rounded-2xl p-6 sm:p-8 border border-gray-700 mb-6 sm:mb-8"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
           >
-            <div className="flex items-center space-x-3 mb-4">
+            <div className="flex items-center space-x-3 mb-3 sm:mb-4">
               <DollarSign className="h-6 w-6 text-blue-400" />
-              <h2 className="text-2xl font-bold text-white">Payment Settings</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-white">Payment Settings</h2>
             </div>
             
-            <div className="mb-6">
+            <div className="mb-4 sm:mb-6">
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 PayPal Email Address
               </label>
@@ -647,14 +683,14 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
               </p>
             </div>
 
-            <div className="bg-blue-900/30 border border-blue-600/50 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-blue-300 mb-4">Secure PayPal Integration</h3>
-              <p className="text-blue-200 mb-4">
+            <div className="bg-blue-900/30 border border-blue-600/50 rounded-lg p-4 sm:p-6">
+              <h3 className="text-base sm:text-lg font-semibold text-blue-300 mb-3 sm:mb-4">Secure PayPal Integration</h3>
+              <p className="text-blue-200 mb-3 sm:mb-4 text-sm sm:text-base">
                 All payments are processed securely through PayPal. {isClient 
                   ? 'You can pay with your PayPal balance, bank account, or any major credit/debit card.' 
                   : 'You will receive payments directly to your PayPal account.'}
               </p>
-              <div className="space-y-3 text-blue-200 text-sm">
+              <div className="space-y-2 sm:space-y-3 text-blue-200 text-xs sm:text-sm">
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
                   <span>{isClient 
@@ -667,31 +703,27 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
                     ? 'Funds are released only when you approve the work' 
                     : 'Funds are released to you when the client approves your work'}</span>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                  <span>Platform fee: 5% of project value</span>
-                </div>
               </div>
             </div>
           </motion.div>
 
           {/* Voice Demos Section (Talent Only) */}
           {isTalent && (
-            <motion.div 
-              className="bg-slate-800 rounded-2xl p-8 border border-gray-700"
+            <motion.div
+              className="bg-slate-800 rounded-xl sm:rounded-2xl p-6 sm:p-8 border border-gray-700"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.6 }}
             >
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-col sm:flex-row items-center justify-between mb-4 sm:mb-6 gap-3">
                 <div className="flex items-center space-x-3">
                   <Music className="h-6 w-6 text-green-400" />
-                  <h2 className="text-2xl font-bold text-white">Voice Demos</h2>
+                  <h2 className="text-xl sm:text-2xl font-bold text-white">Voice Demos</h2>
                 </div>
                 
                 <motion.button
                   onClick={() => setShowAudioUpload(!showAudioUpload)}
-                  className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
+                  className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
@@ -700,62 +732,108 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
                 </motion.button>
               </div>
 
-              {showAudioUpload && (
-                <div className="mb-8">
-                  <AudioUpload
-                    userId={user?.id || 'demo_user'}
-                    type="demo"
-                    title="Upload Voice Demos"
-                    maxFiles={10}
-                    onUploadComplete={handleAudioUploadComplete}
-                  />
-                </div>
+              {showAudioUpload && user?.id && (
+                <AudioUpload
+                  userId={user.id}
+                  type="demo"
+                  title="Upload Demo Reels"
+                  maxFiles={5}
+                  onUploadComplete={(file) => {
+                    // Refresh the audio files list
+                    setAudioFiles(audioService.getUserDemos(user.id));
+                  }}
+                />
               )}
 
-              <div className="space-y-4">
-                <div className="bg-slate-700 rounded-lg p-4 border border-gray-600">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <button
-                        className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full transition-colors"
-                      >
-                        <Mic className="h-5 w-5" />
-                      </button>
+              <div className="space-y-3 sm:space-y-4">
+                {/* Demo samples */}
+                {user?.id && (
+                  <>
+                    {/* Get user demos */}
+                    {(() => {
+                      // Use the state variable if it has data, otherwise fetch from service
+                      const userDemos = audioFiles.length > 0 ? audioFiles : audioService.getUserDemos(user.id);
                       
-                      <div>
-                        <h4 className="text-white font-medium">Commercial Demo</h4>
-                        <div className="flex items-center space-x-4 text-sm text-gray-400">
-                          <span>45s</span>
-                          <span>Commercial</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                      // Update state if needed
+                      if (audioFiles.length === 0 && userDemos.length > 0) {
+                        setAudioFiles(userDemos);
+                      }
+                      
+                      if (userDemos.length > 0) {
+                        return userDemos.map((demo, index) => (
+                          <div key={index} className="bg-slate-700 rounded-lg p-4 border border-gray-600">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-4">
+                                <button
+                                  className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full transition-colors"
+                                >
+                                  <Mic className="h-5 w-5" />
+                                </button>
+                                
+                                <div>
+                                  <h4 className="text-white font-medium">{demo.name}</h4>
+                                  <div className="flex items-center space-x-4 text-sm text-gray-400">
+                                    <span>{Math.floor(demo.duration)}s</span>
+                                    <span>Demo</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ));
+                      }
+                      
+                      // If no demos, show default samples
+                      return (
+                        <>
+                          <div className="bg-slate-700 rounded-lg p-4 border border-gray-600">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-4">
+                                <button
+                                  className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full transition-colors"
+                                >
+                                  <Mic className="h-5 w-5" />
+                                </button>
+                                
+                                <div>
+                                  <h4 className="text-white font-medium">Commercial Demo</h4>
+                                  <div className="flex items-center space-x-4 text-sm text-gray-400">
+                                    <span>45s</span>
+                                    <span>Commercial</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
 
-                <div className="bg-slate-700 rounded-lg p-4 border border-gray-600">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <button
-                        className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full transition-colors"
-                      >
-                        <Mic className="h-5 w-5" />
-                      </button>
-                      
-                      <div>
-                        <h4 className="text-white font-medium">Narration Sample</h4>
-                        <div className="flex items-center space-x-4 text-sm text-gray-400">
-                          <span>60s</span>
-                          <span>Narration</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                          <div className="bg-slate-700 rounded-lg p-4 border border-gray-600">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-4">
+                                <button
+                                  className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full transition-colors"
+                                >
+                                  <Mic className="h-5 w-5" />
+                                </button>
+                                
+                                <div>
+                                  <h4 className="text-white font-medium">Narration Sample</h4>
+                                  <div className="flex items-center space-x-4 text-sm text-gray-400">
+                                    <span>60s</span>
+                                    <span>Narration</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </>
+                )}
               </div>
 
-              <div className="mt-6 p-4 bg-slate-700 rounded-lg border border-gray-600">
-                <p className="text-gray-300 text-sm">
+              <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-slate-700 rounded-lg border border-gray-600">
+                <p className="text-gray-300 text-xs sm:text-sm">
                   <strong>Pro Tip:</strong> Upload multiple demos showcasing different styles and tones to attract a wider range of clients.
                 </p>
               </div>

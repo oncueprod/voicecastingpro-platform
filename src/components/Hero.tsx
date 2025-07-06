@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Star, Users, Headphones, CheckCircle, Mic } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext';
 
 interface HeroProps {
   onSearch: (query: string) => void;
@@ -9,6 +10,7 @@ interface HeroProps {
 
 const Hero: React.FC<HeroProps> = ({ onSearch, onPostProject }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const { isAuthenticated, isClient, isTalent } = useAuth();
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
@@ -36,10 +38,10 @@ const Hero: React.FC<HeroProps> = ({ onSearch, onPostProject }) => {
       <div className="absolute bottom-20 right-10 w-60 h-60 bg-white/5 rounded-full blur-[100px] opacity-50"></div>
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative pt-16">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
+        <div className="grid lg:grid-cols-2 gap-8 lg:gap-16 items-center">
           {/* Left Column - Content */}
           <motion.div 
-            className="lg:pr-8"
+            className="lg:pr-8 text-center lg:text-left"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
@@ -115,13 +117,13 @@ const Hero: React.FC<HeroProps> = ({ onSearch, onPostProject }) => {
 
             {/* Search Bar */}
             <motion.div 
-              className="bg-white/10 backdrop-blur-sm rounded-xl shadow-lg p-2 mb-8 border border-white/20"
+              className="bg-white/10 backdrop-blur-sm rounded-xl shadow-lg p-2 mb-6 lg:mb-8 border border-white/20"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.4 }}
             >
-              <div className="flex items-center space-x-4">
-                <div className="flex-1 flex items-center space-x-3 px-4">
+              <div className="flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:space-x-4">
+                <div className="w-full sm:flex-1 flex items-center space-x-3 px-4">
                   <Search className="h-5 w-5 text-white/70" />
                   <input
                     type="text"
@@ -133,9 +135,9 @@ const Hero: React.FC<HeroProps> = ({ onSearch, onPostProject }) => {
                     style={{ fontWeight: 400 }}
                   />
                 </div>
-                <motion.button 
+                <motion.button
                   onClick={handleSearch}
-                  className="bg-white text-blue-800 px-6 py-3 rounded-lg hover:bg-blue-50 transition-all font-medium"
+                  className="w-full sm:w-auto bg-white text-blue-800 px-6 py-3 rounded-lg hover:bg-blue-50 transition-all font-medium"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   style={{ fontWeight: 500 }}
@@ -147,7 +149,7 @@ const Hero: React.FC<HeroProps> = ({ onSearch, onPostProject }) => {
 
             {/* CTA Buttons */}
             <motion.div 
-              className="flex flex-col sm:flex-row gap-4 mb-12"
+              className="flex flex-col sm:flex-row gap-4 mb-8 lg:mb-12"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.5 }}
@@ -161,20 +163,44 @@ const Hero: React.FC<HeroProps> = ({ onSearch, onPostProject }) => {
               >
                 Browse Voice Talent
               </motion.button>
-              <motion.button 
-                onClick={handlePostProject}
-                className="border-2 border-white/30 text-white px-8 py-4 rounded-xl hover:border-white hover:bg-white/10 transition-colors font-semibold text-lg"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                style={{ fontWeight: 600 }}
-              >
-                Post Your Project
-              </motion.button>
+              {isAuthenticated ? (
+                isClient ? (
+                  <motion.button 
+                    onClick={handlePostProject}
+                    className="border-2 border-white/30 text-white px-8 py-4 rounded-xl hover:border-white hover:bg-white/10 transition-colors font-semibold text-lg"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    style={{ fontWeight: 600 }}
+                  >
+                    Post Your Project
+                  </motion.button>
+                ) : (
+                  <motion.button 
+                    onClick={() => window.location.href = '/browse-jobs'}
+                    className="border-2 border-white/30 text-white px-8 py-4 rounded-xl hover:border-white hover:bg-white/10 transition-colors font-semibold text-lg"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    style={{ fontWeight: 600 }}
+                  >
+                    Browse Voice Jobs
+                  </motion.button>
+                )
+              ) : (
+                <motion.button 
+                  onClick={handlePostProject}
+                  className="border-2 border-white/30 text-white px-8 py-4 rounded-xl hover:border-white hover:bg-white/10 transition-colors font-semibold text-lg"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  style={{ fontWeight: 600 }}
+                >
+                  Post Your Project
+                </motion.button>
+              )}
             </motion.div>
 
             {/* Premium Stats */}
             <motion.div 
-              className="grid grid-cols-3 gap-8"
+              className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-8"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.6 }}
@@ -254,7 +280,7 @@ const Hero: React.FC<HeroProps> = ({ onSearch, onPostProject }) => {
                 {/* Main Content */}
                 <div className="mb-8">
                   <p className="text-white text-lg leading-relaxed" style={{ fontWeight: 400, lineHeight: 1.6 }}>
-                    No middlemen, no commissions. Talent keeps 100% of their fees with a simple subscription. 
+                    No middlemen, no commissions. Talent gains unlimited access with a single subscription payment. 
                     Clients post projects free.
                   </p>
                 </div>

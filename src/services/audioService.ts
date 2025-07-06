@@ -8,256 +8,215 @@ interface AudioFile {
   userId: string;
   projectId?: string;
   type: 'demo' | 'project_delivery' | 'revision';
-  title?: string;
-  description?: string;
-  category?: string;
 }
 
 class AudioService {
-  private apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-
-  // Get auth token from localStorage
-  private getAuthToken(): string | null {
-    return localStorage.getItem('authToken') || localStorage.getItem('token');
-  }
-
-  // Get auth headers
-  private getAuthHeaders(): HeadersInit {
-    const token = this.getAuthToken();
-    return {
-      'Authorization': token ? `Bearer ${token}` : '',
-    };
-  }
+  private storageKey = 'audio_files';
 
   async uploadAudio(
     file: File, 
     userId: string, 
     type: 'demo' | 'project_delivery' | 'revision',
-    projectId?: string,
-    options?: {
-      title?: string;
-      description?: string;
-      category?: string;
-      duration?: number;
-    }
+    projectId?: string
   ): Promise<AudioFile> {
-    try {
+    return new Promise((resolve, reject) => {
       if (!file.type.startsWith('audio/')) {
-        throw new Error('File must be an audio file');
+        reject(new Error('File must be an audio file'));
+        return;
       }
 
       if (file.size > 50 * 1024 * 1024) { // 50MB limit
-        throw new Error('File size must be less than 50MB');
+      }
+      if (file.size > 2 * 1024 * 1024) { // 2MB limit
+        reject(new Error('File size must be less than 2MB'));
+        return;
       }
 
-      // Create FormData
-      const formData = new FormData();
-      formData.append('audio', file);
-      formData.append('type', type);
-      
-      if (projectId) {
-        formData.append('projectId', projectId);
-      }
-      
-      if (options?.title) {
-        formData.append('title', options.title);
-      }
-      
-      if (options?.description) {
-        formData.append('description', options.description);
-      }
-      
-      if (options?.category) {
-        formData.append('category', options.category);
-      }
-      
-      if (options?.duration) {
-        formData.append('duration', options.duration.toString());
-      }
-
-      // Upload to backend
-      const response = await fetch(`${this.apiUrl}/upload/audio`, {
-        method: 'POST',
-        headers: this.getAuthHeaders(),
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Upload failed' }));
-        throw new Error(errorData.error || `Upload failed: ${response.status}`);
-      }
-
-      const result = await response.json();
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Upload failed');
-      }
-
-      // Convert to AudioFile interface
-      const audioFile: AudioFile = {
-        id: result.file.id,
-        name: result.file.name,
-        url: result.file.url,
-        duration: result.file.duration || 0,
-        size: result.file.size,
-        uploadedAt: new Date(result.file.uploadedAt),
-        userId: result.file.userId,
-        projectId: result.file.projectId,
-        type: result.file.type,
-        title: options?.title,
-        description: options?.description,
-        category: options?.category
-      };
-
-      return audioFile;
-
-    } catch (error) {
-      console.error('Audio upload error:', error);
-      throw error instanceof Error ? error : new Error('Upload failed');
-    }
-  }
-
-  async getAudioFiles(userId?: string, projectId?: string): Promise<AudioFile[]> {
-    try {
-      const token = this.getAuthToken();
-      if (!token) {
-        console.warn('No auth token found, returning empty array');
-        return [];
-      }
-
-      // If no userId provided, try to get from token
-      if (!userId) {
-        try {
-          const tokenData = JSON.parse(atob(token.split('.')[1]));
-          userId = tokenData.userId;
-        } catch (e) {
-          console.warn('Could not parse user ID from token');
-          return [];
+      // Check if we already have 5 demos for this user
+      if (type === 'demo') {
+        const existingDemos = this.getUserDemos(userId);
+        if (existingDemos.length >= 5) {
+          reject(new Error('Maximum of 5 demo files allowed. Please delete some existing demos first.'));
+          return;
         }
       }
 
-      if (!userId) {
-        return [];
-      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const audioElement = new Audio();
+        
+        // Create a smaller audio element for metadata only
+        try {
+          const dataUrl = reader.result as string;
+          audioElement.src = dataUrl;
 
-      let url = `${this.apiUrl}/upload/audio/${userId}`;
-      const params = new URLSearchParams();
+          audioElement.onloadedmetadata = () => {
+            const audioFile: AudioFile = {
+              id: `audio_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              name: file.name,
+              url: dataUrl,
+              duration: audioElement.duration || 30, // Default to 30 seconds if duration can't be determined
+              size: file.size,
+              uploadedAt: new Date(),
+              userId,
+              projectId,
+              type
+            };
+
+            // Store in localStorage (in production, this would be cloud storage)
+            try {
+              const existingFiles = this.getAudioFiles();
+              
+              // For demo files, enforce a maximum of 5 per user
+              if (type === 'demo') {
+                const userDemos = existingFiles.filter(f => f.userId === userId && f.type === 'demo');
+                if (userDemos.length >= 5) {
+                  throw new Error('Maximum of 5 demo files allowed. Please delete some existing demos first.');
+                }
+              }
+
+              // Add the new file
+              existingFiles.push(audioFile);
+
+              // Try to save to localStorage
+              try {
+                localStorage.setItem(this.storageKey, JSON.stringify(existingFiles));
+                resolve(audioFile);
+              } catch (storageError) {
+                // Handle storage quota exceeded error
+                console.error('Storage error:', storageError);
+                
+                // If storage error, try to save just this file by removing all other files for this user
+                const otherUserFiles = existingFiles.filter(f => f.userId !== userId);
+                const justThisFile = [audioFile];
+                
+                try {
+                  localStorage.setItem(this.storageKey, JSON.stringify([...otherUserFiles, ...justThisFile]));
+                  resolve(audioFile);
+                } catch (finalError) {
+                  reject(new Error('Storage quota exceeded. Try using smaller audio files or delete existing ones.'));
+                }
+              }
+            } catch (error) {
+              reject(error);
+            }
+          };
+          
+          // Handle errors in audio loading
+          audioElement.onerror = (e) => {
+            console.error('Audio element error:', e);
+            reject(new Error('Failed to load audio file'));
+          };
+        } catch (error) {
+          console.error('Error creating audio element:', error);
+          reject(new Error('Failed to process audio file'));
+        }
+        
+      };
       
-      if (projectId) {
-        params.append('projectId', projectId);
-      }
+      reader.onerror = () => {
+        reject(new Error('Failed to read file'));
+      };
       
-      if (params.toString()) {
-        url += `?${params.toString()}`;
-      }
-
-      const response = await fetch(url, {
-        headers: this.getAuthHeaders()
-      });
-
-      if (!response.ok) {
-        console.error('Failed to fetch audio files:', response.status);
-        return [];
-      }
-
-      const result = await response.json();
-      
-      if (!result.success) {
-        console.error('Failed to fetch audio files:', result.error);
-        return [];
-      }
-
-      // Convert to AudioFile interface
-      return result.files.map((file: any) => ({
-        id: file.id,
-        name: file.name,
-        url: file.url,
-        duration: file.duration || 0,
-        size: file.size,
-        uploadedAt: new Date(file.uploadedAt),
-        userId: file.userId,
-        projectId: file.projectId,
-        type: file.type,
-        title: file.title,
-        description: file.description,
-        category: file.category
-      }));
-
-    } catch (error) {
-      console.error('Get audio files error:', error);
-      return [];
-    }
+      reader.readAsDataURL(file);
+    });
   }
 
-  async deleteAudioFile(fileId: string, userId: string): Promise<boolean> {
-    try {
-      const response = await fetch(`${this.apiUrl}/upload/${fileId}`, {
-        method: 'DELETE',
-        headers: this.getAuthHeaders()
-      });
+  getAudioFiles(userId?: string, projectId?: string): AudioFile[] {
+    const files = JSON.parse(localStorage.getItem(this.storageKey) || '[]');
+    return files.filter((file: AudioFile) => {
+      if (userId && file.userId !== userId) return false;
+      if (projectId && file.projectId !== projectId) return false;
+      return true;
+    });
+  }
 
-      if (!response.ok) {
-        console.error('Failed to delete audio file:', response.status);
-        return false;
-      }
+  deleteAudioFile(fileId: string, userId: string): boolean {
+    const files = this.getAudioFiles();
+    const fileIndex = files.findIndex(f => f.id === fileId && f.userId === userId);
+    
+    if (fileIndex === -1) return false;
 
-      const result = await response.json();
-      return result.success;
-
-    } catch (error) {
-      console.error('Delete audio file error:', error);
-      return false;
-    }
+    files.splice(fileIndex, 1);
+    localStorage.setItem(this.storageKey, JSON.stringify(files));
+    return true;
   }
 
   getAudioFile(fileId: string): AudioFile | null {
-    // Since we're now using backend storage, we'd need to implement a separate API call
-    // For now, this method is not actively used, but keeping for compatibility
-    console.warn('getAudioFile not implemented for backend storage');
-    return null;
+    const files = this.getAudioFiles();
+    return files.find(f => f.id === fileId) || null;
   }
 
-  async getUserDemos(userId: string): Promise<AudioFile[]> {
-    const files = await this.getAudioFiles(userId);
-    return files.filter(f => f.type === 'demo');
+  getUserDemos(userId: string): AudioFile[] {
+    return this.getAudioFiles(userId).filter(f => f.type === 'demo');
   }
-
-  async getProjectAudio(projectId: string): Promise<AudioFile[]> {
-    const files = await this.getAudioFiles(undefined, projectId);
-    return files;
-  }
-
-  // Utility method to get ImageKit optimized URLs
-  getOptimizedAudioUrl(url: string, options?: {
-    quality?: number;
-    format?: string;
-  }): string {
-    if (!url.includes('ik.imagekit.io')) {
-      return url; // Not an ImageKit URL
-    }
-
-    const params = new URLSearchParams();
+  
+  // Get a sample URL for demo purposes
+  getSampleAudioUrl(): string {
+    // Return a data URL for a simple audio tone that works in all browsers
+    // This creates a 1-second 440Hz sine wave tone
+    const sampleRate = 44100;
+    const duration = 1; // 1 second
+    const frequency = 440; // A4 note
+    const samples = sampleRate * duration;
     
-    if (options?.quality) {
-      params.append('tr', `q-${options.quality}`);
+    // Create a simple WAV file data URL
+    const buffer = new ArrayBuffer(44 + samples * 2);
+    const view = new DataView(buffer);
+    
+    // WAV header
+    const writeString = (offset: number, string: string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+    
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + samples * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, samples * 2, true);
+    
+    // Generate sine wave
+    for (let i = 0; i < samples; i++) {
+      const sample = Math.sin(2 * Math.PI * frequency * i / sampleRate) * 0.3;
+      view.setInt16(44 + i * 2, sample * 32767, true);
     }
     
-    if (options?.format) {
-      params.append('tr', `f-${options.format}`);
+    // Convert to base64 data URL
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
     }
-
-    return params.toString() ? `${url}?${params.toString()}` : url;
+    const base64 = btoa(binary);
+    
+    return `data:audio/wav;base64,${base64}`;
   }
 
-  // Method to get audio metadata/waveform thumbnail (future enhancement)
-  getAudioThumbnailUrl(url: string): string {
-    if (!url.includes('ik.imagekit.io')) {
-      return url;
+  getProjectAudio(projectId: string): AudioFile[] {
+    return this.getAudioFiles(undefined, projectId);
+  }
+
+  // Clear all demos for a user
+  clearUserDemos(userId: string): boolean {
+    try {
+      const files = this.getAudioFiles();
+      const remainingFiles = files.filter(f => !(f.userId === userId && f.type === 'demo'));
+      localStorage.setItem(this.storageKey, JSON.stringify(remainingFiles));
+      return true;
+    } catch (error) {
+      console.error('Failed to clear user demos:', error);
+      return false;
     }
-    
-    // For audio files, we might want to generate a waveform image
-    // This would require server-side processing, but ImageKit can store the waveform image
-    return `${url}?tr=w-300,h-100`; // Placeholder for future waveform functionality
   }
 }
 

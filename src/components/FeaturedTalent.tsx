@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Play, Pause, Star, MapPin, Clock, Award } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { talentService } from '../services/talentService';
+import { audioService } from '../services/audioService';
 
 interface FeaturedTalentProps {
   onTalentSelect?: (talentId: string) => void;
@@ -10,8 +11,9 @@ interface FeaturedTalentProps {
 const FeaturedTalent: React.FC<FeaturedTalentProps> = ({ onTalentSelect }) => {
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
   const [talents, setTalents] = useState<any[]>([]);
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const [audioElements, setAudioElements] = useState<{[key: string]: HTMLAudioElement}>({});
   const [audioTimer, setAudioTimer] = useState<NodeJS.Timeout | null>(null);
+  const [demoFiles, setDemoFiles] = useState<{[key: string]: any[]}>({});
 
   // Load talent profiles from service
   useEffect(() => {
@@ -22,6 +24,32 @@ const FeaturedTalent: React.FC<FeaturedTalentProps> = ({ onTalentSelect }) => {
       // Take only the first 3 profiles or fewer if less are available
       const featuredTalents = allTalents.slice(0, 3);
       setTalents(featuredTalents);
+      
+      // Load demo files for each talent
+      const demos: {[key: string]: any[]} = {};
+      featuredTalents.forEach(talent => {
+        // Try to get real demos first
+        if (talent.userId) {
+          const talentDemos = audioService.getUserDemos(talent.userId);
+          if (talentDemos.length > 0) {
+            demos[talent.id] = talentDemos;
+            return;
+          }
+        }
+        
+        // If no real demos, create a mock demo with a reliable sample URL
+        demos[talent.id] = [
+          {
+            id: `demo_${talent.id}_1`,
+            name: 'Commercial Demo',
+            url: audioService.getSampleAudioUrl(),
+            duration: 30,
+            size: 1024000,
+            uploadedAt: new Date()
+          }
+        ];
+      });
+      setDemoFiles(demos);
     };
     
     loadTalents();
@@ -41,7 +69,8 @@ const FeaturedTalent: React.FC<FeaturedTalentProps> = ({ onTalentSelect }) => {
   }, []);
 
   const handlePlayPause = (index: number, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent triggering the card click
+    e.preventDefault(); // Prevent triggering the card click
+    e.stopPropagation();
     
     // Clear any existing timer
     if (audioTimer) {
@@ -49,64 +78,116 @@ const FeaturedTalent: React.FC<FeaturedTalentProps> = ({ onTalentSelect }) => {
       setAudioTimer(null);
     }
     
+    const talent = talents[index];
+    const demos = demoFiles[talent.id] || [];
+    console.log('Demo files for talent:', talent.id, demos);
+    
+    if (demos.length === 0) {
+      alert('No demo files available for this talent');
+      return;
+    }
+    
+    // Use the first demo file
+    const demo = demos[0];
+    console.log('Using demo file:', demo);
+    
     if (playingIndex === index) {
       // Stop playing
-      if (audioElement) {
-        audioElement.pause();
-        audioElement.currentTime = 0;
+      const audio = audioElements[talent.id];
+      if (audio) {
+        try {
+          audio.pause();
+          audio.currentTime = 0;
+        } catch (error) {
+          console.error('Error stopping audio:', error);
+        }
       }
       setPlayingIndex(null);
-      setAudioElement(null);
     } else {
       // Stop current audio if playing
-      if (audioElement) {
-        audioElement.pause();
-        audioElement.currentTime = 0;
+      if (playingIndex !== null && talents[playingIndex]) {
+        const currentTalent = talents[playingIndex];
+        const currentAudio = audioElements[currentTalent.id];
+        if (currentAudio) {
+          currentAudio.pause();
+          currentAudio.currentTime = 0;
+        }
       }
       
       // Create new audio element
-      const audio = new Audio();
+      let audio = audioElements[talent.id];
       
-      // Set up event listeners
-      audio.addEventListener('ended', () => {
-        setPlayingIndex(null);
-        setAudioElement(null);
-      });
-      
-      // In a real app, this would play an actual demo file
-      // For demo purposes, we'll use a silent audio file
-      audio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-      
-      // Set volume and play
-      audio.volume = 0.8;
-      audio.play().catch(err => console.error('Error playing audio:', err));
-      
-      // Store reference and update state
-      setAudioElement(audio);
-      setPlayingIndex(index);
-      
-      // Auto-stop after 30 seconds for demo purposes
-      const timer = setTimeout(() => {
-        if (audio) {
-          audio.pause();
-          audio.currentTime = 0;
+      try {
+        // Create a new audio element if one doesn't exist
+        if (!audio) {
+          try {
+            audio = new Audio();
+            
+            // Set up event listeners
+            audio.addEventListener('ended', () => {
+              setPlayingIndex(null);
+            });
+            
+            audio.addEventListener('error', (e) => {
+              console.error('Audio playback error:', e);
+              setPlayingIndex(null);
+              alert(`Unable to play demo for ${talent.name}. The file may be corrupted.`);
+            });
+            
+            // Store reference
+            setAudioElements(prev => ({
+              ...prev,
+              [talent.id]: audio
+            }));
+          } catch (error) {
+            console.error('Error creating audio element:', error);
+            alert('Failed to create audio player');
+            return;
+          }
         }
-        setPlayingIndex(null);
-        setAudioElement(null);
-        setAudioTimer(null);
-      }, 30000);
-      
-      setAudioTimer(timer);
+        
+        // Set source and play
+        audio.src = demo.url;
+        audio.volume = 0.8;
+        
+        // Play the audio with error handling
+        audio.play().catch(err => {
+          console.error('Error playing audio:', err);
+          setPlayingIndex(null); 
+          alert(`Unable to play demo for ${talent.name}. Please try again.`);
+        });
+        
+        // Update state
+        setPlayingIndex(index);
+        
+        // Auto-stop after the duration of the demo or 30 seconds max
+        const timer = setTimeout(() => {
+          if (audio && !audio.paused) {
+            audio.pause();
+            audio.currentTime = 0;
+          }
+          setPlayingIndex(null);
+          setAudioTimer(null);
+        }, Math.min(demo.duration * 1000, 30000));
+        
+        setAudioTimer(timer);
+      } catch (error) {
+        console.error('Error setting up audio playback:', error);
+        alert('Failed to play audio demo');
+      }
     }
   };
-
+      
   const handleTalentClick = (talentId: string) => {
     // Stop any playing audio before navigating
-    if (audioElement) {
-      audioElement.pause();
-      audioElement.currentTime = 0;
+    if (playingIndex !== null && talents[playingIndex]) {
+      const currentTalent = talents[playingIndex];
+      const audioElement = audioElements[currentTalent.id];
+      if (audioElement) {
+        audioElement.pause();
+        audioElement.currentTime = 0;
+      }
       setPlayingIndex(null);
-      setAudioElement(null);
     }
     
     // Clear any existing timer
@@ -126,16 +207,18 @@ const FeaturedTalent: React.FC<FeaturedTalentProps> = ({ onTalentSelect }) => {
   // Clean up audio on unmount
   useEffect(() => {
     return () => {
-      if (audioElement) {
-        audioElement.pause();
-        audioElement.src = '';
-      }
+      // Clean up all audio elements
+      Object.values(audioElements).forEach(audio => {
+        audio.pause();
+        audio.src = '';
+      });
       
+      // Clear any timers
       if (audioTimer) {
         clearTimeout(audioTimer);
       }
     };
-  }, [audioElement, audioTimer]);
+  }, [audioElements, audioTimer]);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -182,7 +265,7 @@ const FeaturedTalent: React.FC<FeaturedTalentProps> = ({ onTalentSelect }) => {
         </motion.div>
 
         <motion.div 
-          className="grid md:grid-cols-2 lg:grid-cols-3 gap-8"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8"
           variants={containerVariants}
           initial="hidden"
           whileInView="visible"
@@ -200,8 +283,8 @@ const FeaturedTalent: React.FC<FeaturedTalentProps> = ({ onTalentSelect }) => {
               <div className="relative">
                 <img
                   src={talent.image}
-                  alt={talent.name}
-                  className="w-full h-48 object-cover"
+                  alt={talent.name} 
+                  className="w-full h-40 sm:h-48 object-cover"
                 />
                 <div className="absolute top-4 left-4">
                   <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">
@@ -238,8 +321,8 @@ const FeaturedTalent: React.FC<FeaturedTalentProps> = ({ onTalentSelect }) => {
                 </div>
 
                 {/* Audio player */}
-                <div className="bg-slate-700 rounded-lg p-4 mb-4 border border-gray-600">
-                  <div className="flex items-center space-x-3">
+                <div className="bg-slate-700 rounded-lg p-3 sm:p-4 mb-4 border border-gray-600">
+                  <div className="flex items-center space-x-2 sm:space-x-3">
                     <motion.button
                       onClick={(e) => handlePlayPause(index, e)}
                       className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-2 rounded-full hover:shadow-lg hover:shadow-blue-600/20 transition-colors"
@@ -263,18 +346,22 @@ const FeaturedTalent: React.FC<FeaturedTalentProps> = ({ onTalentSelect }) => {
                             style={{
                               width: '3px',
                               height: `${Math.random() * 20 + 8}px`,
-                              animationDelay: `${i * 0.05}s`
+                              animationDelay: playingIndex === index ? `${i * 0.05}s` : '0s'
                             }}
                           ></div>
                         ))}
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">Voice Demo - 0:30</div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {demoFiles[talent.id]?.length > 0 
+                          ? `${demoFiles[talent.id][0].name} - $${talent.priceRange.replace('$', '')}` 
+                          : 'Voice Demo - 0:30'}
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Specialties */}
-                <div className="mb-4">
+                <div className="mb-3 sm:mb-4">
                   <div className="flex flex-wrap gap-2">
                     {talent.specialties.slice(0, 3).map((specialty: string, idx: number) => (
                       <span
@@ -288,14 +375,14 @@ const FeaturedTalent: React.FC<FeaturedTalentProps> = ({ onTalentSelect }) => {
                 </div>
 
                 {/* Languages */}
-                <div className="mb-4">
-                  <div className="text-sm text-gray-400">
+                <div className="mb-3 sm:mb-4">
+                  <div className="text-xs sm:text-sm text-gray-400">
                     Languages: {talent.languages.join(', ')}
                   </div>
                 </div>
 
                 {/* Stats */}
-                <div className="flex items-center justify-between mb-6 text-sm">
+                <div className="flex items-center justify-between mb-4 sm:mb-6 text-xs sm:text-sm">
                   <div className="flex items-center space-x-1 text-gray-400">
                     <Clock className="h-4 w-4" />
                     <span>{talent.responseTime}</span>

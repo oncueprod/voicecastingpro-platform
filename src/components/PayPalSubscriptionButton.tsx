@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -11,6 +11,12 @@ interface PayPalSubscriptionButtonProps {
   buttonText?: string;
 }
 
+declare global {
+  interface Window {
+    paypal?: any;
+  }
+}
+
 const PayPalSubscriptionButton: React.FC<PayPalSubscriptionButtonProps> = ({
   planId,
   userId,
@@ -21,19 +27,112 @@ const PayPalSubscriptionButton: React.FC<PayPalSubscriptionButtonProps> = ({
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const isProduction = import.meta.env.PROD;
+  const [sdkReady, setSdkReady] = useState(false);
+  const paypalContainerRef = useRef<HTMLDivElement>(null);
   const { isAuthenticated, isTalent } = useAuth();
   
+  // Load the PayPal SDK
+  useEffect(() => {
+    const addPayPalScript = () => {
+      const clientId = import.meta.env.VITE_PAYPAL_CLIENT_ID || 'sb';
+      const script = document.createElement('script');
+      script.type = 'text/javascript';
+      script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&vault=true&intent=subscription`;
+      script.async = true;
+      script.onload = () => {
+        setSdkReady(true);
+      };
+      script.onerror = () => {
+        setError('Failed to load PayPal SDK. Please try again later.');
+      };
+      document.body.appendChild(script);
+    };
+
+    if (window.paypal) {
+      setSdkReady(true);
+    } else {
+      addPayPalScript();
+    }
+    
+    // Cleanup
+    return () => {
+      const script = document.querySelector('script[src*="paypal.com/sdk/js"]');
+      if (script) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+  
+  // Render the PayPal button
+  useEffect(() => {
+    if (sdkReady && paypalContainerRef.current && window.paypal) {
+      // Clear any existing buttons
+      paypalContainerRef.current.innerHTML = '';
+      
+      window.paypal.Buttons({
+        style: {
+          shape: 'rect',
+          color: 'blue',
+          layout: 'vertical',
+          label: 'subscribe'
+        },
+        createSubscription: (data: any, actions: any) => {
+          setIsProcessing(true);
+          return actions.subscription.create({
+            'plan_id': planId,
+            'application_context': {
+              'shipping_preference': 'NO_SHIPPING',
+              'user_action': 'SUBSCRIBE_NOW',
+              'return_url': window.location.href,
+              'cancel_url': window.location.href
+            }
+          });
+        },
+        onApprove: (data: any, actions: any) => {
+          console.log('Subscription approved:', data);
+          setIsProcessing(false);
+          
+          // Store subscription data
+          localStorage.setItem('user_subscription', JSON.stringify({
+            id: data.subscriptionID,
+            userId: userId,
+            planType: planId.includes('MONTHLY') ? 'monthly' : 'annual',
+            status: 'active',
+            startDate: new Date().toISOString()
+          }));
+          
+          if (onSuccess) {
+            onSuccess(data.subscriptionID);
+          }
+          
+          return actions.order?.capture();
+        },
+        onError: (err: any) => {
+          console.error('PayPal error:', err);
+          setIsProcessing(false);
+          setError('An error occurred with PayPal. Please try again.');
+          if (onError) {
+            onError(err);
+          }
+        },
+        onCancel: () => {
+          console.log('Subscription cancelled');
+          setIsProcessing(false);
+        }
+      }).render(paypalContainerRef.current);
+    }
+  }, [sdkReady, planId, userId, onSuccess, onError]);
+
   const handleSubscribe = async () => {
     if (!isAuthenticated) {
       setError("You must be signed in to subscribe");
-      if (onError) onError(new Error("Authentication required"));
+      if (onError) onError(new Error("You must be signed in to subscribe"));
       return;
     }
     
     if (!isTalent) {
       setError("Only talent accounts can subscribe to plans");
-      if (onError) onError(new Error("Talent account required"));
+      if (onError) onError(new Error("Only talent accounts can subscribe to plans"));
       return;
     }
     
@@ -41,19 +140,14 @@ const PayPalSubscriptionButton: React.FC<PayPalSubscriptionButtonProps> = ({
     setError(null);
     
     try {
-      // Simulate creating a subscription
-      console.log('Creating subscription for plan:', planId);
-      
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Generate a mock subscription ID
-      const subscriptionId = `PAYPAL_SUB_${Date.now()}_${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
-      
-      setIsProcessing(false);
-      
-      if (onSuccess) {
-        onSuccess(subscriptionId);
+      // This will trigger the PayPal button click programmatically
+      if (paypalContainerRef.current) {
+        const paypalButton = paypalContainerRef.current.querySelector('[data-funding-source="paypal"]');
+        if (paypalButton) {
+          (paypalButton as HTMLElement).click();
+        } else {
+          throw new Error('PayPal button not found');
+        }
       }
     } catch (err) {
       setIsProcessing(false);
@@ -74,10 +168,14 @@ const PayPalSubscriptionButton: React.FC<PayPalSubscriptionButtonProps> = ({
         </div>
       )}
       
+      {/* Hidden PayPal button container */}
+      <div ref={paypalContainerRef} className="hidden"></div>
+      
+      {/* Custom button that will trigger the PayPal flow */}
       <motion.button
         onClick={handleSubscribe}
-        disabled={isProcessing}
-        className={`${className || 'w-full bg-[#0070ba] hover:bg-[#003087] text-white py-3 rounded-lg transition-colors font-medium'} disabled:opacity-70 disabled:cursor-not-allowed`}
+        disabled={isProcessing || !sdkReady}
+        className={`${className || 'w-full bg-[#0070ba] hover:bg-[#003087] text-white py-3 rounded-lg transition-colors font-medium flex items-center justify-center'} disabled:opacity-70 disabled:cursor-not-allowed`}
         whileHover={{ scale: isProcessing ? 1 : 1.02 }}
         whileTap={{ scale: isProcessing ? 1 : 0.98 }}
       >
@@ -87,7 +185,12 @@ const PayPalSubscriptionButton: React.FC<PayPalSubscriptionButtonProps> = ({
             <span>Processing...</span>
           </div>
         ) : (
-          <div className="flex items-center justify-center space-x-2">
+          <div className="flex items-center justify-center space-x-2 w-full">
+            <img 
+              src="https://www.paypalobjects.com/webstatic/en_US/i/buttons/pp-acceptance-small.png" 
+              alt="PayPal" 
+              className="h-5 mr-2"
+            />
             {buttonText}
           </div>
         )}

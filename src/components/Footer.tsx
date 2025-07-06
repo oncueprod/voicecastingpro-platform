@@ -120,16 +120,16 @@ const Footer: React.FC<FooterProps> = ({ onAuthClick, onPageChange }) => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
         {/* Main footer content */}
         <motion.div 
-          className="py-16"
+          className="py-10 lg:py-16"
           variants={containerVariants}
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, amount: 0.1 }}
         >
-          <div className="grid lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
             {/* Brand section */}
             <motion.div 
-              className="lg:col-span-1"
+              className="lg:col-span-1 text-center sm:text-left"
               variants={itemVariants}
             >
               <button 
@@ -144,11 +144,11 @@ const Footer: React.FC<FooterProps> = ({ onAuthClick, onPageChange }) => {
                 </span>
               </button>
               
-              <p className="text-white/80 mb-6 leading-relaxed">
+              <p className="text-white/80 mb-4 sm:mb-6 leading-relaxed">
                 The premier platform connecting voice talent with clients worldwide.
               </p>
               
-              <div className="text-sm text-white/70">
+              <div className="text-sm text-white/70 flex flex-col items-center sm:items-start">
                 <div className="flex items-center space-x-2 mb-2">
                   <span>📧</span>
                   <button 
@@ -162,7 +162,8 @@ const Footer: React.FC<FooterProps> = ({ onAuthClick, onPageChange }) => {
             </motion.div>
 
             {/* For Clients */}
-            <motion.div 
+            <motion.div
+              className="text-center sm:text-left"
               variants={itemVariants}
             >
               <h3 className="font-semibold text-white mb-6">For Clients</h3>
@@ -204,6 +205,7 @@ const Footer: React.FC<FooterProps> = ({ onAuthClick, onPageChange }) => {
 
             {/* For Talent */}
             <motion.div 
+              className="text-center sm:text-left"
               variants={itemVariants}
             >
               <h3 className="font-semibold text-white mb-6">For Talent</h3>
@@ -245,6 +247,7 @@ const Footer: React.FC<FooterProps> = ({ onAuthClick, onPageChange }) => {
 
             {/* Support */}
             <motion.div 
+              className="text-center sm:text-left"
               variants={itemVariants}
             >
               <h3 className="font-semibold text-white mb-6">Support</h3>

@@ -1,306 +1,213 @@
 import React from 'react';
-import { Globe, Clock, Shield, Check, Star } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Shield, Clock, Award, Users, Star, CheckCircle, Check, DollarSign } from 'lucide-react';
 
 interface WhyChooseProps {
   onAuthClick: (type: 'signin' | 'signup') => void;
-  onPageChange?: (page: string) => void;
+  onPageChange: (page: string) => void;
 }
 
 const WhyChoose: React.FC<WhyChooseProps> = ({ onAuthClick, onPageChange }) => {
   const features = [
     {
-      icon: Globe,
-      title: 'Global Talent Pool',
-      description: 'Access thousands of professional voice artists from around the world, speaking multiple languages and dialects.',
-      color: 'from-blue-500 to-blue-600',
+      icon: Shield,
+      title: 'SecurePay Escrow',
+      description: 'Your payments are protected with our escrow system until work is approved.',
+      color: 'text-emerald-400'
+    },
+    {
+      icon: Award,
+      title: 'Verified Talent',
+      description: 'All voice actors are professionally vetted and showcase verified demo reels.',
+      color: 'text-blue-400'
     },
     {
       icon: Clock,
       title: 'Fast Turnaround',
-      description: 'Get your project complete in as little as 24 hours with our network of professional voice talent.',
-      color: 'from-green-500 to-green-600',
+      description: 'Get your projects completed quickly with our efficient workflow system.',
+      color: 'text-purple-400'
     },
     {
-      icon: Shield,
-      title: 'Secure & Reliable',
-      description: 'Your projects and payments are protected with enterprise-grade security and our satisfaction guarantee.',
-      color: 'from-purple-500 to-purple-600',
-    },
-  ];
-
-  const plans = [
-    {
-      name: 'Clients',
-      price: 'FREE',
-      description: 'Perfect for hiring voice talent',
-      features: [
-        'Post unlimited jobs',
-        'Browse talent profiles',
-        'Direct messaging',
-        'Secure payments',
-      ],
-      buttonText: 'Sign Up Free',
-      buttonStyle: 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-lg hover:shadow-blue-600/20',
-      popular: false,
-    },
-    {
-      name: 'Talent Monthly',
-      price: '$35',
-      period: 'Per month, billed monthly',
-      description: '',
-      features: [
-        'Create professional profile',
-        'Apply to unlimited jobs',
-        'Upload audio samples',
-        'Direct client messaging',
-        'Analytics dashboard',
-      ],
-      buttonText: 'Subscribe Now',
-      buttonStyle: 'border-2 border-gray-600 text-gray-300 hover:border-blue-600 hover:text-blue-400',
-      popular: false,
-    },
-    {
-      name: 'Talent Annual',
-      price: '$348',
-      period: 'Per year, billed annually',
-      description: 'Save $72 per year!',
-      features: [
-        'Everything in Monthly',
-        'Priority support',
-        'Featured profile listing',
-        'Advanced analytics',
-        '2 months free!',
-      ],
-      buttonText: 'Subscribe Now',
-      buttonStyle: 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-lg hover:shadow-blue-600/20',
-      popular: true,
-      badge: 'BEST VALUE',
-    },
-  ];
-
-  const handleAuthClick = (type: 'signin' | 'signup') => {
-    // Scroll to top before showing auth modal
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    setTimeout(() => {
-      onAuthClick(type);
-    }, 100);
-  };
-
-  const handlePageChange = (page: string) => {
-    if (onPageChange) {
-      // Scroll to top before navigation
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      setTimeout(() => {
-        onPageChange(page);
-      }, 100);
+      icon: Users,
+      title: 'Direct Communication',
+      description: 'Communicate directly with talent through our built-in messaging system.',
+      color: 'text-orange-400'
     }
-  };
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.2
-      }
-    }
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0 }
-  };
+  ];
 
   return (
-    <section className="py-20 bg-slate-900 relative overflow-hidden">
-      {/* Background decorations */}
-      <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
-      <div className="absolute top-20 left-10 w-40 h-40 bg-blue-600/10 rounded-full blur-[100px] opacity-30"></div>
-      <div className="absolute bottom-20 right-10 w-60 h-60 bg-indigo-600/10 rounded-full blur-[100px] opacity-30"></div>
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-        {/* Why Choose Section */}
-        <motion.div 
-          className="text-center mb-16"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.1 }}
-          transition={{ duration: 0.6 }}
-        >
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-            Why Choose VoiceCastingPro?
+    <section className="py-20 bg-slate-800 relative overflow-hidden">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 opacity-5">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-purple-500/20"></div>
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.1),transparent_50%)]"></div>
+      </div>
+
+      <div className="container mx-auto px-6 relative z-10">
+        {/* Header */}
+        <div className="text-center mb-16">
+          <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
+            Why Choose <span className="text-blue-400">DirectVO</span>?
           </h2>
-          <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-            We make it easy to find, hire, and work with professional voice talent
+          <p className="text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed">
+            We've built the most comprehensive platform for voice-over professionals and clients, 
+            ensuring quality, security, and satisfaction every step of the way.
           </p>
-        </motion.div>
+        </div>
 
         {/* Features Grid */}
-        <motion.div 
-          className="grid md:grid-cols-3 gap-8 mb-20"
-          variants={containerVariants}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, amount: 0.1 }}
-        >
-          {features.map((feature, index) => {
-            const IconComponent = feature.icon;
-            return (
-              <motion.div
-                key={index}
-                className="bg-slate-800 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-700 hover:border-blue-600 hover:-translate-y-2"
-                variants={itemVariants}
-                whileHover={{ y: -5 }}
-              >
-                <div className={`inline-flex p-4 rounded-xl mb-6 bg-gradient-to-r ${feature.color}`}>
-                  <IconComponent className="h-8 w-8 text-white" />
-                </div>
-                
-                <h3 className="text-xl font-bold text-white mb-3">
-                  {feature.title}
-                </h3>
-                <p className="text-gray-300 leading-relaxed">
-                  {feature.description}
-                </p>
-              </motion.div>
-            );
-          })}
-        </motion.div>
-
-        {/* Pricing Section */}
-        <motion.div 
-          className="text-center mb-16"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.1 }}
-          transition={{ duration: 0.6 }}
-        >
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-            Simple, Transparent Pricing
-          </h2>
-          <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-            Choose the plan that works best for you
-          </p>
-        </motion.div>
-
-        {/* Pricing Cards */}
-        <motion.div 
-          className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto"
-          variants={containerVariants}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, amount: 0.1 }}
-        >
-          {plans.map((plan, index) => (
-            <motion.div
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-20">
+          {features.map((feature, index) => (
+            <div 
               key={index}
-              className={`relative bg-slate-800 rounded-2xl shadow-lg transition-all duration-300 hover:-translate-y-2 border ${
-                plan.popular
-                  ? 'border-blue-600 shadow-lg shadow-blue-600/20 scale-105'
-                  : 'border-gray-700 hover:border-blue-600'
-              }`}
-              variants={itemVariants}
-              whileHover={{ y: -5 }}
+              className="bg-slate-700/50 backdrop-blur-sm rounded-2xl p-8 border border-slate-600/50 hover:border-blue-500/50 transition-all duration-300 hover:transform hover:scale-105 group"
             >
-              {plan.popular && (
-                <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                  <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-full">
-                    {plan.badge}
-                  </span>
-                </div>
-              )}
-              
-              <div className="p-8">
-                {/* Plan Header */}
-                <div className="text-center mb-8">
-                  <h3 className="text-2xl font-bold text-white mb-2">
-                    {plan.name}
-                  </h3>
-                  <div className="mb-2">
-                    <span className="text-4xl font-bold text-white">
-                      {plan.price}
-                    </span>
-                  </div>
-                  {plan.period && (
-                    <p className="text-gray-400 text-sm mb-2">
-                      {plan.period}
-                    </p>
-                  )}
-                  {plan.description && (
-                    <p className={`text-sm font-medium ${
-                      plan.popular ? 'text-blue-400' : 'text-gray-400'
-                    }`}>
-                      {plan.description}
-                    </p>
-                  )}
-                </div>
-
-                {/* Features List */}
-                <div className="space-y-4 mb-8">
-                  {plan.features.map((feature, featureIndex) => (
-                    <div key={featureIndex} className="flex items-center space-x-3">
-                      <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${
-                        plan.popular ? 'bg-blue-600' : 'bg-gray-600'
-                      }`}>
-                        <Check className="h-3 w-3 text-white" />
-                      </div>
-                      <span className="text-gray-300 text-sm">
-                        {feature}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* CTA Button */}
-                <motion.button 
-                  onClick={() => handleAuthClick('signup')}
-                  className={`w-full py-3 rounded-lg font-semibold transition-all ${plan.buttonStyle}`}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  {plan.buttonText}
-                </motion.button>
+              <div className={`w-16 h-16 rounded-2xl bg-slate-600/50 flex items-center justify-center mb-6 group-hover:bg-slate-600/70 transition-colors duration-300`}>
+                <feature.icon className={`w-8 h-8 ${feature.color}`} />
               </div>
-            </motion.div>
+              <h3 className="text-xl font-bold text-white mb-4">{feature.title}</h3>
+              <p className="text-slate-300 leading-relaxed">{feature.description}</p>
+            </div>
           ))}
-        </motion.div>
+        </div>
 
-        {/* Bottom CTA */}
-        <motion.div 
-          className="text-center mt-16"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.1 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-        >
-          <div className="bg-gradient-to-r from-slate-800 to-slate-700 rounded-2xl p-8 md:p-12 shadow-2xl border border-gray-700">
-            <h3 className="text-2xl md:text-3xl font-bold text-white mb-4">
-              Ready to Get Started?
-            </h3>
-            <p className="text-gray-300 text-lg mb-8 max-w-2xl mx-auto">
-              Join thousands of satisfied clients and talented voice artists on VoiceCastingPro today!
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <motion.button 
-                onClick={() => handleAuthClick('signup')}
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 rounded-xl hover:shadow-lg hover:shadow-blue-600/20 transition-all font-semibold text-lg"
-                whileHover={{ scale: 1.05, boxShadow: "0 0 20px rgba(37, 99, 235, 0.5)" }}
-                whileTap={{ scale: 0.95 }}
+        {/* Stats Section */}
+        <div className="mb-16">
+          <div className="text-center mb-12">
+            <h3 className="text-3xl font-bold text-white mb-4">Simple Transparent Pricing</h3>
+            <p className="text-slate-300 text-lg">Choose the plan that works best for you</p>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-8">
+            {/* Clients Plan */}
+            <div className="bg-slate-700/50 backdrop-blur-sm rounded-2xl p-8 border border-slate-600/50 hover:border-blue-500/50 transition-all duration-300">
+              <h4 className="text-xl font-bold text-white mb-2">Clients</h4>
+              <div className="text-3xl font-bold text-white mb-2">FREE</div>
+              <p className="text-slate-300 mb-6">Perfect for hiring voice talent</p>
+              
+              <ul className="space-y-3 mb-8">
+                <li className="flex items-center text-slate-300">
+                  <Check className="w-5 h-5 text-green-400 mr-2" />
+                  Post unlimited jobs
+                </li>
+                <li className="flex items-center text-slate-300">
+                  <Check className="w-5 h-5 text-green-400 mr-2" />
+                  Browse talent profiles
+                </li>
+                <li className="flex items-center text-slate-300">
+                  <Check className="w-5 h-5 text-green-400 mr-2" />
+                  Direct messaging
+                </li>
+                <li className="flex items-center text-slate-300">
+                  <Check className="w-5 h-5 text-green-400 mr-2" />
+                  Secure payments
+                </li>
+              </ul>
+              
+              <button
+                onClick={() => onAuthClick('signup')}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg transition-colors font-medium"
               >
-                Start Free Today
-              </motion.button>
-              <motion.button 
-                onClick={() => handlePageChange('talent')}
-                className="border-2 border-gray-600 text-gray-300 px-8 py-4 rounded-xl hover:border-blue-600 hover:text-blue-400 transition-colors font-semibold text-lg"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                Sign Up Free
+              </button>
+            </div>
+            
+            {/* Talent Monthly Plan */}
+            <div className="bg-slate-700/50 backdrop-blur-sm rounded-2xl p-8 border border-slate-600/50 hover:border-blue-500/50 transition-all duration-300">
+              <h4 className="text-xl font-bold text-white mb-2">Talent Monthly</h4>
+              <div className="text-3xl font-bold text-white mb-2">$35</div>
+              <p className="text-slate-300 mb-6">Per month, billed monthly</p>
+              
+              <ul className="space-y-3 mb-8">
+                <li className="flex items-center text-slate-300">
+                  <Check className="w-5 h-5 text-green-400 mr-2" />
+                  Create professional profile
+                </li>
+                <li className="flex items-center text-slate-300">
+                  <Check className="w-5 h-5 text-green-400 mr-2" />
+                  Apply to unlimited jobs
+                </li>
+                <li className="flex items-center text-slate-300">
+                  <Check className="w-5 h-5 text-green-400 mr-2" />
+                  Upload audio samples
+                </li>
+                <li className="flex items-center text-slate-300">
+                  <Check className="w-5 h-5 text-green-400 mr-2" />
+                  Direct client messaging
+                </li>
+              </ul>
+              
+              <button
+                onClick={() => onPageChange('subscription-plans-public')}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg transition-colors font-medium"
               >
-                Browse Talent
-              </motion.button>
+                Subscribe Now
+              </button>
+            </div>
+            
+            {/* Talent Annual Plan */}
+            <div className="bg-slate-700/50 backdrop-blur-sm rounded-2xl p-8 border border-blue-500/50 transition-all duration-300 relative">
+              <h4 className="text-xl font-bold text-white mb-2">Talent Annual</h4>
+              <div className="text-3xl font-bold text-white mb-2">$348</div>
+              <p className="text-slate-300 mb-2">Per year, billed annually</p>
+              <p className="text-green-400 text-sm mb-6">Save $72 per year</p>
+              
+              <ul className="space-y-3 mb-8">
+                <li className="flex items-center text-slate-300">
+                  <Check className="w-5 h-5 text-green-400 mr-2" />
+                  Everything in Monthly
+                </li>
+                <li className="flex items-center text-slate-300">
+                  <Check className="w-5 h-5 text-green-400 mr-2" />
+                  Priority customer support
+                </li>
+                <li className="flex items-center text-slate-300">
+                  <Check className="w-5 h-5 text-green-400 mr-2" />
+                  Featured profile listing
+                </li>
+                <li className="flex items-center text-slate-300">
+                  <Check className="w-5 h-5 text-green-400 mr-2" />
+                  Early access to new features
+                </li>
+                <li className="flex items-center text-slate-300">
+                  <Check className="w-5 h-5 text-green-400 mr-2" />
+                  <span>2 months free!</span>
+                </li>
+              </ul>
+              
+              <button
+                onClick={() => onPageChange('subscription-plans-public')}
+                className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg transition-colors font-medium"
+              >
+                Subscribe Now
+              </button>
             </div>
           </div>
-        </motion.div>
+        </div>
+
+        {/* Trust Indicators */}
+        <div className="bg-slate-700/30 rounded-3xl p-12 border border-slate-600/30">
+          {/* CTA Section */}
+          <div className="text-center">
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8">
+              <h4 className="text-2xl font-bold text-white mb-4">Ready to Get Started?</h4>
+              <p className="text-blue-100 mb-6 text-lg">Join our community of voice professionals today</p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <button 
+                  onClick={() => onAuthClick('signup')}
+                  className="bg-white text-blue-600 px-8 py-4 rounded-xl font-bold hover:bg-blue-50 transition-colors duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                >
+                  Sign Up as Talent
+                </button>
+                <button
+                  onClick={() => onPageChange('post-project')}
+                  className="bg-transparent border-2 border-white text-white px-8 py-4 rounded-xl font-bold hover:bg-white hover:text-blue-600 transition-all duration-200"
+                >
+                  Post a Project
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   );

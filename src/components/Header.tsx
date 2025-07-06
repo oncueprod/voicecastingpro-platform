@@ -19,6 +19,10 @@ const Header: React.FC<HeaderProps> = ({ currentPage, onPageChange, onAuthClick 
   const [keySequence, setKeySequence] = useState<string[]>([]);
   const { isAuthenticated, user, signOut } = useAuth();
   const isProduction = import.meta.env.PROD;
+  
+  // Define user type flags
+  const isClient = user?.type === 'client';
+  const isTalent = user?.type === 'talent';
 
   useEffect(() => {
     const handleScroll = () => {
@@ -136,14 +140,15 @@ const Header: React.FC<HeaderProps> = ({ currentPage, onPageChange, onAuthClick 
   const navigation = [
     { name: 'Home', key: 'home' },
     { name: 'Find Talent', key: 'talent' },
-    { name: 'Post Project', key: 'post-project' },
+    { name: 'Post Project', key: 'post-project', clientOnly: true },
+    { name: 'Browse Jobs', key: 'browse-jobs', talentOnly: true },
     { name: 'How It Works', key: 'how-it-works' },
   ];
 
   return (
     <>
       <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-blue-800/90 backdrop-blur-md shadow-lg' : 'bg-gradient-to-r from-blue-800 via-blue-900 to-indigo-900'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
             <motion.div 
@@ -164,19 +169,21 @@ const Header: React.FC<HeaderProps> = ({ currentPage, onPageChange, onAuthClick 
             {/* Desktop Navigation */}
             <nav className="hidden lg:flex space-x-8">
               {navigation.map((item) => (
-                <motion.button
-                  key={item.key}
-                  onClick={() => handleNavClick(item.key)}
-                  className={`text-sm font-medium transition-colors hover:text-blue-200 ${
-                    currentPage === item.key
-                      ? 'text-white border-b-2 border-white pb-4'
-                      : 'text-white/80'
-                  }`}
-                  whileHover={{ y: -2 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                >
-                  {item.name}
-                </motion.button>
+                ((!item.clientOnly || isClient) && (!item.talentOnly || isTalent)) && (
+                  <motion.button
+                    key={item.key}
+                    onClick={() => handleNavClick(item.key)}
+                    className={`text-sm font-medium transition-colors hover:text-blue-200 ${
+                      currentPage === item.key
+                        ? 'text-white border-b-2 border-white pb-4'
+                        : 'text-white/80'
+                    }`}
+                    whileHover={{ y: -2 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                  >
+                    {item.name}
+                  </motion.button>
+                )
               ))}
               
               {/* PayPal Sandbox Testing Link - Only in development */}
@@ -193,10 +200,10 @@ const Header: React.FC<HeaderProps> = ({ currentPage, onPageChange, onAuthClick 
             </nav>
 
             {/* Desktop Actions */}
-            <div className="hidden md:flex items-center space-x-4">
+            <div className="hidden md:flex items-center space-x-2 lg:space-x-4">
               {isAuthenticated ? (
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2 lg:space-x-4">
+                  <div className="flex items-center space-x-2 lg:space-x-3">
                     {user?.avatar && (
                       <img 
                         src={user.avatar} 
@@ -214,7 +221,7 @@ const Header: React.FC<HeaderProps> = ({ currentPage, onPageChange, onAuthClick 
                     </div>
                   </div>
                   
-                  <motion.button 
+                  <motion.button
                     onClick={handleMessagingClick}
                     className="text-white/90 hover:text-white transition-colors font-medium p-2 rounded-lg hover:bg-white/10"
                     whileHover={{ scale: 1.05 }}
@@ -248,8 +255,8 @@ const Header: React.FC<HeaderProps> = ({ currentPage, onPageChange, onAuthClick 
                   )}
                   
                   <motion.button 
-                    onClick={signOut}
-                    className="text-white/90 hover:text-white transition-colors font-medium"
+                    onClick={signOut} 
+                    className="text-white/90 hover:text-white transition-colors font-medium hidden lg:block"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -259,8 +266,8 @@ const Header: React.FC<HeaderProps> = ({ currentPage, onPageChange, onAuthClick 
               ) : (
                 <>
                   <motion.button 
-                    onClick={() => onAuthClick('signin')}
-                    className="text-white/90 hover:text-white transition-colors font-medium"
+                    onClick={() => onAuthClick('signin')} 
+                    className="text-white/90 hover:text-white transition-colors font-medium hidden sm:block"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -268,7 +275,7 @@ const Header: React.FC<HeaderProps> = ({ currentPage, onPageChange, onAuthClick 
                   </motion.button>
                   <motion.button 
                     onClick={() => onAuthClick('signup')}
-                    className="bg-white text-blue-800 px-6 py-2 rounded-lg hover:bg-blue-50 transition-all font-medium"
+                    className="bg-white text-blue-800 px-4 sm:px-6 py-2 rounded-lg hover:bg-blue-50 transition-all font-medium text-sm sm:text-base"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -297,18 +304,20 @@ const Header: React.FC<HeaderProps> = ({ currentPage, onPageChange, onAuthClick 
             >
               <div className="flex flex-col space-y-3">
                 {navigation.map((item) => (
-                  <button
-                    key={item.key}
-                    onClick={() => {
-                      handleNavClick(item.key);
-                      setIsMenuOpen(false);
-                    }}
-                    className={`text-left py-2 text-sm font-medium transition-colors hover:text-blue-200 ${
-                      currentPage === item.key ? 'text-white' : 'text-white/80'
-                    }`}
-                  >
-                    {item.name}
-                  </button>
+                  ((!item.clientOnly || isClient) && (!item.talentOnly || isTalent)) && (
+                    <button
+                      key={item.key}
+                      onClick={() => {
+                        handleNavClick(item.key);
+                        setIsMenuOpen(false);
+                      }}
+                      className={`text-left py-2 text-sm font-medium transition-colors hover:text-blue-200 ${
+                        currentPage === item.key ? 'text-white' : 'text-white/80'
+                      }`}
+                    >
+                      {item.name}
+                    </button>
+                  )
                 ))}
                 
                 {/* PayPal Sandbox Testing Link - Only in development */}
@@ -350,7 +359,7 @@ const Header: React.FC<HeaderProps> = ({ currentPage, onPageChange, onAuthClick 
                       </button>
                       <button 
                         onClick={signOut}
-                        className="text-left py-2 text-sm text-white/90 hover:text-white transition-colors"
+                        className="text-left py-2 text-sm text-white/90 hover:text-white transition-colors lg:hidden"
                       >
                         Sign Out
                       </button>

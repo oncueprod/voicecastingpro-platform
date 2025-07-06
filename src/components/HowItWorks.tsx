@@ -103,7 +103,7 @@ const HowItWorks: React.FC<HowItWorksProps> = ({ onPageChange }) => {
 
         {/* Features Grid */}
         <motion.div 
-          className="grid md:grid-cols-4 gap-8 mb-20"
+          className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 lg:gap-8 mb-12 lg:mb-20"
           variants={containerVariants}
           initial="hidden"
           whileInView="visible"
@@ -123,7 +123,7 @@ const HowItWorks: React.FC<HowItWorksProps> = ({ onPageChange }) => {
                 )}
                 
                 <motion.div 
-                  className="bg-slate-700 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-600 hover:-translate-y-2 relative z-10 hover:border-blue-600"
+                  className="bg-slate-700 rounded-2xl p-6 sm:p-8 shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-600 hover:-translate-y-2 relative z-10 hover:border-blue-600"
                   whileHover={{ y: -5, boxShadow: "0 0 20px rgba(37, 99, 235, 0.2)" }}
                 >
                   {/* Step number */}
@@ -153,24 +153,24 @@ const HowItWorks: React.FC<HowItWorksProps> = ({ onPageChange }) => {
 
         {/* CTA Section */}
         <motion.div 
-          className="mt-16 text-center"
+          className="mt-12 lg:mt-16 text-center"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.1 }}
           transition={{ duration: 0.6, delay: 0.4 }}
         >
-          <div className="bg-gradient-to-r from-slate-700 to-slate-600 rounded-2xl p-8 md:p-12 shadow-2xl border border-gray-600">
-            <h3 className="text-2xl md:text-3xl font-bold text-white mb-4">
+          <div className="bg-gradient-to-r from-slate-700 to-slate-600 rounded-2xl p-6 sm:p-8 md:p-12 shadow-2xl border border-gray-600">
+            <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-4">
               Ready to Get Started?
             </h3>
-            <p className="text-gray-300 text-lg mb-8 max-w-2xl mx-auto">
+            <p className="text-gray-300 text-base sm:text-lg mb-6 sm:mb-8 max-w-2xl mx-auto">
               Join thousands of satisfied clients who have found their perfect voice 
               through VoiceCastingPro. Start your project today!
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
               <motion.button 
                 onClick={handleBrowseTalent}
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 rounded-xl hover:shadow-lg hover:shadow-blue-600/20 transition-all font-semibold text-lg"
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl hover:shadow-lg hover:shadow-blue-600/20 transition-all font-semibold text-base sm:text-lg"
                 whileHover={{ scale: 1.05, boxShadow: "0 0 20px rgba(37, 99, 235, 0.5)" }}
                 whileTap={{ scale: 0.95 }}
               >
@@ -178,7 +178,7 @@ const HowItWorks: React.FC<HowItWorksProps> = ({ onPageChange }) => {
               </motion.button>
               <motion.button 
                 onClick={handlePostProject}
-                className="border-2 border-gray-600 text-gray-300 px-8 py-4 rounded-xl hover:border-blue-600 hover:text-blue-400 transition-colors font-semibold text-lg"
+                className="border-2 border-gray-600 text-gray-300 px-6 sm:px-8 py-3 sm:py-4 rounded-xl hover:border-blue-600 hover:text-blue-400 transition-colors font-semibold text-base sm:text-lg"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >

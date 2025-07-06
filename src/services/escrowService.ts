@@ -6,12 +6,15 @@ interface EscrowPayment {
   talentId: string;
   projectId: string;
   projectTitle: string;
+  projectTitle: string;
   description: string;
   status: 'pending' | 'funded' | 'released' | 'disputed' | 'refunded';
   paypalOrderId?: string;
   createdAt: Date;
   fundedAt?: Date;
   releasedAt?: Date;
+  platformFee: number;
+  talentReceives: number;
   platformFee: number;
   talentReceives: number;
 }
@@ -48,8 +51,12 @@ class EscrowService {
     talentId: string,
     projectId: string,
     projectTitle: string,
+    projectTitle: string,
     description: string
   ): Promise<EscrowPayment> {
+    const platformFee = amount * 0.05; // 5% platform fee
+    const talentReceives = amount - platformFee;
+
     const platformFee = amount * 0.05; // 5% platform fee
     const talentReceives = amount - platformFee;
 
@@ -61,9 +68,12 @@ class EscrowService {
       talentId,
       projectId,
       projectTitle,
+      projectTitle,
       description,
       status: 'pending',
       createdAt: new Date(),
+      platformFee,
+      talentReceives
       platformFee,
       talentReceives
     };
@@ -177,6 +187,12 @@ class EscrowService {
 
   getProjectEscrows(projectId: string): EscrowPayment[] {
     return this.getEscrowPayments().filter(p => p.projectId === projectId);
+  }
+
+  calculateFees(amount: number): { platformFee: number; talentReceives: number } {
+    const platformFee = amount * 0.05; // 5% platform fee
+    const talentReceives = amount - platformFee;
+    return { platformFee, talentReceives };
   }
 
   calculateFees(amount: number): { platformFee: number; talentReceives: number } {

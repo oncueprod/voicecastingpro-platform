@@ -54,10 +54,25 @@ class MessagingService {
     // Store current user ID for authentication checks
     this.currentUserId = userId;
     
-    // In production, this would connect to your WebSocket server
-    // For now, we'll simulate real-time messaging with localStorage and events
-    this.socket = io(import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:3001', {
+    // Connect to the WebSocket server using the environment variable
+    const websocketUrl = import.meta.env.VITE_WEBSOCKET_URL || 'wss://voicecastingpro.onrender.com';
+    console.log('Connecting to WebSocket server:', websocketUrl);
+    
+    this.socket = io(websocketUrl, {
       auth: { userId }
+    });
+
+    // Handle connection events
+    this.socket.on('connect', () => {
+      console.log('WebSocket connected successfully');
+      // Dispatch custom event for components to listen to
+      window.dispatchEvent(new CustomEvent('socket_connected'));
+    });
+    
+    this.socket.on('connect_error', (error) => {
+      console.error('WebSocket connection error:', error);
+      // Dispatch custom event for components to listen to
+      window.dispatchEvent(new CustomEvent('socket_error', { detail: error }));
     });
 
     this.socket.on('message', (message: Message) => {

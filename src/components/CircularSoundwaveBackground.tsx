@@ -35,28 +35,28 @@ const CircularSoundwaveBackground: React.FC<CircularSoundwaveBackgroundProps> = 
     // Intensity settings
     const intensitySettings = {
       low: {
-        circleCount: 5,
-        sourceCount: 3,
-        maxRadius: 300,
-        opacity: 0.3,
-        speed: 0.5,
-        lineWidth: 1.5
-      },
-      medium: {
-        circleCount: 8,
-        sourceCount: 5,
-        maxRadius: 400,
+        circleCount: 7,
+        sourceCount: 4,
+        maxRadius: 350,
         opacity: 0.4,
-        speed: 0.8,
+        speed: 0.6,
         lineWidth: 2
       },
+      medium: {
+        circleCount: 10,
+        sourceCount: 6,
+        maxRadius: 400,
+        opacity: 0.4,
+        speed: 0.7,
+        lineWidth: 2.5
+      },
       high: {
-        circleCount: 12,
-        sourceCount: 7,
+        circleCount: 15,
+        sourceCount: 8,
         maxRadius: 500,
         opacity: 0.5,
-        speed: 1.2,
-        lineWidth: 2.5
+        speed: 1.1,
+        lineWidth: 3
       }
     };
     
@@ -80,10 +80,10 @@ const CircularSoundwaveBackground: React.FC<CircularSoundwaveBackgroundProps> = 
           x: Math.random() * canvas.width,
           y: Math.random() * canvas.height,
           // Each source has slightly different properties
-          speed: settings.speed * (0.8 + Math.random() * 0.4),
-          maxRadius: settings.maxRadius * (0.7 + Math.random() * 0.6),
-          opacity: settings.opacity * (0.8 + Math.random() * 0.4),
-          lineWidth: settings.lineWidth * (0.8 + Math.random() * 0.4),
+          speed: settings.speed * (0.9 + Math.random() * 0.3),
+          maxRadius: settings.maxRadius * (0.8 + Math.random() * 0.5),
+          opacity: settings.opacity * (0.9 + Math.random() * 0.3),
+          lineWidth: settings.lineWidth * (0.9 + Math.random() * 0.3),
           // Pulsing frequency
           pulseSpeed: 0.5 + Math.random() * 1.5,
           // Delay between circle spawns
@@ -102,8 +102,8 @@ const CircularSoundwaveBackground: React.FC<CircularSoundwaveBackgroundProps> = 
       
       // Pre-populate with some circles
       sources.forEach(source => {
-        for (let i = 0; i < 3; i++) {
-          if (Math.random() > 0.5) {
+        for (let i = 0; i < 4; i++) {
+          if (Math.random() > 0.3) {
             circlesRef.current.push({
               x: source.x,
               y: source.y,
@@ -137,7 +137,7 @@ const CircularSoundwaveBackground: React.FC<CircularSoundwaveBackgroundProps> = 
         circle.radius += circle.speed;
         
         // Fade out as the circle expands
-        circle.opacity = circle.opacity * 0.99;
+        circle.opacity = circle.opacity * 0.992;
         
         // Draw circle
         ctx.beginPath();
@@ -147,7 +147,7 @@ const CircularSoundwaveBackground: React.FC<CircularSoundwaveBackgroundProps> = 
         ctx.stroke();
         
         // Remove circles that are too large or too faded
-        if (circle.radius > circle.maxRadius || circle.opacity < 0.01) {
+        if (circle.radius > circle.maxRadius || circle.opacity < 0.02) {
           circlesRef.current.splice(i, 1);
         }
       }
@@ -155,8 +155,8 @@ const CircularSoundwaveBackground: React.FC<CircularSoundwaveBackgroundProps> = 
       // Spawn new circles from sources
       sources.forEach((source, index) => {
         // Update source position with gentle movement
-        source.x += Math.sin(timeRef.current * 0.2 + index) * 0.5;
-        source.y += Math.cos(timeRef.current * 0.3 + index * 0.7) * 0.5;
+        source.x += Math.sin(timeRef.current * 0.15 + index) * 0.4;
+        source.y += Math.cos(timeRef.current * 0.2 + index * 0.7) * 0.4;
         
         // Keep sources within canvas bounds
         source.x = Math.max(0, Math.min(canvas.width, source.x));
@@ -165,7 +165,7 @@ const CircularSoundwaveBackground: React.FC<CircularSoundwaveBackgroundProps> = 
         // Check if it's time to spawn a new circle
         if (timeRef.current - source.lastSpawnTime > source.spawnDelay) {
           // Pulse effect - spawn circles at varying rates
-          const pulseIntensity = 0.5 + 0.5 * Math.sin(timeRef.current * source.pulseSpeed);
+          const pulseIntensity = 0.5 + 0.5 * Math.sin(timeRef.current * source.pulseSpeed * 0.8);
           
           // Higher chance to spawn during pulse peaks
           if (Math.random() < pulseIntensity * 0.3) {
@@ -173,10 +173,10 @@ const CircularSoundwaveBackground: React.FC<CircularSoundwaveBackgroundProps> = 
               x: source.x,
               y: source.y,
               radius: 0, // Start from zero
-              maxRadius: source.maxRadius * (0.8 + Math.random() * 0.4),
-              speed: source.speed * (0.8 + Math.random() * 0.4),
-              opacity: source.opacity * (0.8 + Math.random() * 0.4),
-              lineWidth: source.lineWidth * (0.8 + pulseIntensity * 0.5), // Thicker lines during peaks
+              maxRadius: source.maxRadius * (0.85 + Math.random() * 0.3),
+              speed: source.speed * (0.85 + Math.random() * 0.3),
+              opacity: source.opacity * (0.9 + Math.random() * 0.3),
+              lineWidth: source.lineWidth * (0.9 + pulseIntensity * 0.5), // Thicker lines during peaks
               sourceIndex: index
             });
             
@@ -210,7 +210,7 @@ const CircularSoundwaveBackground: React.FC<CircularSoundwaveBackgroundProps> = 
     <canvas 
       ref={canvasRef} 
       className="fixed inset-0 pointer-events-none z-0"
-      style={{ opacity: 0.5 }}
+      style={{ opacity: 0.6 }}
     />
   );
 };

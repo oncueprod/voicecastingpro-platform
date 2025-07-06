@@ -62,7 +62,33 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ onClose, initialConve
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [socketStatus, setSocketStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Monitor WebSocket connection status
+  useEffect(() => {
+    if (user) {
+      const handleConnect = () => {
+        setSocketStatus('connected');
+        console.log('WebSocket connected successfully');
+      };
+      
+      const handleConnectError = (error: any) => {
+        setSocketStatus('error');
+        console.error('WebSocket connection error:', error);
+      };
+      
+      // Add event listeners
+      window.addEventListener('socket_connected', handleConnect);
+      window.addEventListener('socket_error', handleConnectError);
+      
+      // Clean up event listeners
+      return () => {
+        window.removeEventListener('socket_connected', handleConnect);
+        window.removeEventListener('socket_error', handleConnectError);
+      };
+    }
+  }, [user]);
 
   // Content filtering patterns
   const filterPatterns = [
@@ -475,7 +501,7 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ onClose, initialConve
         {/* Back Button */}
         <motion.button
           onClick={handleBackClick}
-          className="flex items-center space-x-2 text-white/80 hover:text-white mb-8 transition-colors"
+          className="flex items-center space-x-2 text-white/80 hover:text-white mb-6 lg:mb-8 transition-colors"
           whileHover={{ x: -5 }}
           transition={{ type: "spring", stiffness: 400, damping: 10 }}
         >
@@ -484,8 +510,8 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ onClose, initialConve
         </motion.button>
         
         <div className="bg-slate-800 rounded-xl p-6 border border-gray-700 mb-8">
-          <h1 className="text-2xl font-bold text-white mb-2">Messaging Center</h1>
-          <p className="text-gray-300">
+          <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">Messaging Center</h1>
+          <p className="text-gray-300 text-sm sm:text-base">
             {user.type === 'client' 
               ? 'Connect with voice talent and discuss your projects securely.' 
               : 'Communicate with clients and discuss project details securely.'}
@@ -493,7 +519,7 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ onClose, initialConve
         </div>
         
         <div 
-          className="h-[600px] bg-slate-800 rounded-xl border border-gray-700 overflow-hidden relative"
+          className="h-[500px] sm:h-[600px] bg-slate-800 rounded-xl border border-gray-700 overflow-hidden relative"
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -509,10 +535,20 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ onClose, initialConve
           )}
 
           {/* Conversations List */}
-          <div className="w-1/3 border-r border-gray-700 h-full flex flex-col">
+          <div className="w-1/3 border-r border-gray-700 h-full flex flex-col hidden sm:flex">
             <div className="p-4 border-b border-gray-700">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-lg font-semibold text-white">Messages</h3>
+                <div className="flex items-center space-x-2">
+                  <div className={`w-2 h-2 rounded-full ${
+                    socketStatus === 'connected' ? 'bg-green-500' : 
+                    socketStatus === 'error' ? 'bg-red-500' : 'bg-yellow-500'
+                  }`}></div>
+                  <span className="text-xs text-gray-400">
+                    {socketStatus === 'connected' ? 'Connected' : 
+                     socketStatus === 'error' ? 'Connection Error' : 'Connecting...'}
+                  </span>
+                </div>
               </div>
               
               {/* Search */}
@@ -589,14 +625,95 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ onClose, initialConve
               )}
             </div>
           </div>
+          
+          {/* Mobile Conversations List (Shown when no conversation is active) */}
+          <div className="sm:hidden w-full h-full flex flex-col">
+            <div className="p-4 border-b border-gray-700">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold text-white">Messages</h3>
+              </div>
+              
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+                <input
+                  type="text"
+                  placeholder="Search conversations..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400 text-sm"
+                />
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto">
+              {filteredConversations.length > 0 ? (
+                filteredConversations.map((conversation) => {
+                  const otherParticipant = conversation.participants.find(p => p.id !== user.id);
+                  return (
+                    <motion.div
+                      key={conversation.id}
+                      className="p-4 border-b border-gray-700 cursor-pointer hover:bg-slate-700 transition-colors"
+                      onClick={() => {
+                        setActiveConversation(conversation);
+                        loadMessages(conversation.id);
+                      }}
+                      whileHover={{ backgroundColor: 'rgba(51, 65, 85, 0.8)' }}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="bg-blue-600 rounded-full p-2 relative">
+                          <User className="h-4 w-4 text-white" />
+                          {conversation.unreadCount > 0 && (
+                            <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                              {conversation.unreadCount}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-medium truncate">
+                            {otherParticipant?.name}
+                          </p>
+                          <p className="text-xs text-gray-400 truncate">
+                            {conversation.projectTitle}
+                          </p>
+                          {conversation.lastMessage && (
+                            <p className="text-sm text-gray-400 truncate">
+                              {conversation.lastMessage.content}
+                            </p>
+                          )}
+                        </div>
+                        {conversation.lastMessage && (
+                          <span className="text-xs text-gray-500">
+                            {formatTime(conversation.lastMessage.timestamp)}
+                          </span>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center p-6">
+                    <p className="text-gray-400 mb-2">No conversations found</p>
+                    <p className="text-sm text-gray-500">
+                      {user.type === 'client' 
+                        ? 'Start by browsing voice talent and contacting them' 
+                        : 'Conversations with clients will appear here'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Chat Area */}
-          <div className="flex-1 flex flex-col h-full">
+          <div className="flex-1 flex flex-col h-full sm:block">
             {activeConversation ? (
               <>
                 {/* Chat Header */}
                 <div className="p-4 border-b border-gray-700">
-                  <div className="flex items-center space-x-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
                     <div className="bg-blue-600 rounded-full p-2">
                       <User className="h-4 w-4 text-white" />
                     </div>
@@ -608,6 +725,15 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ onClose, initialConve
                         {activeConversation.projectTitle || 'Direct Message'}
                       </p>
                     </div>
+                    </div>
+                    
+                    {/* Back button for mobile */}
+                    <button 
+                      className="sm:hidden text-gray-400 hover:text-white"
+                      onClick={() => setActiveConversation(null)}
+                    >
+                      <ArrowLeft className="h-5 w-5" />
+                    </button>
                   </div>
                 </div>
 

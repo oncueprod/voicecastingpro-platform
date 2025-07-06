@@ -44,11 +44,37 @@ const EnhancedMessagingInterface: React.FC<EnhancedMessagingInterfaceProps> = ({
   const [showEscrowForm, setShowEscrowForm] = useState(false);
   const [escrowAmount, setEscrowAmount] = useState('');
   const [escrowDescription, setEscrowDescription] = useState('');
+  const [socketStatus, setSocketStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [authError, setAuthError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Monitor WebSocket connection status
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const handleConnect = () => {
+        setSocketStatus('connected');
+        console.log('WebSocket connected successfully');
+      };
+      
+      const handleConnectError = (error: any) => {
+        setSocketStatus('error');
+        console.error('WebSocket connection error:', error);
+      };
+      
+      // Add event listeners
+      window.addEventListener('socket_connected', handleConnect);
+      window.addEventListener('socket_error', handleConnectError);
+      
+      // Clean up event listeners
+      return () => {
+        window.removeEventListener('socket_connected', handleConnect);
+        window.removeEventListener('socket_error', handleConnectError);
+      };
+    }
+  }, [isAuthenticated, user]);
 
   // Authentication check - block access if not authenticated
   useEffect(() => {
@@ -417,7 +443,19 @@ const EnhancedMessagingInterface: React.FC<EnhancedMessagingInterfaceProps> = ({
       {/* Conversations List */}
       <div className="w-1/3 border-r border-gray-700">
         <div className="p-4 border-b border-gray-700">
-          <h3 className="text-lg font-semibold text-white">Messages</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-white">Messages</h3>
+            <div className="flex items-center space-x-2">
+              <div className={`w-2 h-2 rounded-full ${
+                socketStatus === 'connected' ? 'bg-green-500' : 
+                socketStatus === 'error' ? 'bg-red-500' : 'bg-yellow-500'
+              }`}></div>
+              <span className="text-xs text-gray-400">
+                {socketStatus === 'connected' ? 'Connected' : 
+                 socketStatus === 'error' ? 'Connection Error' : 'Connecting...'}
+              </span>
+            </div>
+          </div>
           <p className="text-xs text-gray-400">Signed in as {user.name}</p>
         </div>
         

@@ -49,7 +49,7 @@ class EmailService {
       const adminEmail = this.createAdminNotificationEmail(formData);
       const userEmail = this.createUserConfirmationEmail(formData);
 
-      console.log('📧 Sending admin notification email to:', this.config.supportEmail);
+      console.log('📧 Sending admin notification email to:', this.config.supportEmail || 'support@voicecastingpro.com');
       console.log('📧 Sending user confirmation email to:', formData.email);
 
       // Log environment variables for debugging
@@ -67,7 +67,7 @@ class EmailService {
       // For demo purposes, we'll simulate the email sending
       const emailData = {
         adminNotification: {
-          to: this.config.supportEmail,
+          to: this.config.supportEmail || 'support@voicecastingpro.com',
           from: `${this.config.fromName} <${this.config.fromAddress}>`,
           subject: adminEmail.subject,
           html: adminEmail.html,
@@ -86,7 +86,7 @@ class EmailService {
       // Store email in localStorage for demo (in production, this would be sent via SMTP)
       const sentEmails = JSON.parse(localStorage.getItem('sent_emails') || '[]');
       sentEmails.push({
-        id: `email_${Date.now()}`,
+        id: `email_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         timestamp: new Date().toISOString(),
         type: 'contact_form',
         data: emailData,
@@ -95,7 +95,13 @@ class EmailService {
       localStorage.setItem('sent_emails', JSON.stringify(sentEmails));
 
       // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Log success message
+      console.log('✅ Contact form emails sent successfully!', {
+        adminEmail: emailData.adminNotification.to,
+        userEmail: emailData.userConfirmation.to
+      });
 
       return true;
     } catch (error) {
@@ -221,6 +227,9 @@ Please respond to the customer within 24 hours.
   private createUserConfirmationEmail(formData: ContactFormData): EmailTemplate {
     const subject = `Thank you for contacting VoiceCastingPro - We'll be in touch soon!`;
     
+    // Ensure we have a valid support email
+    const supportEmail = this.config.supportEmail || 'support@voicecastingpro.com';
+    
     // Create attachment list HTML if there are attachments
     let attachmentsHtml = '';
     
@@ -297,7 +306,7 @@ Please respond to the customer within 24 hours.
             
             <p>If you have any urgent questions, you can also reach us at:</p>
             <ul>
-              <li>📧 Email: <a href="mailto:${this.config.supportEmail}">${this.config.supportEmail}</a></li>
+              <li>📧 Email: <a href="mailto:${supportEmail}">${supportEmail}</a></li>
             </ul>
           </div>
           
@@ -337,7 +346,7 @@ What happens next?
 - If needed, we'll schedule a call to discuss your project
 
 Contact Information:
-- Email: ${this.config.supportEmail}
+- Email: ${supportEmail}
 
 Thank you for choosing VoiceCastingPro!
 

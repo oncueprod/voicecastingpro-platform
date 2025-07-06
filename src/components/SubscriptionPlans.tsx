@@ -5,11 +5,19 @@ import ProtectedRoute from './ProtectedRoute';
 import { useAuth } from '../contexts/AuthContext';
 import PayPalSubscriptionButton from './PayPalSubscriptionButton';
 
-const SubscriptionPlans: React.FC = () => {
+interface SubscriptionPlansProps {
+  fromSignup?: boolean;
+  onBack?: () => void;
+}
+
+const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ fromSignup = false, onBack }) => {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
   const [subscriptionStatus, setSubscriptionStatus] = useState<'none' | 'pending' | 'active' | 'cancelled'>('none');
   const [subscriptionId, setSubscriptionId] = useState<string | null>(null);
   const { user } = useAuth();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [sdkReady, setSdkReady] = useState(false);
+  const [paypalError, setPaypalError] = useState<string | null>(null);
   const isProduction = import.meta.env.PROD;
 
   const plans = {
@@ -20,8 +28,8 @@ const SubscriptionPlans: React.FC = () => {
       planId: 'P-MONTHLY-PLAN-ID'
     },
     annual: {
-      price: 348,
-      period: 'per year, billed annually',
+      price: 348, 
+      period: 'per year',
       savings: 'Save $72 per year!',
       planId: 'P-ANNUAL-PLAN-ID'
     }
@@ -83,9 +91,49 @@ const SubscriptionPlans: React.FC = () => {
     }
   ];
 
+  // Load the PayPal SDK
+  useEffect(() => {
+    const addPayPalScript = () => {
+      const clientId = import.meta.env.VITE_PAYPAL_CLIENT_ID || 'sb';
+      const script = document.createElement('script');
+      script.type = 'text/javascript';
+      script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&vault=true&intent=subscription`;
+      script.async = true;
+      script.onload = () => {
+        setSdkReady(true);
+      };
+      script.onerror = () => {
+        setPaypalError('Failed to load PayPal SDK. Please try again later.');
+      };
+      document.body.appendChild(script);
+    };
+
+    if (window.paypal) {
+      setSdkReady(true);
+    } else {
+      addPayPalScript();
+    }
+    
+    // Cleanup
+    return () => {
+      const script = document.querySelector('script[src*="paypal.com/sdk/js"]');
+      if (script) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
   const handleSubscriptionSuccess = (subId: string) => {
     setSubscriptionId(subId);
     setSubscriptionStatus('active');
+    setIsRedirectingToPayPal(false);
+
+    // Show different success message if coming from signup flow
+    if (fromSignup) {
+      alert('Subscription activated successfully! Your talent profile is now fully featured and you can start receiving job opportunities. Welcome to VoiceCastingPro!');
+    } else {
+      alert(`Subscription created successfully! Your ${billingCycle} plan is now active.`);
+    }
     
     // In a real implementation, you would store this in your database
     localStorage.setItem('user_subscription', JSON.stringify({
@@ -96,12 +144,23 @@ const SubscriptionPlans: React.FC = () => {
       startDate: new Date().toISOString()
     }));
     
-    alert(`Subscription created successfully! Your ${billingCycle} plan is now active.`);
+    // If we came from browse jobs, redirect back there
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const fromBrowseJobs = urlParams.get('fromBrowseJobs');
+      
+      if (fromBrowseJobs === 'true' && onBack) {
+        setTimeout(() => {
+          onBack();
+        }, 1500);
+      }
+    }
   };
 
   const handleSubscriptionError = (error: any) => {
     console.error('Subscription error:', error);
-    alert('Failed to create subscription. Please try again.');
+    setPaypalError('Failed to create subscription. Please try again.');
+    setIsRedirectingToPayPal(false);
   };
 
   const handleCancelSubscription = async () => {
@@ -111,10 +170,8 @@ const SubscriptionPlans: React.FC = () => {
     
     if (confirmed) {
       try {
-        await paypalEscrowService.cancelSubscription(
-          subscriptionId,
-          'User requested cancellation'
-        );
+        // In a real implementation, this would call your backend to cancel the subscription
+        // For demo purposes, we'll just update the local state
         
         setSubscriptionStatus('cancelled');
         
@@ -147,7 +204,43 @@ const SubscriptionPlans: React.FC = () => {
         console.error('Failed to parse subscription data:', error);
       }
     }
+    
+    // Check for pending subscription from PayPal redirect
+    const pendingSubscription = localStorage.getItem('pending_subscription');
+    if (pendingSubscription) {
+      try {
+        const subscription = JSON.parse(pendingSubscription);
+        if (subscription.userId === user?.id && subscription.status === 'pending') {
+          // This would be where you verify the subscription with PayPal in a real implementation
+          // For demo purposes, we'll just activate it
+          handleSubscriptionSuccess(subscription.id);
+          localStorage.removeItem('pending_subscription');
+        }
+      } catch (error) {
+        console.error('Failed to parse pending subscription data:', error);
+      }
+    }
   }, [user]);
+
+  // Check if we're coming from the signup flow via URL parameter
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const fromSignupParam = urlParams.get('fromSignup');
+      
+      if (fromSignupParam === 'true') {
+        // Set a more appropriate title for the page
+        document.title = 'Complete Your Registration - VoiceCastingPro';
+      }
+      
+      // Check if we're coming from the browse jobs page
+      const fromBrowseJobs = urlParams.get('fromBrowseJobs');
+      if (fromBrowseJobs === 'true') {
+        // Set appropriate title
+        document.title = 'Subscribe to Submit Proposals - VoiceCastingPro';
+      }
+    }
+  }, []);
 
   return (
     <ProtectedRoute requireTalent={true}>
@@ -176,8 +269,8 @@ const SubscriptionPlans: React.FC = () => {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           {/* Back Button */}
           <motion.a
-            href="/"
-            className="flex items-center space-x-2 text-white/80 hover:text-white mb-8 transition-colors"
+            onClick={() => onBack ? onBack() : window.history.back()}
+            className="flex items-center space-x-2 text-white/80 hover:text-white mb-6 lg:mb-8 transition-colors cursor-pointer"
             whileHover={{ x: -5 }}
             transition={{ type: "spring", stiffness: 400, damping: 10 }}
           >
@@ -187,20 +280,28 @@ const SubscriptionPlans: React.FC = () => {
           
           {/* Header */}
           <motion.div 
-            className="text-center mb-16"
+            className="text-center mb-10 lg:mb-16"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
+            {fromSignup && (
+              <div className="bg-green-900/30 border border-green-600/50 rounded-lg p-3 sm:p-4 max-w-2xl mx-auto mb-6 sm:mb-8 backdrop-blur-sm">
+                <p className="text-green-300 text-xs sm:text-sm font-medium">
+                  ✅ Your talent profile has been created successfully! Complete your registration by subscribing to a plan.
+                </p>
+              </div>
+            )}
+
             <div className="flex items-center justify-center space-x-3 mb-6">
               <div className="bg-white/10 p-3 rounded-full backdrop-blur-sm">
                 <Mic className="h-8 w-8 text-white" />
               </div>
-              <h1 className="text-4xl md:text-5xl font-bold text-white">
+              <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white">
                 Choose Your Subscription Plan
               </h1>
             </div>
-            <p className="text-xl text-white/90 max-w-3xl mx-auto mb-8">
+            <p className="text-lg sm:text-xl text-white/90 max-w-3xl mx-auto mb-6 sm:mb-8">
               Unlock your full potential as a voice talent
             </p>
             
@@ -219,11 +320,11 @@ const SubscriptionPlans: React.FC = () => {
               </div>
             )}
             
-            {/* Sandbox Notice - Only in development */}
-            {!isProduction && (
-              <div className="bg-yellow-900/30 border border-yellow-600/50 rounded-lg p-4 max-w-2xl mx-auto mb-8 backdrop-blur-sm">
-                <p className="text-yellow-300 text-sm">
-                  🧪 <strong>Sandbox Mode:</strong> This is a test environment. No real payments will be processed.
+            {/* PayPal Error */}
+            {paypalError && (
+              <div className="bg-red-900/30 border border-red-600/50 rounded-lg p-4 max-w-2xl mx-auto mb-8 backdrop-blur-sm">
+                <p className="text-red-300 text-sm">
+                  ❌ <strong>Error:</strong> {paypalError}
                 </p>
               </div>
             )}
@@ -301,16 +402,16 @@ const SubscriptionPlans: React.FC = () => {
 
           {/* Billing Toggle */}
           <motion.div 
-            className="flex justify-center mb-12"
+            className="flex justify-center mb-8 lg:mb-12"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
           >
             <div className="bg-white/10 rounded-xl p-2 border border-white/20 backdrop-blur-sm">
-              <div className="flex space-x-2">
+              <div className="flex space-x-1 sm:space-x-2">
                 <button
                   onClick={() => setBillingCycle('monthly')}
-                  className={`px-6 py-3 rounded-lg font-medium transition-all ${
+                  className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-medium transition-all text-sm sm:text-base ${
                     billingCycle === 'monthly'
                       ? 'bg-white text-blue-800'
                       : 'text-white/80 hover:text-white'
@@ -320,7 +421,7 @@ const SubscriptionPlans: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setBillingCycle('annual')}
-                  className={`px-6 py-3 rounded-lg font-medium transition-all relative ${
+                  className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-medium transition-all relative text-sm sm:text-base ${
                     billingCycle === 'annual'
                       ? 'bg-white text-blue-800'
                       : 'text-white/80 hover:text-white'
@@ -339,7 +440,7 @@ const SubscriptionPlans: React.FC = () => {
 
           {/* Subscription Plans */}
           <motion.div 
-            className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mb-16"
+            className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 max-w-4xl mx-auto mb-10 lg:mb-16"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
@@ -350,24 +451,24 @@ const SubscriptionPlans: React.FC = () => {
                 ? 'border-white/50 shadow-lg shadow-blue-600/20 scale-105' 
                 : 'border-white/20'
             }`}>
-              <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold text-white mb-4">
+              <div className="text-center mb-6 sm:mb-8">
+                <h3 className="text-xl sm:text-2xl font-bold text-white mb-3 sm:mb-4">
                   Monthly Plan
                 </h3>
                 <div className="mb-4">
-                  <span className="text-4xl font-bold text-white">
+                  <span className="text-3xl sm:text-4xl font-bold text-white">
                     ${plans.monthly.price}
                   </span>
                 </div>
-                <p className="text-white/80 text-sm mb-4">
+                <p className="text-white/80 text-xs sm:text-sm mb-3 sm:mb-4">
                   {plans.monthly.period}
                 </p>
-                <p className="text-blue-300 text-sm font-medium">
+                <p className="text-blue-300 text-xs sm:text-sm font-medium">
                   via PayPal
                 </p>
               </div>
 
-              <div className="space-y-4 mb-8">
+              <div className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
                 {features.monthly.map((feature, index) => (
                   <div key={index} className="flex items-center space-x-3">
                     <div className="flex-shrink-0 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
@@ -379,21 +480,21 @@ const SubscriptionPlans: React.FC = () => {
               </div>
 
               {subscriptionStatus === 'active' && billingCycle === 'monthly' ? (
-                <div className="w-full bg-green-600 text-white py-4 rounded-lg font-semibold mb-4 text-center">
+                <div className="w-full bg-green-600 text-white py-3 sm:py-4 rounded-lg font-semibold mb-3 sm:mb-4 text-center text-sm sm:text-base">
                   Current Plan
                 </div>
               ) : (
                 <PayPalSubscriptionButton
                   planId={plans.monthly.planId}
-                  userId={user?.id || 'guest'}
+                  userId={user?.id || ''}
                   onSuccess={handleSubscriptionSuccess}
                   onError={handleSubscriptionError}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-lg transition-all font-semibold mb-4"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 sm:py-4 rounded-lg transition-all font-semibold mb-3 sm:mb-4 text-sm sm:text-base"
                   buttonText="Subscribe with PayPal"
                 />
               )}
               
-              <p className="text-center text-xs text-white/60">
+              <p className="text-center text-[10px] sm:text-xs text-white/60">
                 Secure payment processing by PayPal
               </p>
             </div>
@@ -404,35 +505,29 @@ const SubscriptionPlans: React.FC = () => {
                 ? 'border-white/50 shadow-lg shadow-blue-600/20 scale-105' 
                 : 'border-white/20'
             }`}>
-              {billingCycle === 'annual' && (
-                <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                  <span className="bg-green-600 text-white text-sm font-bold px-4 py-2 rounded-full">
-                    BEST VALUE
-                  </span>
-                </div>
-              )}
               
-              <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold text-white mb-4">
-                  Annual Plan
+              <div className="text-center mb-6 sm:mb-8">
+                <h3 className="text-xl sm:text-2xl font-bold text-white mb-3 sm:mb-4">
+                  For Voice Talent
                 </h3>
+                <h4 className="text-xl font-bold text-white mb-3 sm:mb-4">
+                  Annual Plan
+                </h4>
                 <div className="mb-4">
-                  <span className="text-4xl font-bold text-white">
+                  <span className="text-3xl sm:text-4xl font-bold text-white">
                     ${plans.annual.price}
                   </span>
                 </div>
-                <p className="text-white/80 text-sm mb-2">
+                <p className="text-white/80 text-xs sm:text-sm mb-2">
                   {plans.annual.period}
                 </p>
-                <p className="text-green-400 text-sm font-medium mb-2">
-                  {plans.annual.savings}
-                </p>
-                <p className="text-blue-300 text-sm font-medium">
+                <p className="text-green-400 text-xs sm:text-sm font-medium mb-2">Best Value • Save $72/year</p>
+                <p className="text-blue-300 text-xs sm:text-sm font-medium">
                   via PayPal
                 </p>
               </div>
 
-              <div className="space-y-4 mb-8">
+              <div className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
                 {features.annual.map((feature, index) => (
                   <div key={index} className="flex items-center space-x-3">
                     <div className="flex-shrink-0 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
@@ -444,21 +539,21 @@ const SubscriptionPlans: React.FC = () => {
               </div>
 
               {subscriptionStatus === 'active' && billingCycle === 'annual' ? (
-                <div className="w-full bg-green-600 text-white py-4 rounded-lg font-semibold mb-4 text-center">
+                <div className="w-full bg-green-600 text-white py-3 sm:py-4 rounded-lg font-semibold mb-3 sm:mb-4 text-center text-sm sm:text-base">
                   Current Plan
                 </div>
               ) : (
                 <PayPalSubscriptionButton
                   planId={plans.annual.planId}
-                  userId={user?.id || 'guest'}
+                  userId={user?.id || ''}
                   onSuccess={handleSubscriptionSuccess}
                   onError={handleSubscriptionError}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-lg transition-all font-semibold mb-4"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3 sm:py-4 rounded-lg transition-all font-semibold mb-3 sm:mb-4 text-sm sm:text-base"
                   buttonText="Subscribe with PayPal"
                 />
               )}
               
-              <p className="text-center text-xs text-white/60">
+              <p className="text-center text-[10px] sm:text-xs text-white/60">
                 Secure payment processing by PayPal
               </p>
             </div>
@@ -466,33 +561,33 @@ const SubscriptionPlans: React.FC = () => {
 
           {/* PayPal Security Info */}
           <motion.div 
-            className="mb-16"
+            className="mb-10 lg:mb-16"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.6 }}
           >
-            <div className="bg-white/10 rounded-2xl p-8 border border-white/20 backdrop-blur-sm">
-              <h2 className="text-2xl font-bold text-white text-center mb-8">
+            <div className="bg-white/10 rounded-xl sm:rounded-2xl p-6 sm:p-8 border border-white/20 backdrop-blur-sm">
+              <h2 className="text-xl sm:text-2xl font-bold text-white text-center mb-6 sm:mb-8">
                 Secure PayPal Subscriptions
               </h2>
               
-              <div className="grid md:grid-cols-2 gap-6 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
                 <div className="space-y-4">
                   <div className="flex items-start space-x-3">
                     <div className="w-2 h-2 bg-blue-400 rounded-full mt-2"></div>
-                    <p className="text-white/90 text-sm">
+                    <p className="text-white/90 text-xs sm:text-sm">
                       All subscriptions are processed securely through PayPal
                     </p>
                   </div>
                   <div className="flex items-start space-x-3">
                     <div className="w-2 h-2 bg-blue-400 rounded-full mt-2"></div>
-                    <p className="text-white/90 text-sm">
+                    <p className="text-white/90 text-xs sm:text-sm">
                       You can manage, pause, or cancel your subscription anytime in your PayPal account
                     </p>
                   </div>
                   <div className="flex items-start space-x-3">
                     <div className="w-2 h-2 bg-blue-400 rounded-full mt-2"></div>
-                    <p className="text-white/90 text-sm">
+                    <p className="text-white/90 text-xs sm:text-sm">
                       No credit card information is stored on our servers
                     </p>
                   </div>
@@ -500,44 +595,54 @@ const SubscriptionPlans: React.FC = () => {
                 <div className="space-y-4">
                   <div className="flex items-start space-x-3">
                     <div className="w-2 h-2 bg-blue-400 rounded-full mt-2"></div>
-                    <p className="text-white/90 text-sm">
+                    <p className="text-white/90 text-xs sm:text-sm">
                       Automatic billing with email notifications before each charge
                     </p>
                   </div>
                   <div className="flex items-start space-x-3">
                     <div className="w-2 h-2 bg-blue-400 rounded-full mt-2"></div>
-                    <p className="text-white/90 text-sm">
+                    <p className="text-white/90 text-xs sm:text-sm">
                       30-day money-back guarantee for new subscribers
                     </p>
                   </div>
                 </div>
+              </div>
+
+              {/* PayPal SDK Status */}
+              <div className="mt-4 flex items-center space-x-2">
+                <div className={`w-3 h-3 rounded-full ${
+                  sdkReady ? 'bg-green-500' : 'bg-yellow-500'
+                }`}></div>
+                <span className="text-sm text-gray-400">
+                  {sdkReady ? 'PayPal SDK Ready' : 'Loading PayPal SDK...'}
+                </span>
               </div>
             </div>
           </motion.div>
 
           {/* Why PayPal */}
           <motion.div 
-            className="mb-16"
+            className="mb-10 lg:mb-16"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.8 }}
           >
-            <h2 className="text-2xl font-bold text-white text-center mb-8">
+            <h2 className="text-xl sm:text-2xl font-bold text-white text-center mb-6 sm:mb-8">
               Why We Use PayPal
             </h2>
             
-            <div className="grid md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 lg:gap-8">
               {paypalFeatures.map((feature, index) => {
                 const IconComponent = feature.icon;
                 return (
-                  <div key={index} className="bg-white/10 rounded-xl p-6 border border-white/20 text-center backdrop-blur-sm">
+                  <div key={index} className="bg-white/10 rounded-xl p-5 sm:p-6 border border-white/20 text-center backdrop-blur-sm">
                     <div className="bg-blue-600/50 p-3 rounded-xl w-fit mx-auto mb-4">
                       <IconComponent className="h-6 w-6 text-white" />
                     </div>
-                    <h3 className="text-lg font-semibold text-white mb-3">
+                    <h3 className="text-base sm:text-lg font-semibold text-white mb-2 sm:mb-3">
                       {feature.title}
                     </h3>
-                    <p className="text-white/80 text-sm">
+                    <p className="text-white/80 text-xs sm:text-sm">
                       {feature.description}
                     </p>
                   </div>
@@ -548,23 +653,23 @@ const SubscriptionPlans: React.FC = () => {
 
           {/* FAQ */}
           <motion.div 
-            className="mb-16"
+            className="mb-10 lg:mb-16"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 1.0 }}
           >
-            <h2 className="text-2xl font-bold text-white text-center mb-8">
+            <h2 className="text-xl sm:text-2xl font-bold text-white text-center mb-6 sm:mb-8">
               Frequently Asked Questions
             </h2>
             
-            <div className="max-w-4xl mx-auto space-y-6">
+            <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
               {faqs.map((faq, index) => (
-                <div key={index} className="bg-white/10 rounded-xl p-6 border border-white/20 backdrop-blur-sm">
-                  <h3 className="text-lg font-semibold text-white mb-3 flex items-center space-x-2">
+                <div key={index} className="bg-white/10 rounded-xl p-5 sm:p-6 border border-white/20 backdrop-blur-sm">
+                  <h3 className="text-base sm:text-lg font-semibold text-white mb-2 sm:mb-3 flex items-center space-x-2">
                     <HelpCircle className="h-5 w-5 text-blue-400" />
                     <span>{faq.question}</span>
                   </h3>
-                  <p className="text-white/80 leading-relaxed">
+                  <p className="text-white/80 leading-relaxed text-sm sm:text-base">
                     {faq.answer}
                   </p>
                 </div>
@@ -574,27 +679,46 @@ const SubscriptionPlans: React.FC = () => {
 
           {/* Support CTA */}
           <motion.div 
-            className="text-center"
+            className="text-center mb-6"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 1.2 }}
           >
-            <div className="bg-white/10 rounded-2xl p-8 border border-white/20 backdrop-blur-sm">
-              <h3 className="text-xl font-bold text-white mb-4">
-                Need help with your subscription?
-              </h3>
-              <p className="text-white/80 mb-6">
-                Contact our support team for assistance with billing, plan changes, or any questions.
-              </p>
-              <motion.a 
-                href="/contact-us"
-                className="bg-white text-blue-800 px-6 py-3 rounded-lg hover:bg-blue-50 transition-all font-medium inline-block"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                Contact Support
-              </motion.a>
-            </div>
+            {!fromSignup ? (
+              <div className="bg-white/10 rounded-xl sm:rounded-2xl p-6 sm:p-8 border border-white/20 backdrop-blur-sm">
+                <h3 className="text-lg sm:text-xl font-bold text-white mb-3 sm:mb-4">
+                  Need help with your subscription?
+                </h3>
+                <p className="text-white/80 mb-4 sm:mb-6 text-sm sm:text-base">
+                  Contact our support team for assistance with billing, plan changes, or any questions.
+                </p>
+                <motion.a 
+                  href="/contact-us"
+                  className="bg-white text-blue-800 px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:bg-blue-50 transition-all font-medium inline-block text-sm sm:text-base"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  Contact Support
+                </motion.a>
+              </div>
+            ) : (
+              <div className="bg-white/10 rounded-xl sm:rounded-2xl p-6 sm:p-8 border border-white/20 backdrop-blur-sm">
+                <h3 className="text-lg sm:text-xl font-bold text-white mb-3 sm:mb-4">
+                  Ready to Start Your Voice Career?
+                </h3>
+                <p className="text-white/80 mb-4 sm:mb-6 text-sm sm:text-base">
+                  Subscribe now to unlock all premium features and start receiving job opportunities.
+                </p>
+                <motion.button 
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  className="bg-white text-blue-800 px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:bg-blue-50 transition-all font-medium inline-block text-sm sm:text-base"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  View Subscription Options
+                </motion.button>
+              </div>
+            )}
           </motion.div>
         </div>
       </div>

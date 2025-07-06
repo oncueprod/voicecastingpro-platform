@@ -128,20 +128,22 @@ class PayPalEscrowService {
   // Create a subscription
   async createSubscription(
     planId: string,
-    userId: string,
-    returnUrl: string,
-    cancelUrl: string
+    userId: string
   ): Promise<{ id: string; approvalUrl: string }> {
     console.log('Creating PayPal subscription', { planId, userId });
     
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 1500));
     
+    // Get the current URL for return and cancel URLs
+    const returnUrl = window.location.href;
+    const cancelUrl = window.location.href;
+    
     // Create a mock subscription ID
     const subscriptionId = `PAYPAL_SUB_${Date.now()}_${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
     
     // Create a mock approval URL
-    const approvalUrl = `https://www.sandbox.paypal.com/webapps/billing/subscriptions/activate?ba_token=${subscriptionId}`;
+    const approvalUrl = `https://www.sandbox.paypal.com/subscriptions/business/create?plan_id=${planId}&client_id=${this.config.clientId}&return_url=${encodeURIComponent(returnUrl)}&cancel_url=${encodeURIComponent(cancelUrl)}`;
     
     // Store subscription in local storage
     const subscription = {

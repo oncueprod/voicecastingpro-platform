@@ -34,6 +34,8 @@ function App() {
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const isProduction = import.meta.env.PROD;
+  const [fromSignup, setFromSignup] = useState(false);
+  const [fromBrowseJobs, setFromBrowseJobs] = useState(false);
 
   // Listen for custom event to show admin login
   useEffect(() => {
@@ -58,6 +60,21 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
+
+  // Handle direct navigation to subscription plans from browse jobs
+  useEffect(() => {
+    // Check if we have a URL parameter for subscription redirect
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const fromBrowseJobsParam = urlParams.get('fromBrowseJobs');
+      
+      if (fromBrowseJobsParam === 'true' && currentPage !== 'subscription-plans') {
+        // Navigate to subscription plans
+        setCurrentPage('subscription-plans');
+        setFromBrowseJobs(true);
+      }
+    }
+  }, [currentPage]);
 
   const handleAuthSuccess = () => {
     // Navigate back to home page after successful authentication
@@ -164,9 +181,24 @@ function App() {
       case 'privacy-policy':
         return <PrivacyPolicy />;
       case 'browse-jobs':
-        return <BrowseJobs />;
+        return <BrowseJobs 
+          onBack={() => setCurrentPage('home')} 
+          onPageChange={handlePageChange} 
+        />;
       case 'subscription-plans':
-        return <SubscriptionPlans />;
+        return <SubscriptionPlans
+          fromSignup={fromSignup} 
+          onBack={() => {
+            // Check if we should go back to browse jobs or home
+            if (fromBrowseJobs) {
+              setCurrentPage('browse-jobs');
+              setFromBrowseJobs(false);
+            } else {
+              setCurrentPage('home');
+              setFromSignup(false);
+            }
+          }}
+        />;
       case 'subscription-plans-public':
         return <PublicSubscriptionPlans onAuthClick={handleAuthClick} />;
       case 'profile':
@@ -174,8 +206,15 @@ function App() {
       case 'talent-setup':
         return (
           <TalentProfileSetup 
-            onBack={() => setCurrentPage('home')}
-            onComplete={() => setCurrentPage('home')}
+            onBack={() => {
+              setFromSignup(false);
+              setCurrentPage('home');
+            }}
+            onComplete={() => {
+              // When profile setup is complete, navigate to subscription page
+              setFromSignup(true);
+              setCurrentPage('subscription-plans');
+            }}
           />
         );
       case 'messaging':

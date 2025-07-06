@@ -28,7 +28,6 @@ const PayPalButton: React.FC<PayPalButtonProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const paypalRef = useRef<HTMLDivElement>(null);
-  const isProduction = import.meta.env.PROD;
   
   // Load the PayPal SDK
   useEffect(() => {
@@ -112,36 +111,6 @@ const PayPalButton: React.FC<PayPalButtonProps> = ({
     }
   }, [sdkReady, amount, currency, onSuccess, onError]);
   
-  // For development environment, we'll simulate the PayPal button
-  const handleSimulatedPayment = () => {
-    setIsProcessing(true);
-    
-    // Simulate payment processing
-    setTimeout(() => {
-      setIsProcessing(false);
-      if (onSuccess) {
-        onSuccess({
-          id: `SIMULATED_ORDER_${Date.now()}`,
-          status: 'COMPLETED',
-          payer: {
-            email_address: 'customer@example.com',
-            payer_id: `PAYER_${Date.now()}`
-          },
-          purchase_units: [
-            {
-              amount: {
-                value: amount,
-                currency_code: currency
-              }
-            }
-          ],
-          create_time: new Date().toISOString(),
-          update_time: new Date().toISOString()
-        });
-      }
-    }, 2000);
-  };
-  
   return (
     <div className={className}>
       {error && (
@@ -150,32 +119,15 @@ const PayPalButton: React.FC<PayPalButtonProps> = ({
         </div>
       )}
       
-      {/* Real PayPal button container */}
+      {/* PayPal button container */}
       <div ref={paypalRef} style={style}></div>
       
-      {/* Simulated button for development environment */}
-      {(!window.paypal || !isProduction) && (
-        <motion.button
-          onClick={handleSimulatedPayment}
-          disabled={isProcessing}
-          className="w-full bg-[#0070ba] hover:bg-[#003087] text-white py-3 rounded-lg transition-colors font-medium disabled:opacity-70 disabled:cursor-not-allowed"
-          whileHover={{ scale: isProcessing ? 1 : 1.02 }}
-          whileTap={{ scale: isProcessing ? 1 : 0.98 }}
-          style={style}
-        >
-          {isProcessing ? (
-            <div className="flex items-center justify-center space-x-2">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-              <span>Processing...</span>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center space-x-2">
-              <span className="font-bold">Pay</span>
-              <span>with</span>
-              <span className="font-bold">PayPal</span>
-            </div>
-          )}
-        </motion.button>
+      {/* Loading indicator */}
+      {!sdkReady && (
+        <div className="flex items-center justify-center space-x-2 p-3 bg-gray-100 border border-gray-300 rounded">
+          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+          <span className="text-gray-600">Loading PayPal...</span>
+        </div>
       )}
     </div>
   );

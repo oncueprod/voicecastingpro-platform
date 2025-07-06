@@ -24,6 +24,7 @@ const AudioUpload: React.FC<AudioUploadProps> = ({
   const [uploading, setUploading] = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
 
@@ -40,22 +41,41 @@ const AudioUpload: React.FC<AudioUploadProps> = ({
   const handleFileSelect = async (selectedFiles: FileList | null) => {
     if (!selectedFiles) return;
 
-    if (files.length + selectedFiles.length > maxFiles) {
-      alert(`Maximum ${maxFiles} files allowed`);
+    setUploadError(null);
+    
+    // Check if we're at or over the limit
+    if (files.length >= maxFiles) {
+      setUploadError(`Maximum ${maxFiles} files allowed. Please delete some existing files first.`);
       return;
+    }
+    
+    // Calculate how many more files we can add
+    const remainingSlots = maxFiles - files.length;
+    const filesToProcess = Math.min(remainingSlots, selectedFiles.length);
+    
+    if (filesToProcess < selectedFiles.length) {
+      setUploadError(`Only adding ${filesToProcess} files to stay within the limit of ${maxFiles} files.`);
     }
 
     setUploading(true);
 
     try {
-      for (let i = 0; i < selectedFiles.length; i++) {
+      // Process files one by one to handle potential storage errors
+      for (let i = 0; i < filesToProcess; i++) {
         const file = selectedFiles[i];
-        const audioFile = await audioService.uploadAudio(file, userId, type, projectId);
-        setFiles(prev => [...prev, audioFile]);
-        onUploadComplete?.(audioFile);
+        try {
+          const audioFile = await audioService.uploadAudio(file, userId, type, projectId);
+          setFiles(prev => [...prev, audioFile]);
+          if (onUploadComplete) onUploadComplete(audioFile);
+        } catch (error) {
+          if (error instanceof Error) {
+            setUploadError(`Error uploading file: ${error.message}`);
+            break; // Stop processing more files
+          }
+        }
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Upload failed');
+      setUploadError(error instanceof Error ? error.message : 'Upload failed');
     } finally {
       setUploading(false);
     }
@@ -137,8 +157,8 @@ const AudioUpload: React.FC<AudioUploadProps> = ({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-white">{title}</h3>
-        <span className="text-sm text-gray-400">
-          {files.length}/{maxFiles} files
+        <span className="text-sm text-gray-400 whitespace-nowrap">
+          {files.length}/{maxFiles} files {files.length >= maxFiles && '(maximum reached)'}
         </span>
       </div>
 
@@ -147,7 +167,7 @@ const AudioUpload: React.FC<AudioUploadProps> = ({
         className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
           dragOver
             ? 'border-blue-500 bg-blue-500/10'
-            : 'border-gray-600 hover:border-blue-500'
+            : files.length >= maxFiles ? 'border-gray-500 bg-gray-700/30 opacity-50' : 'border-gray-600 hover:border-blue-500'
         }`}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
@@ -168,25 +188,60 @@ const AudioUpload: React.FC<AudioUploadProps> = ({
           </div>
           
           <div>
-            <p className="text-white font-medium mb-2">
-              Drop audio files here or{' '}
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="text-blue-400 hover:text-blue-300 underline"
-              >
-                browse
-              </button>
-            </p>
-            <p className="text-sm text-gray-400">
-              Supports MP3, WAV, M4A, FLAC (Max 50MB per file)
-            </p>
+            {files.length < maxFiles ? (
+              <>
+                <p className="text-white font-medium mb-2">
+                  Drop audio files here or{' '}
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-blue-400 hover:text-blue-300 underline"
+                  >
+                    browse
+                  </button>
+                </p>
+                <p className="text-xs sm:text-sm text-gray-400">
+                  Supports MP3, WAV, M4A (Max 2MB per file)
+                </p>
+                <p className="text-xs sm:text-sm text-gray-400 mt-1">
+                  Maximum {maxFiles} files allowed
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-yellow-400 font-medium mb-2">
+                  Maximum number of files reached ({maxFiles})
+                </p>
+                <p className="text-sm text-gray-400">
+                  Delete existing files to upload more
+                </p>
+              </>
+            )}
           </div>
         </div>
       </div>
 
+      {/* Maximum Files Warning */}
+      {files.length >= maxFiles && (
+        <div className="mt-3 bg-yellow-900/30 border border-yellow-600/50 rounded-lg p-3 text-center">
+          <p className="text-yellow-300 text-xs sm:text-sm">
+            <strong>Note:</strong> You've reached the maximum of {maxFiles} audio files.
+            To upload more, please delete some existing files.
+          </p>
+        </div>
+      )}
+      
+      {/* Error Message */}
+      {uploadError && (
+        <div className="mt-3 bg-red-900/30 border border-red-600/50 rounded-lg p-3 text-center">
+          <p className="text-red-300 text-xs sm:text-sm">
+            <strong>Error:</strong> {uploadError}
+          </p>
+        </div>
+      )}
+
       {/* Uploading State */}
       {uploading && (
-        <div className="bg-slate-800 rounded-lg p-4 border border-gray-700">
+        <div className="mt-4 bg-slate-800 rounded-lg p-4 border border-gray-700">
           <div className="flex items-center space-x-3">
             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
             <span className="text-white">Uploading files...</span>
@@ -196,7 +251,7 @@ const AudioUpload: React.FC<AudioUploadProps> = ({
 
       {/* File List */}
       {files.length > 0 && (
-        <div className="space-y-3">
+        <div className="space-y-3 mt-4">
           {files.map((file) => (
             <motion.div
               key={file.id}
@@ -224,7 +279,7 @@ const AudioUpload: React.FC<AudioUploadProps> = ({
                     <p className="text-white font-medium truncate">
                       {file.name}
                     </p>
-                    <div className="flex items-center space-x-4 text-sm text-gray-400">
+                    <div className="flex items-center space-x-4 text-xs sm:text-sm text-gray-400">
                       <span>{formatDuration(file.duration)}</span>
                       <span>{formatFileSize(file.size)}</span>
                       <span>{new Date(file.uploadedAt).toLocaleDateString()}</span>

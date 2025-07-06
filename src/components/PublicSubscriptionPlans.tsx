@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Check, Shield, CreditCard, Star, HelpCircle, Mic, ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
+import PayPalSubscriptionButton from './PayPalSubscriptionButton';
 
 interface PublicSubscriptionPlansProps {
   onAuthClick: (type: 'signin' | 'signup') => void;
@@ -11,6 +12,38 @@ const PublicSubscriptionPlans: React.FC<PublicSubscriptionPlansProps> = ({ onAut
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
   const isProduction = import.meta.env.PROD;
   const { isAuthenticated, user } = useAuth();
+  const [sdkReady, setSdkReady] = useState(false);
+
+  // Load the PayPal SDK
+  useEffect(() => {
+    if (isAuthenticated && user?.type === 'talent') {
+      const addPayPalScript = () => {
+        const clientId = import.meta.env.VITE_PAYPAL_CLIENT_ID || 'sb';
+        const script = document.createElement('script');
+        script.type = 'text/javascript';
+        script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&vault=true&intent=subscription`;
+        script.async = true;
+        script.onload = () => {
+          setSdkReady(true);
+        };
+        document.body.appendChild(script);
+      };
+
+      if (window.paypal) {
+        setSdkReady(true);
+      } else {
+        addPayPalScript();
+      }
+      
+      // Cleanup
+      return () => {
+        const script = document.querySelector('script[src*="paypal.com/sdk/js"]');
+        if (script) {
+          document.body.removeChild(script);
+        }
+      };
+    }
+  }, [isAuthenticated, user]);
 
   useEffect(() => {
     // If user is already authenticated and is talent, redirect to subscription page
@@ -18,6 +51,19 @@ const PublicSubscriptionPlans: React.FC<PublicSubscriptionPlansProps> = ({ onAut
       window.location.href = '/subscription-plans';
     }
   }, [isAuthenticated, user]);
+
+  const handleSubscriptionClick = (planId: string) => {
+    if (isAuthenticated && user?.type === 'talent') {
+      // If already signed in as talent, redirect to subscription page
+      window.location.href = '/subscription-plans';
+    } else if (isAuthenticated && user?.type === 'client') {
+      // If signed in as client, prompt to create a talent account
+      alert('You need a talent account to subscribe. Please sign up as a voice talent.');
+    } else {
+      // If not signed in, show sign up modal
+      handleAuthClick('signup');
+    }
+  };
 
   const handleAuthClick = (type: 'signin' | 'signup') => {
     // Scroll to top before showing auth modal
@@ -79,24 +125,22 @@ const PublicSubscriptionPlans: React.FC<PublicSubscriptionPlansProps> = ({ onAut
     {
       id: 'annual',
       title: 'Annual Plan',
-      subtitle: 'Best Value • Save $84/year',
-      price: '$29',
-      period: 'per month',
-      subPeriod: 'billed annually ($348) via PayPal',
+      subtitle: 'Best Value • Save $72/year',
+      price: '$348',
+      period: 'per year',
+      subPeriod: 'billed annually via PayPal',
       features: [
         'Everything in Monthly Plan',
         'Priority customer support',
         'Featured profile listing',
-        'Advanced analytics & insights',
-        'Early access to new features',
-        '2 months free!'
+        'Early access to new features'
       ],
       buttonText: 'Start Annual Plan',
       buttonStyle: 'bg-green-600 hover:bg-green-700 text-white',
       bgColor: 'bg-slate-800/80',
       borderColor: 'border-blue-500',
       popular: true,
-      badge: 'Best Value • Save $84/year'
+      badge: 'Best Value • Save $72/year'
     }
   ];
 
@@ -258,20 +302,13 @@ const PublicSubscriptionPlans: React.FC<PublicSubscriptionPlansProps> = ({ onAut
               transition={{ duration: 0.6, delay: 0.1 * index }}
               whileHover={{ y: -5 }}
             >
-              {plan.popular && (
-                <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                  <span className="bg-green-600 text-white text-sm font-bold px-4 py-2 rounded-full">
-                    {plan.badge}
-                  </span>
-                </div>
-              )}
               
               <div className="text-center mb-8">
                 <h3 className="text-lg font-semibold text-white/80 mb-2">
-                  {plan.title}
+                  {plan.id === 'annual' ? 'For Voice Talent' : plan.title}
                 </h3>
                 <h4 className="text-xl font-bold text-white mb-4">
-                  {plan.subtitle}
+                  {plan.id === 'annual' ? 'Annual Plan' : plan.subtitle}
                 </h4>
                 
                 <div className="mb-4">
@@ -302,21 +339,10 @@ const PublicSubscriptionPlans: React.FC<PublicSubscriptionPlansProps> = ({ onAut
               </div>
 
               <motion.button 
-                onClick={() => {
-                  if (isAuthenticated && user?.type === 'talent') {
-                    // If already signed in as talent, redirect to subscription page
-                    window.location.href = '/subscription-plans';
-                  } else if (isAuthenticated && user?.type === 'client') {
-                    // If signed in as client, prompt to create a talent account
-                    alert('You need a talent account to subscribe. Please sign up as a voice talent.');
-                  } else {
-                    // If not signed in, show sign up modal
-                    handleAuthClick('signup');
-                  }
-                }}
-                className={`w-full py-4 rounded-lg transition-all font-semibold text-lg ${plan.buttonStyle}`}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                onClick={() => handleSubscriptionClick(plan.id)}
+                className={`w-full py-3 rounded-lg font-medium ${plan.buttonStyle}`}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
               >
                 {plan.buttonText}
               </motion.button>
@@ -467,14 +493,12 @@ const PublicSubscriptionPlans: React.FC<PublicSubscriptionPlansProps> = ({ onAut
                   </motion.button>
                 </>
               ) : user?.type === 'talent' ? (
-                <motion.button 
-                  onClick={() => window.location.href = '/subscription-plans'}
+                <PayPalSubscriptionButton
+                  planId={billingCycle === 'monthly' ? 'P-MONTHLY-PLAN-ID' : 'P-ANNUAL-PLAN-ID'}
+                  userId={user.id}
                   className="bg-white text-blue-800 px-8 py-3 rounded-lg hover:bg-blue-50 transition-all font-medium"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  View Subscription Options
-                </motion.button>
+                  buttonText="Subscribe Now"
+                />
               ) : (
                 <motion.button 
                   onClick={() => handleAuthClick('signup')}
