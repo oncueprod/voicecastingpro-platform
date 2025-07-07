@@ -205,43 +205,39 @@ interface TalentProfileProps {
 }
 
 const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
-  // Enhanced user type detection
+  // Production-ready user type detection
   const getUserType = () => {
     try {
-      // Debug: Log all relevant localStorage keys
-      console.log('🔍 LocalStorage Debug:');
-      console.log('- userType:', localStorage.getItem('userType'));
-      console.log('- user_type:', localStorage.getItem('user_type'));
-      console.log('- userRole:', localStorage.getItem('userRole'));
-      console.log('- user_role:', localStorage.getItem('user_role'));
-      console.log('- isTalent:', localStorage.getItem('isTalent'));
-      console.log('- userId:', localStorage.getItem('userId'));
-      
       const userType = localStorage.getItem('userType') || localStorage.getItem('user_type');
       const userRole = localStorage.getItem('userRole') || localStorage.getItem('user_role');
       const isTalentFlag = localStorage.getItem('isTalent');
-      const userId = localStorage.getItem('userId') || localStorage.getItem('user_id') || 'demo_user_' + Date.now();
+      const userId = localStorage.getItem('userId') || localStorage.getItem('user_id');
       
+      // Explicit talent detection - must be clearly identified as talent
       const isTalentUser = (userType === 'talent') || 
                           (userRole === 'talent') || 
                           (isTalentFlag === 'true');
       
-      console.log('🎭 User Type Result:', { isClient: !isTalentUser, isTalent: isTalentUser, userId });
+      // Explicit client detection - must be clearly identified as client  
+      const isClientUser = (userType === 'client') || 
+                           (userRole === 'client') || 
+                           (isTalentFlag === 'false');
       
       return {
-        isClient: !isTalentUser,
+        isClient: isClientUser,
         isTalent: isTalentUser,
-        userId: userId
+        isUnknown: !isClientUser && !isTalentUser,
+        userId: userId || null
       };
     } catch (error) {
       console.log('LocalStorage access error:', error);
-      return { isClient: true, isTalent: false, userId: 'demo_user_' + Date.now() };
+      return { isClient: false, isTalent: false, isUnknown: true, userId: null };
     }
   };
   
-  const { isClient, isTalent, userId } = getUserType();
+  const { isClient, isTalent, isUnknown, userId } = getUserType();
   
-  // Remove force client mode - use actual user type detection
+  // Use production user type detection
   const finalIsClient = isClient;
   const finalIsTalent = isTalent;
   
