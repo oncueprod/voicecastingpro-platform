@@ -90,6 +90,7 @@ interface TalentProfileProps {
 }
 
 const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
+  const { user, isClient, isTalent } = useAuth(); // Add useAuth hook
   const [talent, setTalent] = useState<TalentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
@@ -103,12 +104,26 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
   });
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
 
+  // Check if current user is viewing their own profile
+  const isOwnProfile = isTalent && talentId === `talent_user_${user?.id}`;
+
   useEffect(() => {
     if (talentId) {
       loadTalentData();
       checkIfSaved();
     }
   }, [talentId]);
+
+  // Debug logging to verify profile detection
+  useEffect(() => {
+    console.log('🔍 Profile Detection Debug:');
+    console.log('- Current user:', user);
+    console.log('- Is talent:', isTalent);
+    console.log('- Is client:', isClient);
+    console.log('- Viewing talent ID:', talentId);
+    console.log('- Expected own talent ID:', `talent_user_${user?.id}`);
+    console.log('- Is own profile:', isOwnProfile);
+  }, [user, talentId, isOwnProfile]);
 
   // Cleanup audio when component unmounts
   useEffect(() => {
@@ -364,6 +379,15 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
         
         {/* Header Section */}
         <div className="bg-slate-800 rounded-xl shadow-lg p-8 mb-8 border border-gray-700">
+          {/* Own Profile Indicator */}
+          {isOwnProfile && (
+            <div className="mb-4 p-3 bg-blue-900/30 border border-blue-600/50 rounded-lg">
+              <p className="text-blue-300 text-sm font-medium">
+                👤 This is your talent profile - showing how clients will see you
+              </p>
+            </div>
+          )}
+          
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
             <img
               src={talent.avatar}
@@ -393,22 +417,49 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
               </div>
             </div>
             <div className="flex flex-col gap-3">
-              <button 
-                onClick={handleContactTalent}
-                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Contact Talent
-              </button>
-              <button 
-                onClick={handleSaveProfile}
-                className={`px-6 py-3 rounded-lg transition-colors ${
-                  isSaved 
-                    ? 'bg-green-600 text-white hover:bg-green-700' 
-                    : 'border border-gray-600 text-gray-300 hover:bg-slate-700'
-                }`}
-              >
-                {isSaved ? 'Saved ✓' : 'Save Profile'}
-              </button>
+              {isOwnProfile ? (
+                // Buttons for viewing own profile
+                <>
+                  <button 
+                    onClick={() => {
+                      // Navigate to edit profile or show edit mode
+                      alert('Edit Profile functionality - would open profile editor');
+                    }}
+                    className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Edit3 className="h-5 w-5" />
+                    <span>Edit Profile</span>
+                  </button>
+                  <button 
+                    onClick={() => {
+                      alert('This shows how your profile appears to clients');
+                    }}
+                    className="border border-gray-600 text-gray-300 px-6 py-3 rounded-lg hover:bg-slate-700 transition-colors"
+                  >
+                    Preview for Clients
+                  </button>
+                </>
+              ) : (
+                // Buttons for viewing other profiles
+                <>
+                  <button 
+                    onClick={handleContactTalent}
+                    className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    {isTalent ? 'Connect with Talent' : 'Contact Talent'}
+                  </button>
+                  <button 
+                    onClick={handleSaveProfile}
+                    className={`px-6 py-3 rounded-lg transition-colors ${
+                      isSaved 
+                        ? 'bg-green-600 text-white hover:bg-green-700' 
+                        : 'border border-gray-600 text-gray-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    {isSaved ? 'Saved ✓' : 'Save Profile'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -551,13 +602,15 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
           </div>
         </div>
 
-        {/* Contact Modal */}
-        {showContactModal && (
+        {/* Contact Modal - Only show if not viewing own profile */}
+        {showContactModal && !isOwnProfile && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-slate-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700">
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-white">Contact {talent?.name}</h2>
+                  <h2 className="text-2xl font-bold text-white">
+                    {isTalent ? `Connect with ${talent?.name}` : `Contact ${talent?.name}`}
+                  </h2>
                   <button 
                     onClick={() => setShowContactModal(false)}
                     className="text-gray-400 hover:text-white transition-colors"
@@ -577,42 +630,46 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                       value={contactForm.subject}
                       onChange={handleContactFormChange}
                       className="w-full px-4 py-3 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
-                      placeholder="Voice over project for..."
+                      placeholder={isTalent ? "Collaboration opportunity..." : "Voice over project for..."}
                       required
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Project Budget
-                    </label>
-                    <select
-                      name="budget"
-                      value={contactForm.budget}
-                      onChange={handleContactFormChange}
-                      className="w-full px-4 py-3 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white"
-                    >
-                      <option value="">Select budget range</option>
-                      <option value="$100-500">$100 - $500</option>
-                      <option value="$500-1000">$500 - $1,000</option>
-                      <option value="$1000-2500">$1,000 - $2,500</option>
-                      <option value="$2500-5000">$2,500 - $5,000</option>
-                      <option value="$5000+">$5,000+</option>
-                    </select>
-                  </div>
+                  {isClient && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Project Budget
+                        </label>
+                        <select
+                          name="budget"
+                          value={contactForm.budget}
+                          onChange={handleContactFormChange}
+                          className="w-full px-4 py-3 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white"
+                        >
+                          <option value="">Select budget range</option>
+                          <option value="$100-500">$100 - $500</option>
+                          <option value="$500-1000">$500 - $1,000</option>
+                          <option value="$1000-2500">$1,000 - $2,500</option>
+                          <option value="$2500-5000">$2,500 - $5,000</option>
+                          <option value="$5000+">$5,000+</option>
+                        </select>
+                      </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Project Deadline
-                    </label>
-                    <input
-                      type="date"
-                      name="deadline"
-                      value={contactForm.deadline}
-                      onChange={handleContactFormChange}
-                      className="w-full px-4 py-3 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white"
-                    />
-                  </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Project Deadline
+                        </label>
+                        <input
+                          type="date"
+                          name="deadline"
+                          value={contactForm.deadline}
+                          onChange={handleContactFormChange}
+                          className="w-full px-4 py-3 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white"
+                        />
+                      </div>
+                    </>
+                  )}
 
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -624,7 +681,11 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                       onChange={handleContactFormChange}
                       rows={5}
                       className="w-full px-4 py-3 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
-                      placeholder="Describe your project, what type of voice over you need, any special requirements..."
+                      placeholder={
+                        isTalent 
+                          ? "Hi! I'm interested in connecting about potential collaboration opportunities..."
+                          : "Describe your project, what type of voice over you need, any special requirements..."
+                      }
                       required
                     />
                   </div>
