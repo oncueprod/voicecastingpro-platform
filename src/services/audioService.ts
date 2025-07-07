@@ -25,16 +25,17 @@ class AudioService {
         return;
       }
  
-    if (file.size > 5 * 1024 * 1024) { // 5MB limit
-  reject(new Error('File size must be less than 5MB'));
+      // Reduced file size limit to 2MB to fit in localStorage
+      if (file.size > 2 * 1024 * 1024) { // 2MB limit (was 5MB)
+        reject(new Error('File size must be less than 2MB for demo purposes'));
         return;
       }
 
-      // Check if we already have 5 demos for this user
+      // Check if we already have 3 demos for this user (reduced from 5)
       if (type === 'demo') {
         const existingDemos = this.getUserDemos(userId);
-        if (existingDemos.length >= 5) {
-          reject(new Error('Maximum of 5 demo files allowed. Please delete some existing demos first.'));
+        if (existingDemos.length >= 3) {
+          reject(new Error('Maximum of 3 demo files allowed due to storage limitations. Please delete some existing demos first.'));
           return;
         }
       }
@@ -43,9 +44,16 @@ class AudioService {
       reader.onload = () => {
         const audioElement = new Audio();
         
-        // Create a smaller audio element for metadata only
         try {
           const dataUrl = reader.result as string;
+          
+          // Check if this single file would exceed reasonable storage size
+          const estimatedSize = dataUrl.length;
+          if (estimatedSize > 1.5 * 1024 * 1024) { // 1.5MB base64 limit
+            reject(new Error('Audio file too large when encoded. Please use a smaller file or shorter duration.'));
+            return;
+          }
+          
           audioElement.src = dataUrl;
 
           audioElement.onloadedmetadata = () => {
@@ -53,7 +61,7 @@ class AudioService {
               id: `audio_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
               name: file.name,
               url: dataUrl,
-              duration: audioElement.duration || 30, // Default to 30 seconds if duration can't be determined
+              duration: audioElement.duration || 30,
               size: file.size,
               uploadedAt: new Date(),
               userId,
@@ -61,52 +69,55 @@ class AudioService {
               type
             };
 
-            // Store in localStorage (in production, this would be cloud storage)
+            // Store in localStorage with better error handling
             try {
               const existingFiles = this.getAudioFiles();
               
-              // For demo files, enforce a maximum of 5 per user
+              // For demo files, enforce a maximum of 3 per user
               if (type === 'demo') {
                 const userDemos = existingFiles.filter(f => f.userId === userId && f.type === 'demo');
-                if (userDemos.length >= 5) {
-                  throw new Error('Maximum of 5 demo files allowed. Please delete some existing demos first.');
+                if (userDemos.length >= 3) {
+                  reject(new Error('Maximum of 3 demo files allowed. Please delete some existing demos first.'));
+                  return;
                 }
               }
 
               // Add the new file
-              existingFiles.push(audioFile);
+              const newFiles = [...existingFiles, audioFile];
+              
+              // Check total storage size before saving
+              const totalSize = JSON.stringify(newFiles).length;
+              console.log(`Storage size: ${(totalSize / 1024 / 1024).toFixed(2)}MB`);
+              
+              if (totalSize > 4 * 1024 * 1024) { // 4MB total limit
+                reject(new Error('Total storage limit reached. Please delete some existing audio files first.'));
+                return;
+              }
 
               // Try to save to localStorage
-              try {
-                localStorage.setItem(this.storageKey, JSON.stringify(existingFiles));
-                resolve(audioFile);
-              } catch (storageError) {
-                // Handle storage quota exceeded error
-                console.error('Storage error:', storageError);
-                
-                // If storage error, try to save just this file by removing all other files for this user
-                const otherUserFiles = existingFiles.filter(f => f.userId !== userId);
-                const justThisFile = [audioFile];
-                
-                try {
-                  localStorage.setItem(this.storageKey, JSON.stringify([...otherUserFiles, ...justThisFile]));
-                  resolve(audioFile);
-                } catch (finalError) {
-                  reject(new Error('Storage quota exceeded. Try using smaller audio files or delete existing ones.'));
-                }
+              localStorage.setItem(this.storageKey, JSON.stringify(newFiles));
+              console.log(`✅ Audio file uploaded successfully: ${audioFile.name}`);
+              resolve(audioFile);
+              
+            } catch (storageError: any) {
+              console.error('Storage error:', storageError);
+              
+              if (storageError.name === 'QuotaExceededError') {
+                // More helpful error message
+                reject(new Error('Browser storage is full. Please:\n1. Delete some existing audio files\n2. Use smaller audio files (under 1MB)\n3. Clear browser cache'));
+              } else {
+                reject(new Error('Failed to save audio file: ' + storageError.message));
               }
-            } catch (error) {
-              reject(error);
             }
           };
           
-          // Handle errors in audio loading
           audioElement.onerror = (e) => {
             console.error('Audio element error:', e);
-            reject(new Error('Failed to load audio file'));
+            reject(new Error('Failed to load audio file. Please try a different audio format.'));
           };
+          
         } catch (error) {
-          console.error('Error creating audio element:', error);
+          console.error('Error processing audio file:', error);
           reject(new Error('Failed to process audio file'));
         }
         
@@ -121,23 +132,34 @@ class AudioService {
   }
 
   getAudioFiles(userId?: string, projectId?: string): AudioFile[] {
-    const files = JSON.parse(localStorage.getItem(this.storageKey) || '[]');
-    return files.filter((file: AudioFile) => {
-      if (userId && file.userId !== userId) return false;
-      if (projectId && file.projectId !== projectId) return false;
-      return true;
-    });
+    try {
+      const files = JSON.parse(localStorage.getItem(this.storageKey) || '[]');
+      return files.filter((file: AudioFile) => {
+        if (userId && file.userId !== userId) return false;
+        if (projectId && file.projectId !== projectId) return false;
+        return true;
+      });
+    } catch (error) {
+      console.error('Error reading audio files:', error);
+      return [];
+    }
   }
 
   deleteAudioFile(fileId: string, userId: string): boolean {
-    const files = this.getAudioFiles();
-    const fileIndex = files.findIndex(f => f.id === fileId && f.userId === userId);
-    
-    if (fileIndex === -1) return false;
+    try {
+      const files = this.getAudioFiles();
+      const fileIndex = files.findIndex(f => f.id === fileId && f.userId === userId);
+      
+      if (fileIndex === -1) return false;
 
-    files.splice(fileIndex, 1);
-    localStorage.setItem(this.storageKey, JSON.stringify(files));
-    return true;
+      files.splice(fileIndex, 1);
+      localStorage.setItem(this.storageKey, JSON.stringify(files));
+      console.log(`✅ Audio file deleted: ${fileId}`);
+      return true;
+    } catch (error) {
+      console.error('Error deleting audio file:', error);
+      return false;
+    }
   }
 
   getAudioFile(fileId: string): AudioFile | null {
@@ -152,7 +174,6 @@ class AudioService {
   // Get a sample URL for demo purposes
   getSampleAudioUrl(): string {
     // Return a data URL for a simple audio tone that works in all browsers
-    // This creates a 1-second 440Hz sine wave tone
     const sampleRate = 44100;
     const duration = 1; // 1 second
     const frequency = 440; // A4 note
@@ -162,7 +183,6 @@ class AudioService {
     const buffer = new ArrayBuffer(44 + samples * 2);
     const view = new DataView(buffer);
     
-    // WAV header
     const writeString = (offset: number, string: string) => {
       for (let i = 0; i < string.length; i++) {
         view.setUint8(offset + i, string.charCodeAt(i));
@@ -210,10 +230,28 @@ class AudioService {
       const files = this.getAudioFiles();
       const remainingFiles = files.filter(f => !(f.userId === userId && f.type === 'demo'));
       localStorage.setItem(this.storageKey, JSON.stringify(remainingFiles));
+      console.log(`✅ Cleared all demos for user: ${userId}`);
       return true;
     } catch (error) {
       console.error('Failed to clear user demos:', error);
       return false;
+    }
+  }
+
+  // Get storage info for debugging
+  getStorageInfo(): { used: string; files: number; demos: number } {
+    try {
+      const allData = localStorage.getItem(this.storageKey) || '[]';
+      const files = JSON.parse(allData);
+      const demos = files.filter((f: AudioFile) => f.type === 'demo');
+      
+      return {
+        used: `${(allData.length / 1024 / 1024).toFixed(2)}MB`,
+        files: files.length,
+        demos: demos.length
+      };
+    } catch (error) {
+      return { used: 'Error', files: 0, demos: 0 };
     }
   }
 }
