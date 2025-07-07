@@ -156,9 +156,12 @@ class AudioService {
       const dataUrl = reader.result as string;
       
       audioElement.onloadedmetadata = () => {
-        // Demo mode: First 2 demos get real audio, rest get sample audio
+        // Demo mode: First 3 demos get real audio, rest get sample audio
         const existingUserDemos = this.getUserDemos(userId);
-        const shouldStoreActualAudio = existingUserDemos.length < 2;
+        const shouldStoreActualAudio = existingUserDemos.length < 3; // Increased to 3 real audio demos
+        
+        console.log(`📊 User ${userId} has ${existingUserDemos.length} existing demos`);
+        console.log(`🎵 Will use ${shouldStoreActualAudio ? 'REAL' : 'SAMPLE'} audio for: ${file.name}`);
         
         const audioFile: AudioFile = {
           id: `audio_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
