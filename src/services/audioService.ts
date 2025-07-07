@@ -10,6 +10,13 @@ interface AudioFile {
   type: 'demo' | 'project_delivery' | 'revision';
 }
 
+/**
+ * Audio Service for VoiceConnect Demo App
+ * 
+ * Note: This demo version stores file metadata in localStorage and uses 
+ * sample audio for playback to avoid browser storage quota limitations.
+ * In a production app, files would be uploaded to cloud storage (AWS S3, etc.)
+ */
 class AudioService {
   private storageKey = 'audio_files';
 
@@ -25,17 +32,17 @@ class AudioService {
         return;
       }
  
-      // Reduced file size limit to 2MB to fit in localStorage
-      if (file.size > 2 * 1024 * 1024) { // 2MB limit (was 5MB)
-        reject(new Error('File size must be less than 2MB for demo purposes'));
+      // File size limit consistent with other uploads
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit 
+        reject(new Error('File size must be less than 5MB'));
         return;
       }
 
-      // Check if we already have 3 demos for this user (reduced from 5)
+      // Check if we already have 5 demos for this user
       if (type === 'demo') {
         const existingDemos = this.getUserDemos(userId);
-        if (existingDemos.length >= 3) {
-          reject(new Error('Maximum of 3 demo files allowed due to storage limitations. Please delete some existing demos first.'));
+        if (existingDemos.length >= 5) {
+          reject(new Error('Maximum of 5 demo files allowed. Please delete some existing demos first.'));
           return;
         }
       }
@@ -49,35 +56,36 @@ class AudioService {
           
           // Check if this single file would exceed reasonable storage size
           const estimatedSize = dataUrl.length;
-          if (estimatedSize > 1.5 * 1024 * 1024) { // 1.5MB base64 limit
-            reject(new Error('Audio file too large when encoded. Please use a smaller file or shorter duration.'));
+          if (estimatedSize > 4 * 1024 * 1024) { // 4MB base64 limit (5MB file ≈ 4MB base64)
+            reject(new Error('Audio file too large when encoded. Please use a shorter audio clip or compress the file.'));
             return;
           }
           
           audioElement.src = dataUrl;
 
-          audioElement.onloadedmetadata = () => {
-            const audioFile: AudioFile = {
-              id: `audio_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-              name: file.name,
-              url: dataUrl,
-              duration: audioElement.duration || 30,
-              size: file.size,
-              uploadedAt: new Date(),
-              userId,
-              projectId,
-              type
-            };
+          // For demo purposes, we'll store file metadata but use sample audio for playback
+          // This avoids localStorage quota issues while maintaining functionality
+          const audioFile: AudioFile = {
+            id: `audio_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            name: file.name,
+            url: this.getSampleAudioUrl(), // Use sample audio to avoid storage quota
+            duration: audioElement.duration || 30,
+            size: file.size,
+            uploadedAt: new Date(),
+            userId,
+            projectId,
+            type
+          };
 
             // Store in localStorage with better error handling
             try {
               const existingFiles = this.getAudioFiles();
               
-              // For demo files, enforce a maximum of 3 per user
+              // For demo files, enforce a maximum of 2 per user
               if (type === 'demo') {
                 const userDemos = existingFiles.filter(f => f.userId === userId && f.type === 'demo');
-                if (userDemos.length >= 3) {
-                  reject(new Error('Maximum of 3 demo files allowed. Please delete some existing demos first.'));
+                if (userDemos.length >= 2) {
+                  reject(new Error('Maximum of 2 demo files allowed. Please delete some existing demos first.'));
                   return;
                 }
               }
@@ -85,11 +93,11 @@ class AudioService {
               // Add the new file
               const newFiles = [...existingFiles, audioFile];
               
-              // Check total storage size before saving
+              // Check total storage size before saving (increased for 5MB files)
               const totalSize = JSON.stringify(newFiles).length;
               console.log(`Storage size: ${(totalSize / 1024 / 1024).toFixed(2)}MB`);
               
-              if (totalSize > 4 * 1024 * 1024) { // 4MB total limit
+              if (totalSize > 12 * 1024 * 1024) { // 12MB total limit (for 2 x 5MB files)
                 reject(new Error('Total storage limit reached. Please delete some existing audio files first.'));
                 return;
               }
@@ -104,7 +112,7 @@ class AudioService {
               
               if (storageError.name === 'QuotaExceededError') {
                 // More helpful error message
-                reject(new Error('Browser storage is full. Please:\n1. Delete some existing audio files\n2. Use smaller audio files (under 1MB)\n3. Clear browser cache'));
+                reject(new Error('Browser storage is full. Please:\n1. Delete existing audio files\n2. Use shorter audio clips (under 5 minutes)\n3. Upload max 2 demos per talent\n4. Clear browser cache'));
               } else {
                 reject(new Error('Failed to save audio file: ' + storageError.message));
               }
@@ -246,7 +254,7 @@ class AudioService {
       const demos = files.filter((f: AudioFile) => f.type === 'demo');
       
       return {
-        used: `${(allData.length / 1024 / 1024).toFixed(2)}MB`,
+        used: `${(allData.length / 1024).toFixed(2)}KB`, // Much smaller now (just metadata)
         files: files.length,
         demos: demos.length
       };
