@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, MapPin, Clock, DollarSign, Play, Pause, Download, ArrowLeft } from 'lucide-react'; // ✅ Added ArrowLeft
+import { Star, MapPin, Clock, DollarSign, Play, Pause, Download, ArrowLeft, X, Send } from 'lucide-react'; // ✅ Added ArrowLeft
 import { talentService } from '../services/talentService';
 import { audioService } from '../services/audioService';
 
@@ -10,7 +10,7 @@ interface TalentData {
   location: string;
   rating: number;
   reviewCount: number;
-  hourlyRate: number;
+  hourlyRate: string; // Changed from number to string to handle ranges
   avatar: string;
   bio: string;
   skills: string[];
@@ -42,7 +42,7 @@ const mockTalentData: { [key: string]: TalentData } = {
     location: 'Los Angeles, CA',
     rating: 4.9,
     reviewCount: 127,
-    hourlyRate: 75,
+    hourlyRate: '$75-100',
     avatar: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=400',
     bio: 'Professional voice actor with over 10 years of experience in commercials, audiobooks, and animation. Specializing in warm, conversational reads and character voices.',
     skills: ['Commercial Voice Over', 'Audiobook Narration', 'Character Voices', 'E-Learning'],
@@ -94,6 +94,13 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [contactForm, setContactForm] = useState({
+    subject: '',
+    message: '',
+    budget: '',
+    deadline: ''
+  });
 
   useEffect(() => {
     if (talentId) {
@@ -125,7 +132,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
         location: talentProfile.location,
         rating: talentProfile.rating,
         reviewCount: talentProfile.reviews,
-        hourlyRate: parseInt(talentProfile.priceRange.replace(/\D/g, '')),
+        hourlyRate: talentProfile.priceRange, // Use priceRange instead of parsing number
         avatar: talentProfile.image,
         bio: talentProfile.bio,
         skills: talentProfile.specialties,
@@ -180,16 +187,45 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
   };
 
   const handleContactTalent = () => {
-    if (!talent) return;
+    setShowContactModal(true);
+  };
+
+  const handleSendMessage = () => {
+    if (!talent || !contactForm.subject || !contactForm.message) {
+      alert('Please fill in subject and message fields.');
+      return;
+    }
     
-    // Create a contact form or redirect to messaging
-    alert(`Contacting ${talent.name}...\n\nThis would typically open a contact form or messaging system.`);
+    // In a real app, this would send the message via API
+    console.log('Sending message to:', talent.name, contactForm);
     
-    // In a real app, this might:
-    // - Open a contact modal
-    // - Navigate to a messaging page
-    // - Open email client with pre-filled message
-    // - Redirect to a contact form
+    // Save message to localStorage for demo
+    const messages = JSON.parse(localStorage.getItem('sentMessages') || '[]');
+    messages.push({
+      id: Date.now(),
+      talentId: talent.id,
+      talentName: talent.name,
+      subject: contactForm.subject,
+      message: contactForm.message,
+      budget: contactForm.budget,
+      deadline: contactForm.deadline,
+      sentAt: new Date().toISOString(),
+      status: 'sent'
+    });
+    localStorage.setItem('sentMessages', JSON.stringify(messages));
+    
+    // Reset form and close modal
+    setContactForm({ subject: '', message: '', budget: '', deadline: '' });
+    setShowContactModal(false);
+    alert(`Message sent to ${talent.name}! They will respond within ${talent.responseTime}.`);
+  };
+
+  const handleContactFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setContactForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
   const handleSaveProfile = () => {
@@ -438,6 +474,106 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
             </div>
           </div>
         </div>
+
+        {/* Contact Modal */}
+        {showContactModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-white">Contact {talent?.name}</h2>
+                  <button 
+                    onClick={() => setShowContactModal(false)}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    <X className="h-6 w-6" />
+                  </button>
+                </div>
+
+                <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Subject *
+                    </label>
+                    <input
+                      type="text"
+                      name="subject"
+                      value={contactForm.subject}
+                      onChange={handleContactFormChange}
+                      className="w-full px-4 py-3 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
+                      placeholder="Voice over project for..."
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Project Budget
+                    </label>
+                    <select
+                      name="budget"
+                      value={contactForm.budget}
+                      onChange={handleContactFormChange}
+                      className="w-full px-4 py-3 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white"
+                    >
+                      <option value="">Select budget range</option>
+                      <option value="$100-500">$100 - $500</option>
+                      <option value="$500-1000">$500 - $1,000</option>
+                      <option value="$1000-2500">$1,000 - $2,500</option>
+                      <option value="$2500-5000">$2,500 - $5,000</option>
+                      <option value="$5000+">$5,000+</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Project Deadline
+                    </label>
+                    <input
+                      type="date"
+                      name="deadline"
+                      value={contactForm.deadline}
+                      onChange={handleContactFormChange}
+                      className="w-full px-4 py-3 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Message *
+                    </label>
+                    <textarea
+                      name="message"
+                      value={contactForm.message}
+                      onChange={handleContactFormChange}
+                      rows={5}
+                      className="w-full px-4 py-3 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
+                      placeholder="Describe your project, what type of voice over you need, any special requirements..."
+                      required
+                    />
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                    <button
+                      type="submit"
+                      className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors font-medium"
+                    >
+                      <Send className="h-4 w-4" />
+                      Send Message
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowContactModal(false)}
+                      className="px-6 py-3 border border-gray-600 text-gray-300 rounded-lg hover:bg-slate-700 transition-colors font-medium"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
