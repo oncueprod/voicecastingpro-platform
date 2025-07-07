@@ -93,27 +93,47 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
   // Simple user type detection from localStorage (safe fallback)
   const getUserType = () => {
     try {
-      // Check localStorage for user type (common pattern in web apps)
+      // Debug: Log all relevant localStorage keys
+      console.log('🔍 LocalStorage Debug:');
+      console.log('- userType:', localStorage.getItem('userType'));
+      console.log('- user_type:', localStorage.getItem('user_type'));
+      console.log('- userRole:', localStorage.getItem('userRole'));
+      console.log('- user_role:', localStorage.getItem('user_role'));
+      console.log('- isTalent:', localStorage.getItem('isTalent'));
+      console.log('- talent_profile:', localStorage.getItem('talent_profile'));
+      console.log('- client_profile:', localStorage.getItem('client_profile'));
+      
+      // Check specific auth patterns from your app
       const userType = localStorage.getItem('userType') || localStorage.getItem('user_type');
       const userRole = localStorage.getItem('userRole') || localStorage.getItem('user_role');
+      const isTalentFlag = localStorage.getItem('isTalent');
       
-      // Check for talent indicators
-      const isTalentUser = userType === 'talent' || 
-                          userRole === 'talent' || 
-                          localStorage.getItem('isTalent') === 'true' ||
-                          localStorage.getItem('talent_profile'); // If talent profile exists in localStorage
+      // More specific talent detection (must be explicitly set as talent)
+      const isTalentUser = (userType === 'talent') || 
+                          (userRole === 'talent') || 
+                          (isTalentFlag === 'true');
       
+      // Default to client unless explicitly talent
       return {
         isClient: !isTalentUser,
         isTalent: isTalentUser
       };
+      
     } catch (error) {
-      // Safe fallback if localStorage access fails
+      console.log('LocalStorage access error:', error);
+      // Safe fallback - default to client
       return { isClient: true, isTalent: false };
     }
   };
   
   const { isClient, isTalent } = getUserType();
+  
+  // TEMPORARY: Force client mode for testing (remove when auth is working)
+  // Uncomment the line below to force client view for testing:
+  const forceClientMode = true; // Set to true to test client buttons
+  const finalIsClient = forceClientMode || isClient;
+  const finalIsTalent = !forceClientMode && isTalent;
+  
   const user = null; // Will be set when auth is properly implemented
   
   const [talent, setTalent] = useState<TalentData | null>(null);
@@ -137,7 +157,13 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
       loadTalentData();
       checkIfSaved();
     }
-  }, [talentId]);
+    
+    // Debug: Show user type detection
+    console.log('🔍 User Type Detection:');
+    console.log('- Detected as Client:', isClient);
+    console.log('- Detected as Talent:', isTalent);
+    console.log('- Will show Contact/Save buttons:', isClient);
+  }, [talentId, isClient, isTalent]);
 
   // Cleanup audio when component unmounts
   useEffect(() => {
@@ -422,7 +448,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
               </div>
             </div>
             <div className="flex flex-col gap-3">
-              {isClient ? (
+              {finalIsClient ? (
                 // Buttons for clients viewing talent profiles
                 <>
                   <button 
@@ -592,8 +618,8 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
           </div>
         </div>
 
-        {/* Contact Modal */}
-        {showContactModal && (
+        {/* Contact Modal - Only for clients */}
+        {showContactModal && isClient && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-slate-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700">
               <div className="p-6">
