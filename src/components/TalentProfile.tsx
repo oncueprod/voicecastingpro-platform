@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, MapPin, Clock, DollarSign, Play, Pause, Download, ArrowLeft, X, Send } from 'lucide-react'; // ✅ Added ArrowLeft
+import { Star, MapPin, Clock, DollarSign, Play, Pause, Download, ArrowLeft, X, Send, Users, Briefcase, Heart, Plus } from 'lucide-react';
 import { talentService } from '../services/talentService';
 import { audioService } from '../services/audioService';
 
@@ -10,7 +10,7 @@ interface TalentData {
   location: string;
   rating: number;
   reviewCount: number;
-  hourlyRate: string; // Changed from number to string to handle ranges
+  hourlyRate: string;
   avatar: string;
   bio: string;
   skills: string[];
@@ -32,6 +32,121 @@ interface TalentData {
     comment: string;
     date: string;
   }>;
+}
+
+interface Project {
+  id: string;
+  title: string;
+  description: string;
+  budget: string;
+  deadline: string;
+  clientId: string;
+  clientName: string;
+  createdAt: string;
+  status: 'open' | 'in_progress' | 'completed';
+}
+
+interface TalentStats {
+  generalFavorites: number;
+  projectShortlists: number;
+  activeProjects: Project[];
+}
+
+// Enhanced favorites and shortlist management
+class FavoritesManager {
+  // Tier 1: General Favorites
+  static addToGeneralFavorites(clientId: string, talentId: string, talentData: any) {
+    const favorites = JSON.parse(localStorage.getItem('generalFavorites') || '{}');
+    
+    if (!favorites[clientId]) {
+      favorites[clientId] = [];
+    }
+    
+    if (!favorites[clientId].find((fav: any) => fav.talentId === talentId)) {
+      favorites[clientId].push({
+        talentId,
+        talentName: talentData.name,
+        talentTitle: talentData.title,
+        talentAvatar: talentData.avatar,
+        savedAt: new Date().toISOString()
+      });
+      localStorage.setItem('generalFavorites', JSON.stringify(favorites));
+    }
+  }
+
+  static removeFromGeneralFavorites(clientId: string, talentId: string) {
+    const favorites = JSON.parse(localStorage.getItem('generalFavorites') || '{}');
+    
+    if (favorites[clientId]) {
+      favorites[clientId] = favorites[clientId].filter((fav: any) => fav.talentId !== talentId);
+      localStorage.setItem('generalFavorites', JSON.stringify(favorites));
+    }
+  }
+
+  static isInGeneralFavorites(clientId: string, talentId: string): boolean {
+    const favorites = JSON.parse(localStorage.getItem('generalFavorites') || '{}');
+    return favorites[clientId]?.some((fav: any) => fav.talentId === talentId) || false;
+  }
+
+  static getGeneralFavoritesCount(talentId: string): number {
+    const favorites = JSON.parse(localStorage.getItem('generalFavorites') || '{}');
+    let count = 0;
+    
+    Object.keys(favorites).forEach(clientId => {
+      if (favorites[clientId].some((fav: any) => fav.talentId === talentId)) {
+        count++;
+      }
+    });
+    
+    return count;
+  }
+
+  // Tier 2: Project Shortlists
+  static addToProjectShortlist(projectId: string, talentId: string, talentData: any) {
+    const shortlists = JSON.parse(localStorage.getItem('projectShortlists') || '{}');
+    
+    if (!shortlists[projectId]) {
+      shortlists[projectId] = [];
+    }
+    
+    if (!shortlists[projectId].find((talent: any) => talent.talentId === talentId)) {
+      shortlists[projectId].push({
+        talentId,
+        talentName: talentData.name,
+        talentTitle: talentData.title,
+        talentAvatar: talentData.avatar,
+        shortlistedAt: new Date().toISOString(),
+        status: 'shortlisted' // shortlisted, invited, applied, hired
+      });
+      localStorage.setItem('projectShortlists', JSON.stringify(shortlists));
+    }
+  }
+
+  static getProjectShortlistsForTalent(talentId: string): Project[] {
+    const shortlists = JSON.parse(localStorage.getItem('projectShortlists') || '{}');
+    const projects = JSON.parse(localStorage.getItem('projects') || '[]');
+    const shortlistedProjects: Project[] = [];
+    
+    Object.keys(shortlists).forEach(projectId => {
+      const shortlist = shortlists[projectId];
+      if (shortlist.some((talent: any) => talent.talentId === talentId)) {
+        const project = projects.find((p: Project) => p.id === projectId);
+        if (project && project.status === 'open') {
+          shortlistedProjects.push(project);
+        }
+      }
+    });
+    
+    return shortlistedProjects;
+  }
+
+  static getTalentStats(talentId: string): TalentStats {
+    return {
+      generalFavorites: this.getGeneralFavoritesCount(talentId),
+      projectShortlists: this.getProjectShortlistsForTalent(talentId).length,
+      activeProjects: this.getProjectShortlistsForTalent(talentId)
+    };
+  }
 }
 
 const mockTalentData: { [key: string]: TalentData } = {
@@ -90,57 +205,43 @@ interface TalentProfileProps {
 }
 
 const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
-  // Simple user type detection from localStorage (safe fallback)
+  // Enhanced user type detection
   const getUserType = () => {
     try {
-      // Debug: Log all relevant localStorage keys
-      console.log('🔍 LocalStorage Debug:');
-      console.log('- userType:', localStorage.getItem('userType'));
-      console.log('- user_type:', localStorage.getItem('user_type'));
-      console.log('- userRole:', localStorage.getItem('userRole'));
-      console.log('- user_role:', localStorage.getItem('user_role'));
-      console.log('- isTalent:', localStorage.getItem('isTalent'));
-      console.log('- talent_profile:', localStorage.getItem('talent_profile'));
-      console.log('- client_profile:', localStorage.getItem('client_profile'));
-      
-      // Check specific auth patterns from your app
       const userType = localStorage.getItem('userType') || localStorage.getItem('user_type');
       const userRole = localStorage.getItem('userRole') || localStorage.getItem('user_role');
       const isTalentFlag = localStorage.getItem('isTalent');
       
-      // More specific talent detection (must be explicitly set as talent)
       const isTalentUser = (userType === 'talent') || 
                           (userRole === 'talent') || 
                           (isTalentFlag === 'true');
       
-      // Default to client unless explicitly talent
       return {
         isClient: !isTalentUser,
-        isTalent: isTalentUser
+        isTalent: isTalentUser,
+        userId: localStorage.getItem('userId') || 'demo_user_' + Date.now()
       };
-      
     } catch (error) {
       console.log('LocalStorage access error:', error);
-      // Safe fallback - default to client
-      return { isClient: true, isTalent: false };
+      return { isClient: true, isTalent: false, userId: 'demo_user_' + Date.now() };
     }
   };
   
-  const { isClient, isTalent } = getUserType();
+  const { isClient, isTalent, userId } = getUserType();
   
-  // TEMPORARY: Force client mode for testing (remove when auth is working)
-  // Uncomment the line below to force client view for testing:
-  const forceClientMode = true; // Set to true to test client buttons
+  // Force client mode for testing
+  const forceClientMode = true;
   const finalIsClient = forceClientMode || isClient;
   const finalIsTalent = !forceClientMode && isTalent;
-  
-  const user = null; // Will be set when auth is properly implemented
   
   const [talent, setTalent] = useState<TalentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
+  const [showShortlistModal, setShowShortlistModal] = useState(false);
+  const [talentStats, setTalentStats] = useState<TalentStats>({ generalFavorites: 0, projectShortlists: 0, activeProjects: [] });
+  const [userProjects, setUserProjects] = useState<Project[]>([]);
   const [contactForm, setContactForm] = useState({
     subject: '',
     message: '',
@@ -149,23 +250,15 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
   });
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
 
-  // Check if current user is viewing their own profile
-  const isOwnProfile = false; // Will be enhanced when user auth is ready
-
   useEffect(() => {
     if (talentId) {
       loadTalentData();
       checkIfSaved();
+      loadTalentStats();
+      loadUserProjects();
     }
-    
-    // Debug: Show user type detection
-    console.log('🔍 User Type Detection:');
-    console.log('- Detected as Client:', isClient);
-    console.log('- Detected as Talent:', isTalent);
-    console.log('- Will show Contact/Save buttons:', isClient);
-  }, [talentId, isClient, isTalent]);
+  }, [talentId, userId]);
 
-  // Cleanup audio when component unmounts
   useEffect(() => {
     return () => {
       if (audioElement) {
@@ -175,12 +268,22 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     };
   }, [audioElement]);
 
-  const checkIfSaved = () => {
+  const loadTalentStats = () => {
     if (!talentId) return;
-    
-    const savedTalents = JSON.parse(localStorage.getItem('savedTalents') || '[]');
-    const isAlreadySaved = savedTalents.some((saved: any) => saved.id === talentId);
-    setIsSaved(isAlreadySaved);
+    const stats = FavoritesManager.getTalentStats(talentId);
+    setTalentStats(stats);
+  };
+
+  const loadUserProjects = () => {
+    const projects = JSON.parse(localStorage.getItem('projects') || '[]');
+    const userProjectsList = projects.filter((p: Project) => p.clientId === userId && p.status === 'open');
+    setUserProjects(userProjectsList);
+  };
+
+  const checkIfSaved = () => {
+    if (!talentId || !userId) return;
+    const isInFavorites = FavoritesManager.isInGeneralFavorites(userId, talentId);
+    setIsSaved(isInFavorites);
   };
 
   const loadTalentData = () => {
@@ -190,7 +293,6 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     const talentProfile = talentService.getTalentProfile(talentId);
     
     if (talentProfile) {
-      // Convert talent profile to the format expected by this component
       const talentData = {
         id: talentProfile.id,
         name: talentProfile.name,
@@ -198,7 +300,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
         location: talentProfile.location,
         rating: talentProfile.rating,
         reviewCount: talentProfile.reviews,
-        hourlyRate: talentProfile.priceRange, // Use priceRange instead of parsing number
+        hourlyRate: talentProfile.priceRange,
         avatar: talentProfile.image,
         bio: talentProfile.bio,
         skills: talentProfile.specialties,
@@ -211,49 +313,33 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
         reviews: []
       };
       
-      // Add portfolio items based on demos
+      // Add portfolio items
       if (talentProfile.demos && talentProfile.demos.length > 0) {
-        console.log('Loading demos from talent profile:', talentProfile.demos);
         talentData.portfolio = talentProfile.demos.map((demo: any) => ({
           title: demo.name || 'Demo',
           description: demo.type || 'Voice Demo',
           audioUrl: demo.url || audioService.getSampleAudioUrl(),
           duration: demo.duration || 30
         }));
-      } else if (talentProfile.userId) {
-        // Try to get demos from audio service
-        console.log('Loading demos from audio service for user:', talentProfile.userId);
-        const demos = audioService.getUserDemos(talentProfile.userId);
-        console.log('Found demos from audio service:', demos);
-        if (demos.length > 0) {
-          talentData.portfolio = demos.map(demo => ({
-            title: demo.name,
-            description: demo.type || 'Voice Demo',
-            audioUrl: demo.url,
-            duration: demo.duration
-          }));
-        } else {
-          // Add default sample demos if no demos found
-          talentData.portfolio = [
-            {
-              title: 'Commercial Demo',
-              description: 'Sample commercial voice over',
-              audioUrl: audioService.getSampleAudioUrl(),
-              duration: 45
-            },
-            {
-              title: 'Narration Sample',
-              description: 'Sample narration voice over',
-              audioUrl: audioService.getSampleAudioUrl(),
-              duration: 60
-            }
-          ];
-        }
+      } else {
+        talentData.portfolio = [
+          {
+            title: 'Commercial Demo',
+            description: 'Sample commercial voice over',
+            audioUrl: audioService.getSampleAudioUrl(),
+            duration: 45
+          },
+          {
+            title: 'Narration Sample',
+            description: 'Sample narration voice over',
+            audioUrl: audioService.getSampleAudioUrl(),
+            duration: 60
+          }
+        ];
       }
       
       setTalent(talentData);
     } else {
-      // Fallback to mock data
       const mockData = mockTalentData[talentId];
       if (mockData) {
         setTalent(mockData);
@@ -264,18 +350,15 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
   };
 
   const handlePlayAudio = (audioUrl: string) => {
-    // Stop any currently playing audio
     if (audioElement) {
       audioElement.pause();
       audioElement.currentTime = 0;
     }
 
     if (playingAudio === audioUrl) {
-      // If clicking the same audio, stop it
       setPlayingAudio(null);
       setAudioElement(null);
     } else {
-      // Play new audio
       try {
         const audio = new Audio(audioUrl);
         audio.onended = () => {
@@ -284,7 +367,6 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
         };
         audio.onerror = () => {
           console.log('Audio playback failed, using sample audio');
-          // Fallback to sample audio if the URL doesn't work
           const sampleAudio = new Audio(audioService.getSampleAudioUrl());
           sampleAudio.onended = () => {
             setPlayingAudio(null);
@@ -314,10 +396,6 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
       return;
     }
     
-    // In a real app, this would send the message via API
-    console.log('Sending message to:', talent.name, contactForm);
-    
-    // Save message to localStorage for demo
     const messages = JSON.parse(localStorage.getItem('sentMessages') || '[]');
     messages.push({
       id: Date.now(),
@@ -332,10 +410,35 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     });
     localStorage.setItem('sentMessages', JSON.stringify(messages));
     
-    // Reset form and close modal
     setContactForm({ subject: '', message: '', budget: '', deadline: '' });
     setShowContactModal(false);
     alert(`Message sent to ${talent.name}! They will respond within ${talent.responseTime}.`);
+  };
+
+  // Enhanced save functionality - Tier 1: General Favorites
+  const handleSaveProfile = () => {
+    if (!talent || !userId) return;
+    
+    if (!isSaved) {
+      FavoritesManager.addToGeneralFavorites(userId, talent.id, talent);
+      setIsSaved(true);
+      loadTalentStats(); // Refresh stats
+      alert(`${talent.name} has been added to your favorites! They'll be notified of your interest.`);
+    } else {
+      FavoritesManager.removeFromGeneralFavorites(userId, talent.id);
+      setIsSaved(false);
+      loadTalentStats(); // Refresh stats
+      alert(`${talent.name} has been removed from your favorites.`);
+    }
+  };
+
+  // New functionality - Tier 2: Project Shortlists
+  const handleAddToShortlist = (projectId: string) => {
+    if (!talent || !userId) return;
+    
+    FavoritesManager.addToProjectShortlist(projectId, talent.id, talent);
+    setShowShortlistModal(false);
+    alert(`${talent.name} has been added to your project shortlist! They'll be notified about this opportunity.`);
   };
 
   const handleContactFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -344,36 +447,6 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
       ...prev,
       [name]: value
     }));
-  };
-
-  const handleSaveProfile = () => {
-    if (!talent) return;
-    
-    setIsSaved(!isSaved);
-    
-    // Save to localStorage for demo
-    const savedTalents = JSON.parse(localStorage.getItem('savedTalents') || '[]');
-    
-    if (!isSaved) {
-      // Add to saved talents
-      if (!savedTalents.find((saved: any) => saved.id === talent.id)) {
-        savedTalents.push({
-          id: talent.id,
-          name: talent.name,
-          title: talent.title,
-          avatar: talent.avatar,
-          rating: talent.rating,
-          savedAt: new Date().toISOString()
-        });
-        localStorage.setItem('savedTalents', JSON.stringify(savedTalents));
-        alert(`${talent.name} has been saved to your favorites!`);
-      }
-    } else {
-      // Remove from saved talents
-      const filteredTalents = savedTalents.filter((saved: any) => saved.id !== talent.id);
-      localStorage.setItem('savedTalents', JSON.stringify(filteredTalents));
-      alert(`${talent.name} has been removed from your favorites.`);
-    }
   };
 
   if (loading) {
@@ -416,6 +489,58 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
             <span>Back to Talent Directory</span>
           </button>
         )}
+
+        {/* Talent Stats Bar - Only visible to talents viewing their own profile */}
+        {finalIsTalent && talentId === userId && (
+          <div className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 rounded-xl p-6 mb-8 border border-blue-800/50">
+            <h2 className="text-lg font-semibold text-white mb-4">Your Profile Engagement</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="text-center">
+                <div className="flex items-center justify-center mb-2">
+                  <Heart className="h-6 w-6 text-pink-400 mr-2" />
+                  <span className="text-2xl font-bold text-white">{talentStats.generalFavorites}</span>
+                </div>
+                <p className="text-sm text-gray-300">Clients have favorited your profile</p>
+              </div>
+              <div className="text-center">
+                <div className="flex items-center justify-center mb-2">
+                  <Briefcase className="h-6 w-6 text-green-400 mr-2" />
+                  <span className="text-2xl font-bold text-white">{talentStats.projectShortlists}</span>
+                </div>
+                <p className="text-sm text-gray-300">Active project shortlists</p>
+              </div>
+              <div className="text-center">
+                <div className="flex items-center justify-center mb-2">
+                  <Users className="h-6 w-6 text-blue-400 mr-2" />
+                  <span className="text-2xl font-bold text-white">{talentStats.activeProjects.length}</span>
+                </div>
+                <p className="text-sm text-gray-300">Open opportunities</p>
+              </div>
+            </div>
+            
+            {/* Active Project Opportunities */}
+            {talentStats.activeProjects.length > 0 && (
+              <div className="mt-6 pt-6 border-t border-gray-700">
+                <h3 className="text-white font-medium mb-3">🚀 You've been shortlisted for these projects:</h3>
+                <div className="space-y-2">
+                  {talentStats.activeProjects.slice(0, 3).map((project) => (
+                    <div key={project.id} className="bg-slate-800/50 rounded-lg p-3 border border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-white font-medium">{project.title}</h4>
+                          <p className="text-sm text-gray-400">by {project.clientName} • {project.budget}</p>
+                        </div>
+                        <button className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm">
+                          View Details
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         
         {/* Header Section */}
         <div className="bg-slate-800 rounded-xl shadow-lg p-8 mb-8 border border-gray-700">
@@ -446,10 +571,25 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                   {talent.responseTime}
                 </div>
               </div>
+              
+              {/* Show engagement stats for all users */}
+              {!finalIsTalent && (
+                <div className="flex items-center gap-4 mt-3 text-sm">
+                  <div className="flex items-center gap-1 text-pink-400">
+                    <Heart className="w-4 h-4" />
+                    <span>{talentStats.generalFavorites} clients interested</span>
+                  </div>
+                  {talentStats.projectShortlists > 0 && (
+                    <div className="flex items-center gap-1 text-green-400">
+                      <Briefcase className="w-4 h-4" />
+                      <span>Shortlisted for {talentStats.projectShortlists} projects</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex flex-col gap-3">
               {finalIsClient ? (
-                // Buttons for clients viewing talent profiles
                 <>
                   <button 
                     onClick={handleContactTalent}
@@ -459,17 +599,26 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                   </button>
                   <button 
                     onClick={handleSaveProfile}
-                    className={`px-6 py-3 rounded-lg transition-colors ${
+                    className={`px-6 py-3 rounded-lg transition-colors flex items-center gap-2 ${
                       isSaved 
-                        ? 'bg-green-600 text-white hover:bg-green-700' 
+                        ? 'bg-pink-600 text-white hover:bg-pink-700' 
                         : 'border border-gray-600 text-gray-300 hover:bg-slate-700'
                     }`}
                   >
-                    {isSaved ? 'Saved ✓' : 'Save Profile'}
+                    <Heart className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
+                    {isSaved ? 'Favorited ✓' : 'Add to Favorites'}
                   </button>
+                  {userProjects.length > 0 && (
+                    <button 
+                      onClick={() => setShowShortlistModal(true)}
+                      className="border border-blue-600 text-blue-400 px-6 py-3 rounded-lg hover:bg-blue-900/20 transition-colors flex items-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add to Project
+                    </button>
+                  )}
                 </>
               ) : (
-                // Message for talents viewing profiles
                 <div className="text-center p-4 bg-slate-700 rounded-lg border border-gray-600">
                   <p className="text-gray-300 text-sm">
                     👤 Viewing as talent - Contact and save features are available to clients
@@ -589,6 +738,34 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
               </div>
             </div>
 
+            {/* Market Appeal - New Section */}
+            <div className="bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-xl shadow-lg p-6 border border-purple-800/50">
+              <h3 className="text-lg font-semibold text-white mb-4">Market Appeal</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-300">Client Interest</span>
+                  <div className="flex items-center gap-2">
+                    <Heart className="w-4 h-4 text-pink-400" />
+                    <span className="font-medium text-white">{talentStats.generalFavorites}</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-300">Active Shortlists</span>
+                  <div className="flex items-center gap-2">
+                    <Briefcase className="w-4 h-4 text-green-400" />
+                    <span className="font-medium text-white">{talentStats.projectShortlists}</span>
+                  </div>
+                </div>
+                {talentStats.generalFavorites > 0 && (
+                  <div className="mt-3 p-3 bg-pink-900/20 rounded-lg border border-pink-800/30">
+                    <p className="text-xs text-pink-300">
+                      🌟 This talent is getting noticed! {talentStats.generalFavorites} clients have favorited this profile.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Skills */}
             <div className="bg-slate-800 rounded-xl shadow-lg p-6 border border-gray-700">
               <h3 className="text-lg font-semibold text-white mb-4">Skills</h3>
@@ -619,7 +796,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
         </div>
 
         {/* Contact Modal - Only for clients */}
-        {showContactModal && isClient && (
+        {showContactModal && finalIsClient && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-slate-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700">
               <div className="p-6">
@@ -713,6 +890,57 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Project Shortlist Modal - Only for clients */}
+        {showShortlistModal && finalIsClient && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-white">Add {talent?.name} to Project Shortlist</h2>
+                  <button 
+                    onClick={() => setShowShortlistModal(false)}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    <X className="h-6 w-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <p className="text-gray-300 mb-4">
+                    Select which project you'd like to shortlist {talent?.name} for:
+                  </p>
+                  
+                  {userProjects.length > 0 ? (
+                    <div className="space-y-3">
+                      {userProjects.map((project) => (
+                        <div 
+                          key={project.id} 
+                          className="border border-gray-700 bg-slate-700 rounded-lg p-4 hover:bg-slate-600 transition-colors cursor-pointer"
+                          onClick={() => handleAddToShortlist(project.id)}
+                        >
+                          <h3 className="font-semibold text-white mb-2">{project.title}</h3>
+                          <p className="text-gray-300 text-sm mb-2">{project.description}</p>
+                          <div className="flex items-center gap-4 text-sm text-gray-400">
+                            <span>Budget: {project.budget}</span>
+                            <span>Deadline: {project.deadline}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-gray-400 mb-4">You don't have any open projects yet.</p>
+                      <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors">
+                        Create New Project
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
