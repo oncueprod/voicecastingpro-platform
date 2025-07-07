@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, MapPin, Clock, DollarSign, Play, Pause, Download, ArrowLeft } from 'lucide-react';
+import { Star, MapPin, Clock, DollarSign, Play, Pause, Download, ArrowLeft } from 'lucide-react'; // ✅ Added ArrowLeft
 import { talentService } from '../services/talentService';
 import { audioService } from '../services/audioService';
 
@@ -93,12 +93,22 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
   const [talent, setTalent] = useState<TalentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  const [isSaved, setIsSaved] = useState(false);
 
   useEffect(() => {
     if (talentId) {
       loadTalentData();
+      checkIfSaved();
     }
   }, [talentId]);
+
+  const checkIfSaved = () => {
+    if (!talentId) return;
+    
+    const savedTalents = JSON.parse(localStorage.getItem('savedTalents') || '[]');
+    const isAlreadySaved = savedTalents.some((saved: any) => saved.id === talentId);
+    setIsSaved(isAlreadySaved);
+  };
 
   const loadTalentData = () => {
     if (!talentId) return;
@@ -166,6 +176,49 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
       setPlayingAudio(null);
     } else {
       setPlayingAudio(audioUrl);
+    }
+  };
+
+  const handleContactTalent = () => {
+    if (!talent) return;
+    
+    // Create a contact form or redirect to messaging
+    alert(`Contacting ${talent.name}...\n\nThis would typically open a contact form or messaging system.`);
+    
+    // In a real app, this might:
+    // - Open a contact modal
+    // - Navigate to a messaging page
+    // - Open email client with pre-filled message
+    // - Redirect to a contact form
+  };
+
+  const handleSaveProfile = () => {
+    if (!talent) return;
+    
+    setIsSaved(!isSaved);
+    
+    // Save to localStorage for demo
+    const savedTalents = JSON.parse(localStorage.getItem('savedTalents') || '[]');
+    
+    if (!isSaved) {
+      // Add to saved talents
+      if (!savedTalents.find((saved: any) => saved.id === talent.id)) {
+        savedTalents.push({
+          id: talent.id,
+          name: talent.name,
+          title: talent.title,
+          avatar: talent.avatar,
+          rating: talent.rating,
+          savedAt: new Date().toISOString()
+        });
+        localStorage.setItem('savedTalents', JSON.stringify(savedTalents));
+        alert(`${talent.name} has been saved to your favorites!`);
+      }
+    } else {
+      // Remove from saved talents
+      const filteredTalents = savedTalents.filter((saved: any) => saved.id !== talent.id);
+      localStorage.setItem('savedTalents', JSON.stringify(filteredTalents));
+      alert(`${talent.name} has been removed from your favorites.`);
     }
   };
 
@@ -241,11 +294,21 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
               </div>
             </div>
             <div className="flex flex-col gap-3">
-              <button className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+              <button 
+                onClick={handleContactTalent}
+                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+              >
                 Contact Talent
               </button>
-              <button className="border border-gray-600 text-gray-300 px-6 py-3 rounded-lg hover:bg-slate-700 transition-colors">
-                Save Profile
+              <button 
+                onClick={handleSaveProfile}
+                className={`px-6 py-3 rounded-lg transition-colors ${
+                  isSaved 
+                    ? 'bg-green-600 text-white hover:bg-green-700' 
+                    : 'border border-gray-600 text-gray-300 hover:bg-slate-700'
+                }`}
+              >
+                {isSaved ? 'Saved ✓' : 'Save Profile'}
               </button>
             </div>
           </div>
