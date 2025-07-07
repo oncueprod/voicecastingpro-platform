@@ -73,7 +73,7 @@ class AudioService {
         // Production: Upload to cloud storage
         this.uploadToCloudStorage(file, userId, type, projectId, resolve, reject);
       } else {
-        // Demo: Use localStorage with real audio for first 2 demos
+        // Demo: Use localStorage with real audio for first demo only
         this.uploadToLocalStorage(file, userId, type, projectId, resolve, reject);
       }
     });
@@ -125,7 +125,7 @@ class AudioService {
         };
 
         // Save metadata to database/localStorage
-        this.saveAudioMetadata(audioFile, resolve, reject);
+        this.saveAudioMetadata(audioFile, resolve, reject, true);
         URL.revokeObjectURL(dataUrl);
       };
 
@@ -156,12 +156,17 @@ class AudioService {
       const dataUrl = reader.result as string;
       
       audioElement.onloadedmetadata = () => {
-        // Demo mode: First 3 demos get real audio, rest get sample audio
+        // Demo mode: Only first demo gets real audio to avoid storage quota issues
         const existingUserDemos = this.getUserDemos(userId);
-        const shouldStoreActualAudio = existingUserDemos.length < 3; // Increased to 3 real audio demos
+        const shouldStoreActualAudio = existingUserDemos.length === 0; // Only first demo gets real audio
         
         console.log(`📊 User ${userId} has ${existingUserDemos.length} existing demos`);
         console.log(`🎵 Will use ${shouldStoreActualAudio ? 'REAL' : 'SAMPLE'} audio for: ${file.name}`);
+        
+        if (!shouldStoreActualAudio) {
+          console.log(`📝 Note: Demo #${existingUserDemos.length + 1} uses sample audio due to localStorage limits`);
+          console.log(`🚀 In production mode, ALL demos will have real audio via cloud storage`);
+        }
         
         const audioFile: AudioFile = {
           id: `audio_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -176,7 +181,7 @@ class AudioService {
           storageType: 'localStorage'
         };
 
-        this.saveAudioMetadata(audioFile, resolve, reject);
+        this.saveAudioMetadata(audioFile, resolve, reject, shouldStoreActualAudio);
       };
       
       audioElement.onerror = () => {
@@ -195,7 +200,6 @@ class AudioService {
 
   // VSP Storage Integration (implement with your VSP API)
   private async uploadToVSP(file: File, fileName: string): Promise<string> {
-    // TODO: Implement VSP upload logic
     const formData = new FormData();
     formData.append('file', file);
     formData.append('fileName', fileName);
@@ -218,8 +222,6 @@ class AudioService {
 
   // AWS S3 Integration (alternative cloud storage)
   private async uploadToAWS(file: File, fileName: string): Promise<string> {
-    // TODO: Implement AWS S3 upload logic
-    // This would use AWS SDK or presigned URLs
     const formData = new FormData();
     formData.append('file', file);
     formData.append('key', fileName);
@@ -239,7 +241,6 @@ class AudioService {
 
   // Cloudinary Integration (alternative cloud storage)
   private async uploadToCloudinary(file: File, fileName: string): Promise<string> {
-    // TODO: Implement Cloudinary upload logic
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', 'voice_demos'); // Configure in Cloudinary
@@ -263,7 +264,8 @@ class AudioService {
   private saveAudioMetadata(
     audioFile: AudioFile,
     resolve: (value: AudioFile) => void,
-    reject: (reason: Error) => void
+    reject: (reason: Error) => void,
+    isActualAudio: boolean = false
   ): void {
     try {
       const existingFiles = this.getAudioFiles();
@@ -278,14 +280,45 @@ class AudioService {
       }
 
       const newFiles = [...existingFiles, audioFile];
-      localStorage.setItem(this.storageKey, JSON.stringify(newFiles));
       
-      console.log(`✅ Audio file uploaded successfully: ${audioFile.name}`);
-      console.log(`📁 Storage: ${audioFile.storageType === 'cloud' ? 'Cloud Storage' : 'Local Storage'}`);
-      
-      resolve(audioFile);
+      // Try to save to localStorage
+      try {
+        localStorage.setItem(this.storageKey, JSON.stringify(newFiles));
+        
+        console.log(`✅ Audio file uploaded successfully: ${audioFile.name}`);
+        console.log(`📁 Storage: ${audioFile.storageType === 'cloud' ? 'Cloud Storage' : 'Local Storage'}`);
+        
+        if (isActualAudio) {
+          console.log(`🎵 This demo has REAL AUDIO playback`);
+        } else {
+          console.log(`🔊 This demo uses SAMPLE AUDIO (real audio available in production)`);
+        }
+        
+        resolve(audioFile);
+        
+      } catch (storageError: any) {
+        if (storageError.name === 'QuotaExceededError') {
+          console.log(`⚠️ Storage quota exceeded for real audio, falling back to sample audio`);
+          
+          // Fallback: Use sample audio instead
+          audioFile.url = this.getSampleAudioUrl();
+          audioFile.storageType = 'localStorage';
+          
+          // Try again with sample audio
+          const fallbackFiles = [...existingFiles, audioFile];
+          localStorage.setItem(this.storageKey, JSON.stringify(fallbackFiles));
+          
+          console.log(`✅ Audio file uploaded with sample audio fallback: ${audioFile.name}`);
+          console.log(`🚀 In production, this would be stored in cloud storage with real audio`);
+          
+          resolve(audioFile);
+        } else {
+          throw storageError;
+        }
+      }
       
     } catch (error: any) {
+      console.error('Failed to save audio metadata:', error);
       reject(new Error('Failed to save audio metadata: ' + error.message));
     }
   }
@@ -335,7 +368,7 @@ class AudioService {
 
   private async deleteFromCloudStorage(fileUrl: string): Promise<void> {
     try {
-      // Implement cloud storage deletion based on provider
+      // Call the backend delete endpoint
       await fetch('/api/storage/delete', {
         method: 'DELETE',
         headers: {
