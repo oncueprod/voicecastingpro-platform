@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, MapPin, Clock, DollarSign, Play, Pause, Download } from 'lucide-react';
+import { Star, MapPin, Clock, DollarSign, Play, Pause, Download, ArrowLeft } from 'lucide-react';
 import { talentService } from '../services/talentService';
 import { audioService } from '../services/audioService';
 
