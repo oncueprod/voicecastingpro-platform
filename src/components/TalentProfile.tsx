@@ -90,10 +90,31 @@ interface TalentProfileProps {
 }
 
 const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
-  // Simplified auth detection - can be enhanced later when auth is properly set up
-  const user = null; // Replace with actual user when auth is ready
-  const isClient = true; // Default to client view
-  const isTalent = false; // Set to true when logged in as talent
+  // Simple user type detection from localStorage (safe fallback)
+  const getUserType = () => {
+    try {
+      // Check localStorage for user type (common pattern in web apps)
+      const userType = localStorage.getItem('userType') || localStorage.getItem('user_type');
+      const userRole = localStorage.getItem('userRole') || localStorage.getItem('user_role');
+      
+      // Check for talent indicators
+      const isTalentUser = userType === 'talent' || 
+                          userRole === 'talent' || 
+                          localStorage.getItem('isTalent') === 'true' ||
+                          localStorage.getItem('talent_profile'); // If talent profile exists in localStorage
+      
+      return {
+        isClient: !isTalentUser,
+        isTalent: isTalentUser
+      };
+    } catch (error) {
+      // Safe fallback if localStorage access fails
+      return { isClient: true, isTalent: false };
+    }
+  };
+  
+  const { isClient, isTalent } = getUserType();
+  const user = null; // Will be set when auth is properly implemented
   
   const [talent, setTalent] = useState<TalentData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -109,7 +130,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
 
   // Check if current user is viewing their own profile
-  const isOwnProfile = false; // Will be: isTalent && user?.id && talentId === `talent_user_${user.id}`;
+  const isOwnProfile = false; // Will be enhanced when user auth is ready
 
   useEffect(() => {
     if (talentId) {
@@ -401,22 +422,34 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
               </div>
             </div>
             <div className="flex flex-col gap-3">
-              <button 
-                onClick={handleContactTalent}
-                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Contact Talent
-              </button>
-              <button 
-                onClick={handleSaveProfile}
-                className={`px-6 py-3 rounded-lg transition-colors ${
-                  isSaved 
-                    ? 'bg-green-600 text-white hover:bg-green-700' 
-                    : 'border border-gray-600 text-gray-300 hover:bg-slate-700'
-                }`}
-              >
-                {isSaved ? 'Saved ✓' : 'Save Profile'}
-              </button>
+              {isClient ? (
+                // Buttons for clients viewing talent profiles
+                <>
+                  <button 
+                    onClick={handleContactTalent}
+                    className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Contact Talent
+                  </button>
+                  <button 
+                    onClick={handleSaveProfile}
+                    className={`px-6 py-3 rounded-lg transition-colors ${
+                      isSaved 
+                        ? 'bg-green-600 text-white hover:bg-green-700' 
+                        : 'border border-gray-600 text-gray-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    {isSaved ? 'Saved ✓' : 'Save Profile'}
+                  </button>
+                </>
+              ) : (
+                // Message for talents viewing profiles
+                <div className="text-center p-4 bg-slate-700 rounded-lg border border-gray-600">
+                  <p className="text-gray-300 text-sm">
+                    👤 Viewing as talent - Contact and save features are available to clients
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
