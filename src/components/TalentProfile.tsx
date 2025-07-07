@@ -208,18 +208,30 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
   // Enhanced user type detection
   const getUserType = () => {
     try {
+      // Debug: Log all relevant localStorage keys
+      console.log('🔍 LocalStorage Debug:');
+      console.log('- userType:', localStorage.getItem('userType'));
+      console.log('- user_type:', localStorage.getItem('user_type'));
+      console.log('- userRole:', localStorage.getItem('userRole'));
+      console.log('- user_role:', localStorage.getItem('user_role'));
+      console.log('- isTalent:', localStorage.getItem('isTalent'));
+      console.log('- userId:', localStorage.getItem('userId'));
+      
       const userType = localStorage.getItem('userType') || localStorage.getItem('user_type');
       const userRole = localStorage.getItem('userRole') || localStorage.getItem('user_role');
       const isTalentFlag = localStorage.getItem('isTalent');
+      const userId = localStorage.getItem('userId') || localStorage.getItem('user_id') || 'demo_user_' + Date.now();
       
       const isTalentUser = (userType === 'talent') || 
                           (userRole === 'talent') || 
                           (isTalentFlag === 'true');
       
+      console.log('🎭 User Type Result:', { isClient: !isTalentUser, isTalent: isTalentUser, userId });
+      
       return {
         isClient: !isTalentUser,
         isTalent: isTalentUser,
-        userId: localStorage.getItem('userId') || 'demo_user_' + Date.now()
+        userId: userId
       };
     } catch (error) {
       console.log('LocalStorage access error:', error);
@@ -229,10 +241,9 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
   
   const { isClient, isTalent, userId } = getUserType();
   
-  // Force client mode for testing
-  const forceClientMode = true;
-  const finalIsClient = forceClientMode || isClient;
-  const finalIsTalent = !forceClientMode && isTalent;
+  // Remove force client mode - use actual user type detection
+  const finalIsClient = isClient;
+  const finalIsTalent = isTalent;
   
   const [talent, setTalent] = useState<TalentData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -590,6 +601,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
             </div>
             <div className="flex flex-col gap-3">
               {finalIsClient ? (
+                // Buttons for clients viewing talent profiles
                 <>
                   <button 
                     onClick={handleContactTalent}
@@ -618,10 +630,21 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                     </button>
                   )}
                 </>
-              ) : (
+              ) : finalIsTalent ? (
+                // Message for talents viewing profiles (including their own)
                 <div className="text-center p-4 bg-slate-700 rounded-lg border border-gray-600">
                   <p className="text-gray-300 text-sm">
-                    👤 Viewing as talent - Contact and save features are available to clients
+                    {talentId === userId 
+                      ? '✨ This is your profile - check your engagement stats above!'
+                      : '👤 Viewing as talent - Contact and save features are available to clients'
+                    }
+                  </p>
+                </div>
+              ) : (
+                // Fallback for unknown user types
+                <div className="text-center p-4 bg-slate-700 rounded-lg border border-gray-600">
+                  <p className="text-gray-300 text-sm">
+                    Please log in to contact talent or save profiles
                   </p>
                 </div>
               )}
