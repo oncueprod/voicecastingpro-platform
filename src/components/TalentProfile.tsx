@@ -285,7 +285,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                 </div>
                 <div className="flex items-center gap-1">
                   <DollarSign className="w-4 h-4" />
-                  ${talent.hourlyRate}/hour
+                  {talent.hourlyRate}/hour
                 </div>
                 <div className="flex items-center gap-1">
                   <Clock className="w-4 h-4" />
