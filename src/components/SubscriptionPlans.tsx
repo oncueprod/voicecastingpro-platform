@@ -675,7 +675,7 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ fromSignup = fals
                   Contact our support team for assistance with billing, plan changes, or any questions.
                 </p>
                 <motion.a 
-                  href="/contact-us"
+                 href="/#contact-us" 
                   className="bg-white text-blue-800 px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:bg-blue-50 transition-all font-medium inline-block text-sm sm:text-base"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
