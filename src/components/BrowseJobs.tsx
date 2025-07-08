@@ -27,52 +27,49 @@ const BrowseJobs: React.FC<BrowseJobsProps> = ({ onBack, onPageChange }) => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
 
-  // Mock data for demonstration
   useEffect(() => {
-    const mockJobs: JobListing[] = [
-      {
-        id: '1',
-        title: 'Professional Audiobook Narration',
-        description: 'Looking for an experienced narrator for a 200-page business book. Must have a clear, professional voice with excellent pronunciation.',
-        budget: '$500 - $1,000',
-        location: 'Remote',
-        postedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-        deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-        clientName: 'Sarah Johnson',
-        clientRating: 4.8,
-        tags: ['Audiobook', 'Narration', 'Professional'],
-        applicants: 12
-      },
-      {
-        id: '2',
-        title: 'Commercial Voice Over for Tech Product',
-        description: 'Need a dynamic voice for a 30-second commercial promoting our new mobile app. Looking for an energetic, modern sound.',
-        budget: '$200 - $400',
-        location: 'Remote',
-        postedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-        deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        clientName: 'TechCorp Inc.',
-        clientRating: 4.5,
-        tags: ['Commercial', 'Tech', 'Energetic'],
-        applicants: 8
-      },
-      {
-        id: '3',
-        title: 'E-Learning Course Narration',
-        description: 'Seeking a warm, friendly voice for an online course about digital marketing. Approximately 3 hours of content.',
-        budget: '$300 - $600',
-        location: 'Remote',
-        postedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-        deadline: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
-        clientName: 'EduTech Solutions',
-        clientRating: 4.9,
-        tags: ['E-Learning', 'Educational', 'Friendly'],
-        applicants: 15
-      }
-    ];
-    setJobs(mockJobs);
-  }, []);
+  // Load real projects from localStorage
+  const loadRealProjects = () => {
+    try {
+      const projects = JSON.parse(localStorage.getItem('projects') || '[]');
+      
+      // Convert Project format to JobListing format
+      const jobListings: JobListing[] = projects
+        .filter((project: any) => project.status === 'open')
+        .map((project: any) => ({
+          id: project.id,
+          title: project.title,
+          description: project.description,
+          budget: project.budget,
+          location: project.location || 'Remote',
+          postedAt: new Date(project.createdAt),
+          deadline: project.deadline ? new Date(project.deadline) : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+          clientName: project.clientName,
+          clientRating: 4.5, // Default rating
+          tags: project.skills || [project.category || 'General'],
+          applicants: Math.floor(Math.random() * 20) // Random for demo
+        }));
+      
+      setJobs(jobListings);
+    } catch (error) {
+      console.error('Error loading projects:', error);
+      setJobs([]);
+    }
+  };
 
+  loadRealProjects();
+
+  // Listen for new projects
+  const handleProjectsUpdated = () => {
+    loadRealProjects();
+  };
+
+  window.addEventListener('projectsUpdated', handleProjectsUpdated);
+  
+  return () => {
+    window.removeEventListener('projectsUpdated', handleProjectsUpdated);
+  };
+}, []);
   const handleBackClick = () => {
     if (onBack) {
       onBack();
