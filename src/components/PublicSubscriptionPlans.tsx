@@ -6,9 +6,10 @@ import PayPalSubscriptionButton from './PayPalSubscriptionButton';
 
 interface PublicSubscriptionPlansProps {
   onAuthClick: (type: 'signin' | 'signup') => void;
+  onPageChange?: (page: string) => void;
 }
 
-const PublicSubscriptionPlans: React.FC<PublicSubscriptionPlansProps> = ({ onAuthClick }) => {
+const PublicSubscriptionPlans: React.FC<PublicSubscriptionPlansProps> = ({ onAuthClick, onPageChange }) => {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
   const isProduction = import.meta.env.PROD;
   const { isAuthenticated, user } = useAuth();
@@ -48,14 +49,14 @@ const PublicSubscriptionPlans: React.FC<PublicSubscriptionPlansProps> = ({ onAut
   useEffect(() => {
     // If user is already authenticated and is talent, redirect to subscription page
     if (isAuthenticated && user?.type === 'talent') {
-      window.location.href = '/subscription-plans';
+      onPageChange?.('subscription-plans');
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, onPageChange]);
 
   const handleSubscriptionClick = (planId: string) => {
     if (isAuthenticated && user?.type === 'talent') {
       // If already signed in as talent, redirect to subscription page
-      window.location.href = '/subscription-plans';
+      onPageChange?.('subscription-plans');
     } else if (isAuthenticated && user?.type === 'client') {
       // If signed in as client, prompt to create a talent account
       alert('You need a talent account to subscribe. Please sign up as a voice talent.');
