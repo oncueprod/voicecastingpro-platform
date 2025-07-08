@@ -8,9 +8,14 @@ import PayPalSubscriptionButton from './PayPalSubscriptionButton';
 interface SubscriptionPlansProps {
   fromSignup?: boolean;
   onBack?: () => void;
+  onPageChange?: (page: string) => void;  // ADD: Navigation prop
 }
 
-const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ fromSignup = false, onBack }) => {
+const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ 
+  fromSignup = false, 
+  onBack,
+  onPageChange  // ADD: Include navigation prop
+}) => {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
   const [subscriptionStatus, setSubscriptionStatus] = useState<'none' | 'pending' | 'active' | 'cancelled'>('none');
   const [subscriptionId, setSubscriptionId] = useState<string | null>(null);
@@ -674,14 +679,14 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ fromSignup = fals
                 <p className="text-white/80 mb-4 sm:mb-6 text-sm sm:text-base">
                   Contact our support team for assistance with billing, plan changes, or any questions.
                 </p>
-                <motion.a 
-                 href="/#contact-us" 
+                <motion.button 
+                  onClick={() => onPageChange && onPageChange('contact-us')}
                   className="bg-white text-blue-800 px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:bg-blue-50 transition-all font-medium inline-block text-sm sm:text-base"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
                   Contact Support
-                </motion.a>
+                </motion.button>
               </div>
             ) : (
               <div className="bg-white/10 rounded-xl sm:rounded-2xl p-6 sm:p-8 border border-white/20 backdrop-blur-sm">
