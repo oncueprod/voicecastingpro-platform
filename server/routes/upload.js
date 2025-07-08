@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import ImageKit from 'imagekit';
+// import ImageKit from 'imagekit';  // COMMENTED OUT
 import jwt from 'jsonwebtoken';
 import { pool } from '../db/index.js';
 import dotenv from 'dotenv';
@@ -9,12 +9,12 @@ dotenv.config();
 
 const router = express.Router();
 
-// Initialize ImageKit
-const imagekit = new ImageKit({
-  publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
-  privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
-  urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT
-});
+// Initialize ImageKit - COMMENTED OUT
+// const imagekit = new ImageKit({
+//   publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+//   privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
+//   urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT
+// });
 
 // Configure multer for memory storage (no local files)
 const upload = multer({ 
@@ -48,7 +48,7 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
-// Audio Upload Endpoint (for voice demos)
+// Audio Upload Endpoint (for voice demos) - IMAGEKIT REMOVED
 router.post('/audio', authenticateToken, upload.single('audio'), async (req, res) => {
   try {
     console.log('Audio upload started...', req.file ? 'File received' : 'No file');
@@ -60,51 +60,47 @@ router.post('/audio', authenticateToken, upload.single('audio'), async (req, res
     const { type = 'demo', title, description, category } = req.body;
     const userId = req.user.userId;
 
-    console.log('Uploading to ImageKit...');
+    console.log('ImageKit upload disabled - returning mock response');
 
-    // Upload to ImageKit
-    const uploadResponse = await imagekit.upload({
-      file: req.file.buffer,
-      fileName: `audio_${userId}_${Date.now()}_${req.file.originalname}`,
-      folder: `/audio/${type}`,
-      tags: ['audio', type, `user-${userId}`, category || 'uncategorized'],
-      customMetadata: {
-        userId: userId.toString(),
-        type,
-        title: title || '',
-        description: description || '',
-        category: category || '',
-        originalName: req.file.originalname,
-        uploadedAt: new Date().toISOString()
-      }
-    });
+    // IMAGEKIT UPLOAD COMMENTED OUT
+    // const uploadResponse = await imagekit.upload({
+    //   file: req.file.buffer,
+    //   fileName: `audio_${userId}_${Date.now()}_${req.file.originalname}`,
+    //   folder: `/audio/${type}`,
+    //   tags: ['audio', type, `user-${userId}`, category || 'uncategorized'],
+    //   customMetadata: {
+    //     userId: userId.toString(),
+    //     type,
+    //     title: title || '',
+    //     description: description || '',
+    //     category: category || '',
+    //     originalName: req.file.originalname,
+    //     uploadedAt: new Date().toISOString()
+    //   }
+    // });
 
-    console.log('ImageKit upload successful:', uploadResponse.fileId);
+    console.log('Mock upload successful');
 
-    // Return success (skip database for now to test ImageKit first)
+    // Return mock success response (ImageKit disabled)
     res.json({
       success: true,
-      message: 'Audio uploaded to ImageKit successfully!',
+      message: 'Audio upload simulated successfully! (ImageKit disabled)',
       file: {
         id: `audio_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         name: req.file.originalname,
-        url: uploadResponse.url,
+        url: `/uploads/mock_${req.file.originalname}`, // Mock URL
         size: req.file.size,
         uploadedAt: new Date(),
         userId,
         type
       },
-      imagekit: {
-        fileId: uploadResponse.fileId,
-        url: uploadResponse.url,
-        name: uploadResponse.name
-      }
+      note: 'ImageKit integration has been disabled. This is a mock response.'
     });
 
   } catch (error) {
     console.error('Audio upload error:', error);
     res.status(500).json({ 
-      error: 'Failed to upload audio file',
+      error: 'Failed to process audio file',
       details: error.message 
     });
   }
@@ -115,8 +111,8 @@ router.get('/test', (req, res) => {
   res.json({ 
     message: 'Upload route is working!',
     imagekit: {
-      configured: !!(process.env.IMAGEKIT_PUBLIC_KEY && process.env.IMAGEKIT_PRIVATE_KEY),
-      endpoint: process.env.IMAGEKIT_URL_ENDPOINT || 'Not configured'
+      configured: false,
+      status: 'Disabled - ImageKit integration removed'
     }
   });
 });
