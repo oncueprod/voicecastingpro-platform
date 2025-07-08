@@ -275,6 +275,15 @@ function App() {
           🐛 Debug Projects
         </button>
 
+{/* Test Project Board Button */}
+<button 
+  onClick={() => setCurrentPage('project-board')}
+  className="fixed top-4 right-32 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm font-medium shadow-lg transition-colors z-[9999]"
+>
+  🎯 Project Board
+</button>
+
+
         {renderPage()}
         <ScrollToTop />
         {renderBackground()}
