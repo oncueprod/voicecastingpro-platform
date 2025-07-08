@@ -82,7 +82,7 @@ app.use('/api/talent', talentRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/upload', uploadRoutes);
+// app.use('/api/upload', uploadRoutes);
 app.use('/api/contact', contactRoutes);
 
 // Health check endpoint
