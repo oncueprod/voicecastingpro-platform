@@ -188,6 +188,7 @@ function App() {
       case 'subscription-plans':
         return <SubscriptionPlans
           fromSignup={fromSignup} 
+          onPageChange={handlePageChange}  // ADDED: Navigation prop for Contact Support
           onBack={() => {
             // Check if we should go back to browse jobs or home
             if (fromBrowseJobs) {
