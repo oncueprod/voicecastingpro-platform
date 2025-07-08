@@ -27,6 +27,7 @@ import AdminLogin from './components/AdminLogin';
 import AdminDashboard from './components/AdminDashboard';
 import CircularSoundwaveBackground from './components/CircularSoundwaveBackground';
 import ProjectDebugTool from './components/ProjectDebugTool';
+import { ProjectManagementSystem } from './components/ProjectManagementSystem';
 
 function App() {
   const [currentPage, setCurrentPage] = useState('home');
@@ -174,6 +175,8 @@ function App() {
         ) : null;
       case 'post-project':
         return <PostProject onBack={() => setCurrentPage('home')} />;
+      case 'project-board':
+        return <ProjectManagementSystem />;
       case 'help-center':
         return <HelpCenter onPageChange={handlePageChange} />;
       case 'contact-us':
