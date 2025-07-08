@@ -200,8 +200,11 @@ function App() {
             }
           }}
         />;
-      case 'subscription-plans-public':
-        return <PublicSubscriptionPlans onAuthClick={handleAuthClick} />;
+   case 'subscription-plans-public':
+  return <PublicSubscriptionPlans 
+    onAuthClick={handleAuthClick} 
+    onPageChange={handlePageChange} 
+  />;
       case 'profile':
         return <UserProfile onBack={() => setCurrentPage('home')} />;
       case 'talent-setup':
