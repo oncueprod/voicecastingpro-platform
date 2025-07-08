@@ -327,7 +327,7 @@ const Hero: React.FC<HeroProps> = ({ onSearch, onPostProject, onPageChange }) =>
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.6, delay: 1.0 }}
                   >
-                    <div className="bg-gradient-to-br from-indigo-600/30 to-purple-800/30 backdrop-blur-sm rounded-2xl p-6 border border-indigo-400/30 relative">
+                    <div className="bg-gradient-to-br from-indigo-600/30 to-purple-800/30 backdrop-blur-sm rounded-2xl p-4 sm:p-6 border border-indigo-400/30 relative">
                       {/* Animated background glow */}
                       <div className="absolute inset-0 bg-gradient-to-br from-indigo-400/20 to-transparent rounded-2xl animate-pulse" style={{ animationDelay: '1s' }}></div>
                       
@@ -336,9 +336,9 @@ const Hero: React.FC<HeroProps> = ({ onSearch, onPostProject, onPageChange }) =>
                       <div className="absolute bottom-2 right-4 w-1 h-1 bg-purple-300 rounded-full animate-bounce" style={{ animationDelay: '0.8s' }}></div>
                       <div className="absolute top-5 right-2 w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '1.3s' }}></div>
                       
-                      <div className="relative z-10 text-center flex flex-col items-center justify-center">
+                      <div className="relative z-10 h-full flex flex-col items-center justify-center text-center">
                         <motion.div 
-                          className="text-xs sm:text-lg font-bold text-white mb-2 leading-tight whitespace-nowrap tracking-tighter w-full text-center" 
+                          className="text-xs sm:text-lg font-bold text-white mb-2 leading-tight whitespace-nowrap tracking-tighter mx-auto" 
                           style={{ fontWeight: 700 }}
                           animate={{ y: [0, -2, 0] }}
                           transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
