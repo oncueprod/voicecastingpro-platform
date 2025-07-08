@@ -236,7 +236,11 @@ function App() {
               onAuthClick={handleAuthClick}
             />
             <div id="hero">
-              <Hero onSearch={handleSearch} onPostProject={handlePostProject} />
+              <Hero 
+                onSearch={handleSearch} 
+                onPostProject={handlePostProject}
+                onPageChange={handlePageChange}
+              />
             </div>
             <div id="services">
               <Services onPageChange={handlePageChange} />
