@@ -26,6 +26,7 @@ import ScrollToTop from './components/ScrollToTop';
 import AdminLogin from './components/AdminLogin';
 import AdminDashboard from './components/AdminDashboard';
 import CircularSoundwaveBackground from './components/CircularSoundwaveBackground';
+import ProjectDebugTool from './components/ProjectDebugTool';
 
 function App() {
   const [currentPage, setCurrentPage] = useState('home');
@@ -33,6 +34,7 @@ function App() {
   const [selectedTalentId, setSelectedTalentId] = useState<string | null>(null);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
   const isProduction = import.meta.env.PROD;
   const [fromSignup, setFromSignup] = useState(false);
   const [fromBrowseJobs, setFromBrowseJobs] = useState(false);
@@ -261,6 +263,15 @@ function App() {
   return (
     <AuthProvider>
       <div className="min-h-screen bg-slate-900">
+        {/* Debug Button - Always visible in top-right corner */}
+        <button 
+          onClick={() => setShowDebug(true)}
+          className="fixed top-4 right-4 bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm font-medium shadow-lg transition-colors z-[9999]"
+          title="Debug Project Creation"
+        >
+          🐛 Debug Projects
+        </button>
+
         {renderPage()}
         <ScrollToTop />
         {renderBackground()}
@@ -282,6 +293,9 @@ function App() {
             onClose={() => setShowAdminDashboard(false)}
           />
         )}
+
+        {/* Project Debug Tool */}
+        {showDebug && <ProjectDebugTool />}
       </div>
     </AuthProvider>
   );
