@@ -137,11 +137,46 @@ const PostProject: React.FC<PostProjectProps> = ({ onBack }) => {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // In production, this would submit to your backend
-      console.log('Project submitted:', {
-        ...formData,
+      // Get user info
+      const userId = localStorage.getItem('userId') || localStorage.getItem('user_id') || 'demo_client_' + Date.now();
+      const userName = localStorage.getItem('userName') || localStorage.getItem('user_name') || 'Demo Client';
+      
+      // Create project object in the format BrowseJobs expects
+      const newProject = {
+        id: 'project_' + Date.now(),
+        title: formData.title,
+        description: formData.description,
+        budget: formData.budget || 'Budget not specified',
+        location: 'Remote', // You can add location field to form if needed
+        category: formData.category,
+        skills: formData.voiceStyle ? [formData.voiceStyle, formData.category] : [formData.category],
+        status: 'open',
+        clientId: userId,
+        clientName: userName,
+        deadline: formData.deadline,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        applicants: [],
+        viewCount: 0,
+        // Additional data from your form
+        scriptLength: formData.scriptLength,
+        voiceStyle: formData.voiceStyle,
+        gender: formData.gender,
+        age: formData.age,
+        language: formData.language,
+        projectType: formData.projectType,
         files: uploadedFiles.map(f => ({ name: f.name, size: f.size, type: f.type }))
-      });
+      };
+      
+      // Save to localStorage (same key that BrowseJobs reads from)
+      const existingProjects = JSON.parse(localStorage.getItem('projects') || '[]');
+      const updatedProjects = [newProject, ...existingProjects];
+      localStorage.setItem('projects', JSON.stringify(updatedProjects));
+      
+      // Dispatch event to update other components
+      window.dispatchEvent(new CustomEvent('projectsUpdated', { detail: updatedProjects }));
+      
+      console.log('Project submitted and saved:', newProject);
 
       alert('Project posted successfully! Voice talent will start submitting proposals soon.');
       
