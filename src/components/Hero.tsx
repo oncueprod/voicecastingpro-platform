@@ -338,7 +338,7 @@ const Hero: React.FC<HeroProps> = ({ onSearch, onPostProject, onPageChange }) =>
                       
                       <div className="relative z-10 text-center">
                         <motion.div 
-                          className="text-lg sm:text-xl font-bold text-white mb-2 leading-tight text-center" 
+                          className="text-sm sm:text-lg font-bold text-white mb-2 leading-tight text-center break-words" 
                           style={{ fontWeight: 700 }}
                           animate={{ y: [0, -2, 0] }}
                           transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
