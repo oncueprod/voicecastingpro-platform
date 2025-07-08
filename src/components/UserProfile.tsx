@@ -15,17 +15,17 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
   const { user, isClient, isTalent, updateUserAvatar } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [showAudioUpload, setShowAudioUpload] = useState(false);
-  const [audioUploadError, setAudioUploadError] = useState(''); // ✅ FIX: Add missing state
+  const [audioUploadError, setAudioUploadError] = useState('');
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
-    email: user?.email || '', // ✅ FIX: Always use user email
+    email: user?.email || '',
     phone: user?.phone || '',
     location: user?.location || '',
     bio: '',
     website: '',
     company: '',
-    specialties: '', // Add missing specialties field
+    specialties: '',
     // Talent specific fields
     voiceTypes: [] as string[],
     languages: '',
@@ -54,7 +54,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
           ...prev,
           firstName: profileData.firstName || '',
           lastName: profileData.lastName || '',
-          email: user?.email || '', // ✅ ALWAYS use current user email, not cached
+          email: user?.email || '',
           phone: profileData.phone || '',
           location: profileData.location || '',
           bio: profileData.bio || '',
@@ -106,79 +106,85 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
   };
 
   const handleSave = () => {
-    // In production, this would update the user profile via API
-    console.log('Saving profile:', formData);
-    
-    // Save to localStorage for demo
-    if (isClient) {
-      localStorage.setItem('client_profile', JSON.stringify({
-        ...formData,
-        profilePhoto: profileImage
-      }));
-    } else {
-      localStorage.setItem('talent_profile', JSON.stringify({
-        ...formData,
-        profilePhoto: profileImage
-      }));
+    try {
+      console.log('Saving profile:', formData);
       
-      // Also update talent profile in talent service if user is talent
-      if (user && isTalent) {
-        const talentId = `talent_user_${user.id}`;
-        const existingProfile = talentService.getTalentProfile(talentId);
+      // Save to localStorage for demo
+      if (isClient) {
+        localStorage.setItem('client_profile', JSON.stringify({
+          ...formData,
+          profilePhoto: profileImage
+        }));
+        console.log('Client profile saved successfully');
+      } else {
+        localStorage.setItem('talent_profile', JSON.stringify({
+          ...formData,
+          profilePhoto: profileImage
+        }));
         
-        if (existingProfile) {
-          talentService.updateTalentProfile(talentId, {
-            ...existingProfile,
-            name: `${formData.firstName} ${formData.lastName}`,
-            title: formData.specialties || 'Voice Talent',
-            bio: formData.bio,
-            image: profileImage || existingProfile.image,
-            languages: formData.languages ? formData.languages.split(',').map(l => l.trim()) : existingProfile.languages,
-            specialties: formData.specialties ? formData.specialties.split(',').map(s => s.trim()) : existingProfile.specialties,
-            priceRange: formData.hourlyRate || existingProfile.priceRange,
-            updatedAt: new Date()
-          });
-        } else {
-          // Create new talent profile
-          const newProfile = {
-            id: talentId,
-            userId: user.id,
-            name: `${formData.firstName} ${formData.lastName}`,
-            title: formData.specialties || 'Voice Talent',
-            location: formData.location || 'Location not specified',
-            rating: 5.0,
-            reviews: 0,
-            responseTime: '1 hour',
-            priceRange: formData.hourlyRate || '$50-100',
-            image: profileImage || user.avatar || 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=400',
-            specialties: formData.specialties ? formData.specialties.split(',').map(s => s.trim()) : ['Commercial', 'Narration'],
-            languages: formData.languages ? formData.languages.split(',').map(l => l.trim()) : ['English'],
-            badge: 'New Talent',
-            bio: formData.bio || 'Professional voice talent',
-            experience: formData.yearsExperience || '1+ years',
-            completedProjects: 0,
-            repeatClients: 0,
-            equipment: ['Professional Equipment'],
-            demos: [],
-            isActive: true,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          };
+        // Also update talent profile in talent service if user is talent
+        if (user && isTalent) {
+          const talentId = `talent_user_${user.id}`;
+          const existingProfile = talentService.getTalentProfile(talentId);
           
-          talentService.updateTalentProfile(newProfile.id, newProfile);
+          if (existingProfile) {
+            talentService.updateTalentProfile(talentId, {
+              ...existingProfile,
+              name: `${formData.firstName} ${formData.lastName}`,
+              title: formData.specialties || 'Voice Talent',
+              bio: formData.bio,
+              image: profileImage || existingProfile.image,
+              languages: formData.languages ? formData.languages.split(',').map(l => l.trim()) : existingProfile.languages,
+              specialties: formData.specialties ? formData.specialties.split(',').map(s => s.trim()) : existingProfile.specialties,
+              priceRange: formData.hourlyRate || existingProfile.priceRange,
+              updatedAt: new Date()
+            });
+          } else {
+            // Create new talent profile
+            const newProfile = {
+              id: talentId,
+              userId: user.id,
+              name: `${formData.firstName} ${formData.lastName}`,
+              title: formData.specialties || 'Voice Talent',
+              location: formData.location || 'Location not specified',
+              rating: 5.0,
+              reviews: 0,
+              responseTime: '1 hour',
+              priceRange: formData.hourlyRate || '$50-100',
+              image: profileImage || user.avatar || 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=400',
+              specialties: formData.specialties ? formData.specialties.split(',').map(s => s.trim()) : ['Commercial', 'Narration'],
+              languages: formData.languages ? formData.languages.split(',').map(l => l.trim()) : ['English'],
+              badge: 'New Talent',
+              bio: formData.bio || 'Professional voice talent',
+              experience: formData.yearsExperience || '1+ years',
+              completedProjects: 0,
+              repeatClients: 0,
+              equipment: ['Professional Equipment'],
+              demos: [],
+              isActive: true,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            };
+            
+            talentService.updateTalentProfile(newProfile.id, newProfile);
+          }
         }
+        console.log('Talent profile saved successfully');
       }
+      
+      // Update avatar in auth context
+      if (profileImage) {
+        updateUserAvatar(profileImage);
+      }
+      
+      setIsEditing(false);
+      alert('Profile updated successfully!');
+      
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      alert('Failed to save profile. Please try again.');
     }
-    
-    // Update avatar in auth context
-    if (profileImage) {
-      updateUserAvatar(profileImage);
-    }
-    
-    setIsEditing(false);
-    // Show success message
-    alert('Profile updated successfully!');
-  }; // ✅ FIX: Add missing closing brace
+  };
 
   const handleCancel = () => {
     // Reset form data to original values
@@ -193,7 +199,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
           ...prev,
           firstName: profileData.firstName || '',
           lastName: profileData.lastName || '',
-          email: user?.email || '', // ✅ ALWAYS use current user email
+          email: user?.email || '',
           phone: profileData.phone || '',
           location: profileData.location || '',
           bio: profileData.bio || '',
@@ -394,7 +400,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
                     </label>
                     <p className="text-white text-lg flex items-center space-x-2">
                       <Mail className="h-4 w-4 text-gray-400" />
-                      <span>{user?.email}</span> {/* ✅ ALWAYS show current user email */}
+                      <span>{user?.email}</span>
                     </p>
                   </div>
 
@@ -753,7 +759,6 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
                 {/* Demo samples */}
                 {user?.id && (
                   <>
-                    {/* Get user demos */}
                     {(() => {
                       // Use the state variable if it has data, otherwise fetch from service
                       const userDemos = audioFiles.length > 0 ? audioFiles : audioService.getUserDemos(user.id);
