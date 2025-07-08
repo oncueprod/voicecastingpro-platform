@@ -15,23 +15,21 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ fromSignup = fals
   const [subscriptionStatus, setSubscriptionStatus] = useState<'none' | 'pending' | 'active' | 'cancelled'>('none');
   const [subscriptionId, setSubscriptionId] = useState<string | null>(null);
   const { user } = useAuth();
-  const [isProcessing, setIsProcessing] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
   const [paypalError, setPaypalError] = useState<string | null>(null);
-  const isProduction = import.meta.env.PROD;
 
   const plans = {
     monthly: {
       price: 35,
       period: 'per month, billed monthly',
       savings: null,
-      planId: 'P-MONTHLY-PLAN-ID'
+      planId: import.meta.env.VITE_PAYPAL_MONTHLY_PLAN_ID || 'P-MONTHLY-PLAN-ID'
     },
     annual: {
       price: 348, 
       period: 'per year',
       savings: 'Save $72 per year!',
-      planId: 'P-ANNUAL-PLAN-ID'
+      planId: import.meta.env.VITE_PAYPAL_ANNUAL_PLAN_ID || 'P-ANNUAL-PLAN-ID'
     }
   };
 
@@ -91,42 +89,54 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ fromSignup = fals
     }
   ];
 
-  // Load the PayPal SDK
+  // Load the PayPal SDK once for the entire page
   useEffect(() => {
-    const addPayPalScript = () => {
-      const clientId = import.meta.env.VITE_PAYPAL_CLIENT_ID || 'sb';
+    const loadPayPalScript = () => {
+      // Check if PayPal is already loaded
+      if (window.paypal && window.paypal.Buttons) {
+        setSdkReady(true);
+        return;
+      }
+
+      // Check if script is already being loaded
+      const existingScript = document.querySelector('script[src*="paypal.com/sdk/js"]');
+      if (existingScript) {
+        existingScript.addEventListener('load', () => setSdkReady(true));
+        existingScript.addEventListener('error', () => {
+          setPaypalError('Failed to load PayPal SDK. Please check your internet connection and try again.');
+        });
+        return;
+      }
+
+      const clientId = import.meta.env.VITE_PAYPAL_CLIENT_ID;
+      
+      if (!clientId || clientId === 'sb') {
+        setPaypalError('PayPal Client ID is not configured. Please contact support.');
+        return;
+      }
+
       const script = document.createElement('script');
       script.type = 'text/javascript';
-      script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&vault=true&intent=subscription`;
+      script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&vault=true&intent=subscription&components=buttons`;
       script.async = true;
       script.onload = () => {
+        console.log('PayPal SDK loaded successfully');
         setSdkReady(true);
       };
       script.onerror = () => {
-        setPaypalError('Failed to load PayPal SDK. Please try again later.');
+        console.error('Failed to load PayPal SDK');
+        setPaypalError('Failed to load PayPal SDK. Please check your internet connection and try again.');
       };
-      document.body.appendChild(script);
+      document.head.appendChild(script);
     };
 
-    if (window.paypal) {
-      setSdkReady(true);
-    } else {
-      addPayPalScript();
-    }
-    
-    // Cleanup
-    return () => {
-      const script = document.querySelector('script[src*="paypal.com/sdk/js"]');
-      if (script) {
-        document.body.removeChild(script);
-      }
-    };
+    loadPayPalScript();
   }, []);
 
   const handleSubscriptionSuccess = (subId: string) => {
     setSubscriptionId(subId);
     setSubscriptionStatus('active');
-    setIsRedirectingToPayPal(false);
+    setPaypalError(null);
 
     // Show different success message if coming from signup flow
     if (fromSignup) {
@@ -134,15 +144,6 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ fromSignup = fals
     } else {
       alert(`Subscription created successfully! Your ${billingCycle} plan is now active.`);
     }
-    
-    // In a real implementation, you would store this in your database
-    localStorage.setItem('user_subscription', JSON.stringify({
-      id: subId,
-      userId: user?.id,
-      planType: billingCycle,
-      status: 'active',
-      startDate: new Date().toISOString()
-    }));
     
     // If we came from browse jobs, redirect back there
     if (typeof window !== 'undefined') {
@@ -159,8 +160,7 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ fromSignup = fals
 
   const handleSubscriptionError = (error: any) => {
     console.error('Subscription error:', error);
-    setPaypalError('Failed to create subscription. Please try again.');
-    setIsRedirectingToPayPal(false);
+    setPaypalError('Failed to create subscription. Please try again or contact support.');
   };
 
   const handleCancelSubscription = async () => {
@@ -171,8 +171,6 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ fromSignup = fals
     if (confirmed) {
       try {
         // In a real implementation, this would call your backend to cancel the subscription
-        // For demo purposes, we'll just update the local state
-        
         setSubscriptionStatus('cancelled');
         
         // Update local storage
@@ -204,22 +202,6 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ fromSignup = fals
         console.error('Failed to parse subscription data:', error);
       }
     }
-    
-    // Check for pending subscription from PayPal redirect
-    const pendingSubscription = localStorage.getItem('pending_subscription');
-    if (pendingSubscription) {
-      try {
-        const subscription = JSON.parse(pendingSubscription);
-        if (subscription.userId === user?.id && subscription.status === 'pending') {
-          // This would be where you verify the subscription with PayPal in a real implementation
-          // For demo purposes, we'll just activate it
-          handleSubscriptionSuccess(subscription.id);
-          localStorage.removeItem('pending_subscription');
-        }
-      } catch (error) {
-        console.error('Failed to parse pending subscription data:', error);
-      }
-    }
   }, [user]);
 
   // Check if we're coming from the signup flow via URL parameter
@@ -229,14 +211,11 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ fromSignup = fals
       const fromSignupParam = urlParams.get('fromSignup');
       
       if (fromSignupParam === 'true') {
-        // Set a more appropriate title for the page
         document.title = 'Complete Your Registration - VoiceCastingPro';
       }
       
-      // Check if we're coming from the browse jobs page
       const fromBrowseJobs = urlParams.get('fromBrowseJobs');
       if (fromBrowseJobs === 'true') {
-        // Set appropriate title
         document.title = 'Subscribe to Submit Proposals - VoiceCastingPro';
       }
     }
@@ -325,6 +304,9 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ fromSignup = fals
               <div className="bg-red-900/30 border border-red-600/50 rounded-lg p-4 max-w-2xl mx-auto mb-8 backdrop-blur-sm">
                 <p className="text-red-300 text-sm">
                   ❌ <strong>Error:</strong> {paypalError}
+                </p>
+                <p className="text-red-300 text-xs mt-2">
+                  Try refreshing the page or contact support if the problem persists.
                 </p>
               </div>
             )}
