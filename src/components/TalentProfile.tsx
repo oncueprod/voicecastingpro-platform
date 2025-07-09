@@ -489,10 +489,22 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
 
   // Handle sign-in navigation
   const handleSignInRedirect = () => {
-    // This would depend on your app's routing system
-    // For now, we'll just alert - you can replace this with your actual navigation
-    alert('Please sign in to continue. This would redirect to your sign-in page.');
-    // Example: navigate('/signin') or onPageChange('signin')
+    // Try common navigation methods - customize based on your routing system
+    
+    // Option 1: If using React Router
+    // navigate('/signin');
+    
+    // Option 2: If using Next.js router
+    // router.push('/signin');
+    
+    // Option 3: If using a custom page change handler
+    // onPageChange('signin');
+    
+    // Option 4: Direct window navigation (fallback)
+    window.location.href = '/signin';
+    
+    // If none of the above work, you can uncomment this line and customize:
+    // console.log('Please sign in to continue - redirecting to sign-in page');
   };
 
   if (loading) {
