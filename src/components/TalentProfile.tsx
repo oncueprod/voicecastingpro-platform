@@ -68,24 +68,199 @@ interface TalentNotification {
 
 // Enhanced favorites and shortlist management
 class FavoritesManager {
-  // Helper function to clean up old demo data
+  // Helper function to clean up old demo data and optimize storage
   static cleanupDemoData() {
     try {
-      const favorites = JSON.parse(localStorage.getItem('generalFavorites') || '{}');
-      const cleaned = {};
+      console.log('Starting comprehensive storage cleanup...');
       
-      // Only keep non-demo users (remove demo_user_ entries)
+      // Clean up favorites
+      const favorites = JSON.parse(localStorage.getItem('generalFavorites') || '{}');
+      const cleanedFavorites = {};
+      
       Object.keys(favorites).forEach(clientId => {
-        if (!clientId.startsWith('demo_user_')) {
-          cleaned[clientId] = favorites[clientId];
+        if (!clientId.startsWith('demo_user_') && !clientId.startsWith('demo_')) {
+          // Keep only recent favorites (last 50 per user to prevent bloat)
+          const userFavorites = favorites[clientId];
+          if (userFavorites && userFavorites.length > 0) {
+            cleanedFavorites[clientId] = userFavorites.slice(-50);
+          }
         }
       });
       
-      localStorage.setItem('generalFavorites', JSON.stringify(cleaned));
-      console.log('Cleaned up demo data from favorites');
+      // Clean up notifications - keep only recent ones
+      const notifications = JSON.parse(localStorage.getItem('talentNotifications') || '{}');
+      const cleanedNotifications = {};
+      
+      Object.keys(notifications).forEach(talentId => {
+        if (!talentId.startsWith('demo_user_') && !talentId.startsWith('demo_')) {
+          // Keep only last 20 notifications per talent
+          const talentNotifications = notifications[talentId];
+          if (talentNotifications && talentNotifications.length > 0) {
+            cleanedNotifications[talentId] = talentNotifications.slice(-20);
+          }
+        }
+      });
+      
+      // Clean up messages - keep only recent ones
+      const messages = JSON.parse(localStorage.getItem('messages') || '[]');
+      const cleanedMessages = messages.filter((msg: any) => 
+        !msg.fromId?.startsWith('demo_user_') && 
+        !msg.fromId?.startsWith('demo_') &&
+        !msg.toId?.startsWith('demo_user_') && 
+        !msg.toId?.startsWith('demo_')
+      ).slice(-100); // Keep last 100 messages
+      
+      // Clean up sent messages
+      const sentMessages = JSON.parse(localStorage.getItem('sentMessages') || '[]');
+      const cleanedSentMessages = sentMessages.filter((msg: any) => 
+        !msg.talentId?.startsWith('demo_user_') && 
+        !msg.talentId?.startsWith('demo_') &&
+        !msg.clientId?.startsWith('demo_user_') && 
+        !msg.clientId?.startsWith('demo_')
+      ).slice(-100); // Keep last 100 sent messages
+      
+      // Clean up project shortlists
+      const shortlists = JSON.parse(localStorage.getItem('projectShortlists') || '{}');
+      const cleanedShortlists = {};
+      
+      Object.keys(shortlists).forEach(projectId => {
+        if (!projectId.startsWith('demo_project_')) {
+          const projectShortlist = shortlists[projectId];
+          if (projectShortlist && projectShortlist.length > 0) {
+            // Remove demo users from shortlists
+            const filtered = projectShortlist.filter((talent: any) => 
+              !talent.talentId?.startsWith('demo_user_') && 
+              !talent.talentId?.startsWith('demo_')
+            );
+            if (filtered.length > 0) {
+              cleanedShortlists[projectId] = filtered.slice(-50); // Keep last 50 per project
+            }
+          }
+        }
+      });
+      
+      // Update all cleaned data
+      localStorage.setItem('generalFavorites', JSON.stringify(cleanedFavorites));
+      localStorage.setItem('talentNotifications', JSON.stringify(cleanedNotifications));
+      localStorage.setItem('messages', JSON.stringify(cleanedMessages));
+      localStorage.setItem('sentMessages', JSON.stringify(cleanedSentMessages));
+      localStorage.setItem('projectShortlists', JSON.stringify(cleanedShortlists));
+      
+      console.log('Comprehensive cleanup completed:', {
+        favorites: Object.keys(cleanedFavorites).length,
+        notifications: Object.keys(cleanedNotifications).length,
+        messages: cleanedMessages.length,
+        sentMessages: cleanedSentMessages.length,
+        shortlists: Object.keys(cleanedShortlists).length
+      });
+      
       return true;
     } catch (error) {
-      console.error('Error cleaning demo data:', error);
+      console.error('Error during comprehensive cleanup:', error);
+      return false;
+    }
+  }
+
+  // Check current localStorage usage
+  static getStorageInfo() {
+    try {
+      const total = 10 * 1024 * 1024; // 10MB typical limit
+      let used = 0;
+      
+      for (const key in localStorage) {
+        if (localStorage.hasOwnProperty(key)) {
+          used += localStorage[key].length + key.length;
+        }
+      }
+      
+      const percentage = (used / total) * 100;
+      
+      console.log('LocalStorage usage:', {
+        used: `${(used / 1024 / 1024).toFixed(2)}MB`,
+        total: `${(total / 1024 / 1024).toFixed(2)}MB`,
+        percentage: `${percentage.toFixed(1)}%`
+      });
+      
+      return { used, total, percentage };
+    } catch (error) {
+      console.error('Error checking storage:', error);
+      return { used: 0, total: 0, percentage: 0 };
+    }
+  }
+
+  // Manual cleanup function for UI
+  static performManualCleanup() {
+    console.log('Manual cleanup requested...');
+    this.getStorageInfo();
+    
+    if (this.cleanupDemoData()) {
+      console.log('Manual cleanup completed successfully');
+      this.getStorageInfo();
+      return true;
+    }
+    
+    console.log('Manual cleanup failed');
+    return false;
+  }
+  static emergencyCleanup() {
+    try {
+      console.log('Performing emergency storage cleanup...');
+      
+      // Keep only the most essential data
+      const favorites = JSON.parse(localStorage.getItem('generalFavorites') || '{}');
+      const emergencyFavorites = {};
+      
+      Object.keys(favorites).forEach(clientId => {
+        if (!clientId.startsWith('demo_user_') && !clientId.startsWith('demo_')) {
+          // Keep only last 10 favorites per user
+          const userFavorites = favorites[clientId];
+          if (userFavorites && userFavorites.length > 0) {
+            emergencyFavorites[clientId] = userFavorites.slice(-10);
+          }
+        }
+      });
+      
+      // Keep only last 10 notifications per talent
+      const notifications = JSON.parse(localStorage.getItem('talentNotifications') || '{}');
+      const emergencyNotifications = {};
+      
+      Object.keys(notifications).forEach(talentId => {
+        if (!talentId.startsWith('demo_user_') && !talentId.startsWith('demo_')) {
+          const talentNotifications = notifications[talentId];
+          if (talentNotifications && talentNotifications.length > 0) {
+            emergencyNotifications[talentId] = talentNotifications.slice(-10);
+          }
+        }
+      });
+      
+      // Keep only last 20 messages
+      const messages = JSON.parse(localStorage.getItem('messages') || '[]');
+      const emergencyMessages = messages.filter((msg: any) => 
+        !msg.fromId?.startsWith('demo_user_') && 
+        !msg.fromId?.startsWith('demo_') &&
+        !msg.toId?.startsWith('demo_user_') && 
+        !msg.toId?.startsWith('demo_')
+      ).slice(-20);
+      
+      // Keep only last 20 sent messages
+      const sentMessages = JSON.parse(localStorage.getItem('sentMessages') || '[]');
+      const emergencySentMessages = sentMessages.filter((msg: any) => 
+        !msg.talentId?.startsWith('demo_user_') && 
+        !msg.talentId?.startsWith('demo_') &&
+        !msg.clientId?.startsWith('demo_user_') && 
+        !msg.clientId?.startsWith('demo_')
+      ).slice(-20);
+      
+      // Update with minimal data
+      localStorage.setItem('generalFavorites', JSON.stringify(emergencyFavorites));
+      localStorage.setItem('talentNotifications', JSON.stringify(emergencyNotifications));
+      localStorage.setItem('messages', JSON.stringify(emergencyMessages));
+      localStorage.setItem('sentMessages', JSON.stringify(emergencySentMessages));
+      
+      console.log('Emergency cleanup completed');
+      return true;
+    } catch (error) {
+      console.error('Emergency cleanup failed:', error);
       return false;
     }
   }
@@ -96,14 +271,22 @@ class FavoritesManager {
       localStorage.setItem(key, value);
       return true;
     } catch (error) {
-      console.error('localStorage quota exceeded, attempting cleanup...');
+      console.log('localStorage quota exceeded, attempting standard cleanup...');
       if (this.cleanupDemoData()) {
         try {
           localStorage.setItem(key, value);
           return true;
         } catch (retryError) {
-          console.error('Still failed after cleanup:', retryError);
-          return false;
+          console.log('Still failed after standard cleanup, trying emergency cleanup...');
+          if (this.emergencyCleanup()) {
+            try {
+              localStorage.setItem(key, value);
+              return true;
+            } catch (emergencyError) {
+              console.error('Failed even after emergency cleanup:', emergencyError);
+              return false;
+            }
+          }
         }
       }
       return false;
@@ -406,6 +589,23 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
       loadTalentNotifications();
       loadUserProjects();
     }
+    
+    // Add manual cleanup to window for console access
+    (window as any).manualCleanup = () => {
+      console.log('🧹 Manual cleanup requested from console');
+      const result = FavoritesManager.performManualCleanup();
+      if (result) {
+        console.log('✅ Manual cleanup successful - try your action again');
+      } else {
+        console.log('❌ Manual cleanup failed');
+      }
+      return result;
+    };
+    
+    // Add storage info check to window
+    (window as any).checkStorage = () => {
+      return FavoritesManager.getStorageInfo();
+    };
   }, [talentId, user?.id]);
 
   useEffect(() => {
@@ -688,6 +888,9 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     
     console.log('Current state:', { isSaved, userId: user.id, talentId: talent.id, userName: user.name });
     
+    // Check storage before operation
+    FavoritesManager.getStorageInfo();
+    
     if (!isSaved) {
       console.log('Adding to favorites...');
       const success = FavoritesManager.addToGeneralFavorites(user.id, talent.id, talent, user.name);
@@ -695,10 +898,11 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
         setIsSaved(true);
         loadTalentStats(); // Refresh stats
         loadTalentNotifications(); // Refresh notifications
-        console.log(`${talent.name} has been added to your favorites`);
+        console.log(`✅ ${talent.name} has been added to your favorites`);
       } else {
-        console.error('Failed to add to favorites - storage quota exceeded');
-        // You might want to show a user-friendly error message here
+        console.error('❌ Failed to add to favorites - storage quota exceeded');
+        console.log('💡 Try manually clearing browser data or contact support');
+        // Could show a user-friendly notification here
       }
     } else {
       console.log('Removing from favorites...');
@@ -706,9 +910,9 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
       if (success) {
         setIsSaved(false);
         loadTalentStats(); // Refresh stats
-        console.log(`${talent.name} has been removed from your favorites`);
+        console.log(`✅ ${talent.name} has been removed from your favorites`);
       } else {
-        console.error('Failed to remove from favorites - storage quota exceeded');
+        console.error('❌ Failed to remove from favorites - storage quota exceeded');
       }
     }
   };
