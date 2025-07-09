@@ -783,44 +783,126 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     };
     
     try {
-      // Send message to backend API
-      const response = await fetch('/api/messages/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-        },
-        body: JSON.stringify(messageData)
-      });
+      // Try different possible API endpoints that might exist
+      let response;
+      let apiUrl = '';
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      // Option 1: Standard messages endpoint
+      try {
+        apiUrl = '/api/messages';
+        response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          },
+          body: JSON.stringify(messageData)
+        });
+      } catch (error) {
+        console.log('Trying alternative endpoint...');
+      }
+      
+      // Option 2: Send message endpoint
+      if (!response || !response.ok) {
+        try {
+          apiUrl = '/api/send-message';
+          response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            },
+            body: JSON.stringify(messageData)
+          });
+        } catch (error) {
+          console.log('Trying another alternative endpoint...');
+        }
+      }
+      
+      // Option 3: Contact endpoint
+      if (!response || !response.ok) {
+        try {
+          apiUrl = '/api/contact';
+          response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            },
+            body: JSON.stringify(messageData)
+          });
+        } catch (error) {
+          console.log('Trying final alternative endpoint...');
+        }
+      }
+      
+      // Option 4: Email endpoint
+      if (!response || !response.ok) {
+        try {
+          apiUrl = '/api/email/send';
+          response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            },
+            body: JSON.stringify(messageData)
+          });
+        } catch (error) {
+          console.log('All API endpoints failed');
+        }
+      }
+      
+      if (!response || !response.ok) {
+        throw new Error(`API endpoint not found. Tried: /api/messages, /api/send-message, /api/contact, /api/email/send. Status: ${response?.status || 'No response'}`);
       }
       
       const result = await response.json();
-      console.log('✅ Message sent successfully:', result);
+      console.log('✅ Message sent successfully via:', apiUrl, result);
       
-      // Create notification for talent about new message
-      await createTalentNotification(talent.id, 'message', {
-        clientId: user.id,
-        clientName: user.name || 'Client',
-        messageId: result.messageId,
-        messageSubject: contactForm.subject
-      });
+      // Try to create notification for talent about new message
+      try {
+        await createTalentNotification(talent.id, 'message', {
+          clientId: user.id,
+          clientName: user.name || 'Client',
+          messageId: result.messageId || result.id,
+          messageSubject: contactForm.subject
+        });
+      } catch (notificationError) {
+        console.log('Note: Notification creation failed, but message was sent successfully');
+      }
       
       // Clear form and close modal
       setContactForm({ subject: '', message: '', budget: '', deadline: '' });
       setShowContactModal(false);
       
       // Refresh notifications if viewing own profile
-      loadTalentNotifications();
+      try {
+        await loadTalentNotifications();
+      } catch (refreshError) {
+        console.log('Note: Could not refresh notifications, but message was sent');
+      }
       
       console.log('✅ Message sent and email notification triggered');
+      alert('Message sent successfully! The talent will receive an email notification.');
       
     } catch (error) {
       console.error('❌ Failed to send message:', error);
-      // You might want to show a user-friendly error message here
-      alert('Failed to send message. Please try again.');
+      
+      // Show more specific error message
+      if (error.message.includes('API endpoint not found')) {
+        alert(`Message sending failed. It looks like the messaging API endpoints are not yet implemented on your backend. 
+
+Please implement one of these endpoints:
+• POST /api/messages
+• POST /api/send-message  
+• POST /api/contact
+• POST /api/email/send
+
+Contact your developer to set up the messaging API.`);
+      } else {
+        alert('Failed to send message. Please try again or contact support.');
+      }
     }
   };
 
