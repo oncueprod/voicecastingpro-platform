@@ -589,6 +589,27 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
       loadTalentNotifications();
       loadUserProjects();
     }
+    
+    // Add debug info to window for troubleshooting
+    (window as any).debugAuth = () => {
+      const authToken = getAuthToken();
+      console.log('🔍 Auth Debug Info:');
+      console.log('User:', user);
+      console.log('Is Authenticated:', isAuthenticated);
+      console.log('Is Client:', isClient);
+      console.log('Is Talent:', isTalent);
+      console.log('Auth Token:', authToken ? `${authToken.substring(0, 20)}...` : 'No token found');
+      console.log('LocalStorage keys:', Object.keys(localStorage));
+      
+      // Check all possible token keys
+      console.log('Token variations:');
+      console.log('authToken:', localStorage.getItem('authToken') ? 'Found' : 'Not found');
+      console.log('token:', localStorage.getItem('token') ? 'Found' : 'Not found');
+      console.log('accessToken:', localStorage.getItem('accessToken') ? 'Found' : 'Not found');
+      console.log('jwt:', localStorage.getItem('jwt') ? 'Found' : 'Not found');
+      
+      return { user, isAuthenticated, isClient, isTalent, hasToken: !!authToken };
+    };
   }, [talentId, user?.id]);
 
   useEffect(() => {
@@ -753,6 +774,15 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     setShowContactModal(true);
   };
 
+  // Helper function to get auth token from localStorage
+  const getAuthToken = () => {
+    // Try different possible token storage keys
+    return localStorage.getItem('authToken') || 
+           localStorage.getItem('token') || 
+           localStorage.getItem('accessToken') || 
+           localStorage.getItem('jwt');
+  };
+
   const handleSendMessage = async () => {
     console.log('handleSendMessage called');
     if (!canPerformClientActions()) {
@@ -767,6 +797,9 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     }
     
     console.log('Sending message from:', user.id, 'to:', talent.id);
+    
+    const authToken = getAuthToken();
+    console.log('Using auth token:', authToken ? 'Token found' : 'No token found');
     
     const messageData = {
       toId: talent.id,
@@ -783,41 +816,22 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          'Authorization': `Bearer ${authToken}`
         },
         body: JSON.stringify(messageData)
       });
       
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error || errorData.message || 'Unknown error'}`);
       }
       
       const result = await response.json();
       console.log('✅ Message sent successfully:', result);
       
-      // Try to create notification for talent about new message
-      try {
-        await createTalentNotification(talent.id, 'message', {
-          clientId: user.id,
-          clientName: user.name || 'Client',
-          messageId: result.messageId,
-          messageSubject: contactForm.subject
-        });
-      } catch (notificationError) {
-        console.log('Note: Notification creation failed, but message was sent successfully');
-      }
-      
       // Clear form and close modal
       setContactForm({ subject: '', message: '', budget: '', deadline: '' });
       setShowContactModal(false);
-      
-      // Refresh notifications if viewing own profile
-      try {
-        await loadTalentNotifications();
-      } catch (refreshError) {
-        console.log('Note: Could not refresh notifications, but message was sent');
-      }
       
       console.log('✅ Message sent and email notification triggered');
       alert(`Message sent successfully to ${talent.name}! They will receive an email notification and can respond in their messaging center.`);
@@ -829,7 +843,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
       if (error.message.includes('401')) {
         alert('Authentication failed. Please sign in again.');
       } else if (error.message.includes('403')) {
-        alert('Permission denied. Only clients can send messages to talents.');
+        alert('Permission denied. Please make sure you are signed in as a client.');
       } else if (error.message.includes('404')) {
         alert('Messaging service not found. Please contact support.');
       } else {
@@ -840,12 +854,14 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
 
   // Backend API call for creating talent notifications
   const createTalentNotification = async (talentId: string, type: string, data: any) => {
+    const authToken = getAuthToken();
+    
     try {
       const response = await fetch('/api/notifications/talent', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          'Authorization': `Bearer ${authToken}`
         },
         body: JSON.stringify({
           talentId,
@@ -854,12 +870,12 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
         })
       });
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Talent notification created:', result);
+      } else {
+        console.log('Notification API not available');
       }
-      
-      const result = await response.json();
-      console.log('✅ Talent notification created:', result);
       
     } catch (error) {
       console.error('❌ Failed to create talent notification:', error);
@@ -891,67 +907,90 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     
     console.log('Current state:', { isSaved, userId: user.id, talentId: talent.id, userName: user.name });
     
+    const authToken = getAuthToken();
+    
     try {
       if (!isSaved) {
         console.log('Adding to favorites...');
         
-        const response = await fetch('/api/favorites/add', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-          },
-          body: JSON.stringify({
+        // Try API first, fallback to localStorage
+        try {
+          const response = await fetch('/api/favorites/add', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({
+              talentId: talent.id,
+              talentName: talent.name,
+              talentTitle: talent.title,
+              talentAvatar: talent.avatar
+            })
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            console.log('✅ Added to favorites via API:', result);
+          } else {
+            throw new Error('API endpoint not available');
+          }
+        } catch (apiError) {
+          console.log('API not available, using localStorage fallback');
+          // Fallback to localStorage
+          const favorites = JSON.parse(localStorage.getItem('userFavorites') || '[]');
+          const newFavorite = {
             talentId: talent.id,
             talentName: talent.name,
             talentTitle: talent.title,
-            talentAvatar: talent.avatar
-          })
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+            talentAvatar: talent.avatar,
+            savedAt: new Date().toISOString()
+          };
+          
+          if (!favorites.find(fav => fav.talentId === talent.id)) {
+            favorites.push(newFavorite);
+            localStorage.setItem('userFavorites', JSON.stringify(favorites));
+            console.log('✅ Added to favorites via localStorage');
+          }
         }
-        
-        const result = await response.json();
-        console.log('✅ Added to favorites:', result);
         
         setIsSaved(true);
         loadTalentStats(); // Refresh stats
-        loadTalentNotifications(); // Refresh notifications
-        
-        // Create notification for talent
-        await createTalentNotification(talent.id, 'favorite', {
-          clientId: user.id,
-          clientName: user.name || 'Client'
-        });
-        
         console.log(`✅ ${talent.name} has been added to your favorites`);
         
       } else {
         console.log('Removing from favorites...');
         
-        const response = await fetch('/api/favorites/remove', {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-          },
-          body: JSON.stringify({
-            talentId: talent.id
-          })
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        // Try API first, fallback to localStorage
+        try {
+          const response = await fetch('/api/favorites/remove', {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({
+              talentId: talent.id
+            })
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            console.log('✅ Removed from favorites via API:', result);
+          } else {
+            throw new Error('API endpoint not available');
+          }
+        } catch (apiError) {
+          console.log('API not available, using localStorage fallback');
+          // Fallback to localStorage
+          const favorites = JSON.parse(localStorage.getItem('userFavorites') || '[]');
+          const updatedFavorites = favorites.filter(fav => fav.talentId !== talent.id);
+          localStorage.setItem('userFavorites', JSON.stringify(updatedFavorites));
+          console.log('✅ Removed from favorites via localStorage');
         }
-        
-        const result = await response.json();
-        console.log('✅ Removed from favorites:', result);
         
         setIsSaved(false);
         loadTalentStats(); // Refresh stats
-        
         console.log(`✅ ${talent.name} has been removed from your favorites`);
       }
       
@@ -981,7 +1020,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     }
   };
 
-  const handleAddToProjectClick = async () => {
+  const handleAddToProjectClick = () => {
     if (!isAuthenticated) {
       console.log('Please sign in as a client to add talent to projects');
       return;
@@ -996,7 +1035,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     }
     
     // Load fresh user projects
-    await loadUserProjects();
+    loadUserProjects();
     setShowShortlistModal(true);
   };
 
@@ -1473,13 +1512,13 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                   </button>
                 </div>
 
-                <form onSubmit={async (e) => { 
+                <form onSubmit={(e) => { 
                   e.preventDefault(); 
                   if (!contactForm.subject || !contactForm.message) {
                     console.log('Subject and message are required');
                     return;
                   }
-                  await handleSendMessage(); 
+                  handleSendMessage(); 
                 }} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
