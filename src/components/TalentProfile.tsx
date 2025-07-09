@@ -769,103 +769,39 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     console.log('Sending message from:', user.id, 'to:', talent.id);
     
     const messageData = {
-      fromId: user.id,
-      fromName: user.name || 'Client',
-      fromType: 'client',
       toId: talent.id,
       toName: talent.name,
-      toType: 'talent',
       subject: contactForm.subject,
       message: contactForm.message,
       budget: contactForm.budget,
-      deadline: contactForm.deadline,
-      messageType: 'project_inquiry'
+      deadline: contactForm.deadline
     };
     
     try {
-      // Try different possible API endpoints that might exist
-      let response;
-      let apiUrl = '';
+      // Send message to backend API
+      const response = await fetch('/api/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify(messageData)
+      });
       
-      // Option 1: Standard messages endpoint
-      try {
-        apiUrl = '/api/messages';
-        response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-          },
-          body: JSON.stringify(messageData)
-        });
-      } catch (error) {
-        console.log('Trying alternative endpoint...');
-      }
-      
-      // Option 2: Send message endpoint
-      if (!response || !response.ok) {
-        try {
-          apiUrl = '/api/send-message';
-          response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-            },
-            body: JSON.stringify(messageData)
-          });
-        } catch (error) {
-          console.log('Trying another alternative endpoint...');
-        }
-      }
-      
-      // Option 3: Contact endpoint
-      if (!response || !response.ok) {
-        try {
-          apiUrl = '/api/contact';
-          response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-            },
-            body: JSON.stringify(messageData)
-          });
-        } catch (error) {
-          console.log('Trying final alternative endpoint...');
-        }
-      }
-      
-      // Option 4: Email endpoint
-      if (!response || !response.ok) {
-        try {
-          apiUrl = '/api/email/send';
-          response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-            },
-            body: JSON.stringify(messageData)
-          });
-        } catch (error) {
-          console.log('All API endpoints failed');
-        }
-      }
-      
-      if (!response || !response.ok) {
-        throw new Error(`API endpoint not found. Tried: /api/messages, /api/send-message, /api/contact, /api/email/send. Status: ${response?.status || 'No response'}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
       
       const result = await response.json();
-      console.log('✅ Message sent successfully via:', apiUrl, result);
+      console.log('✅ Message sent successfully:', result);
       
       // Try to create notification for talent about new message
       try {
         await createTalentNotification(talent.id, 'message', {
           clientId: user.id,
           clientName: user.name || 'Client',
-          messageId: result.messageId || result.id,
+          messageId: result.messageId,
           messageSubject: contactForm.subject
         });
       } catch (notificationError) {
@@ -884,24 +820,20 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
       }
       
       console.log('✅ Message sent and email notification triggered');
-      alert('Message sent successfully! The talent will receive an email notification.');
+      alert(`Message sent successfully to ${talent.name}! They will receive an email notification and can respond in their messaging center.`);
       
     } catch (error) {
       console.error('❌ Failed to send message:', error);
       
-      // Show more specific error message
-      if (error.message.includes('API endpoint not found')) {
-        alert(`Message sending failed. It looks like the messaging API endpoints are not yet implemented on your backend. 
-
-Please implement one of these endpoints:
-• POST /api/messages
-• POST /api/send-message  
-• POST /api/contact
-• POST /api/email/send
-
-Contact your developer to set up the messaging API.`);
+      // Show specific error message
+      if (error.message.includes('401')) {
+        alert('Authentication failed. Please sign in again.');
+      } else if (error.message.includes('403')) {
+        alert('Permission denied. Only clients can send messages to talents.');
+      } else if (error.message.includes('404')) {
+        alert('Messaging service not found. Please contact support.');
       } else {
-        alert('Failed to send message. Please try again or contact support.');
+        alert(`Failed to send message: ${error.message}`);
       }
     }
   };
