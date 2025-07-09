@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
+import { SocketProvider } from './contexts/SocketContext';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import FeaturedTalent from './components/FeaturedTalent';
@@ -268,29 +269,31 @@ function App() {
 
   return (
     <AuthProvider>
-      <div className="min-h-screen bg-slate-900">
-        {renderPage()}
-        <ScrollToTop />
-        {renderBackground()}
-        
-        {/* Admin Login Modal */}
-        {showAdminLogin && (
-          <AdminLogin
-            onClose={() => setShowAdminLogin(false)}
-            onSuccess={() => {
-              setShowAdminLogin(false);
-              setShowAdminDashboard(true);
-            }}
-          />
-        )}
+      <SocketProvider>
+        <div className="min-h-screen bg-slate-900">
+          {renderPage()}
+          <ScrollToTop />
+          {renderBackground()}
+          
+          {/* Admin Login Modal */}
+          {showAdminLogin && (
+            <AdminLogin
+              onClose={() => setShowAdminLogin(false)}
+              onSuccess={() => {
+                setShowAdminLogin(false);
+                setShowAdminDashboard(true);
+              }}
+            />
+          )}
 
-        {/* Admin Dashboard Modal */}
-        {showAdminDashboard && (
-          <AdminDashboard
-            onClose={() => setShowAdminDashboard(false)}
-          />
-        )}
-      </div>
+          {/* Admin Dashboard Modal */}
+          {showAdminDashboard && (
+            <AdminDashboard
+              onClose={() => setShowAdminDashboard(false)}
+            />
+          )}
+        </div>
+      </SocketProvider>
     </AuthProvider>
   );
 }
