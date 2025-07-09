@@ -1,5 +1,6 @@
 import React from 'react';
 import { Shield, Clock, Award, Users, Star, CheckCircle, Check, DollarSign } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface WhyChooseProps {
   onAuthClick: (type: 'signin' | 'signup') => void;
@@ -7,6 +8,8 @@ interface WhyChooseProps {
 }
 
 const WhyChoose: React.FC<WhyChooseProps> = ({ onAuthClick, onPageChange }) => {
+  const { isAuthenticated, isClient, isTalent } = useAuth();
+
   const features = [
     {
       icon: Shield,
@@ -33,6 +36,30 @@ const WhyChoose: React.FC<WhyChooseProps> = ({ onAuthClick, onPageChange }) => {
       color: 'text-orange-400'
     }
   ];
+
+  const handleClientSignUp = () => {
+    if (isAuthenticated && isClient) {
+      // Already signed in as client, go to post project
+      onPageChange('post-project');
+    } else {
+      // Not signed in or not client, show signup
+      onAuthClick('signup');
+    }
+  };
+
+  const handleSubscriptionClick = () => {
+    if (isAuthenticated && isClient) {
+      // Logged in as client - show message that subscriptions are for talent
+      alert('Subscriptions are for voice talent only. As a client, you can post projects for free!');
+      return;
+    } else if (isAuthenticated && isTalent) {
+      // Logged in as talent - go directly to talent subscription page
+      onPageChange('subscription-plans');
+    } else {
+      // Not logged in - go to public subscription page
+      onPageChange('subscription-plans-public');
+    }
+  };
 
   return (
     <section className="py-20 bg-slate-800 relative overflow-hidden">
@@ -104,10 +131,10 @@ const WhyChoose: React.FC<WhyChooseProps> = ({ onAuthClick, onPageChange }) => {
               </ul>
               
               <button
-                onClick={() => onAuthClick('signup')}
+                onClick={handleClientSignUp}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg transition-colors font-medium"
               >
-                Sign Up Free
+                {isAuthenticated && isClient ? 'Start Posting Projects' : 'Sign Up Free'}
               </button>
             </div>
             
@@ -137,7 +164,7 @@ const WhyChoose: React.FC<WhyChooseProps> = ({ onAuthClick, onPageChange }) => {
               </ul>
               
               <button
-                onClick={() => onPageChange('subscription-plans-public')}
+                onClick={handleSubscriptionClick}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg transition-colors font-medium"
               >
                 Subscribe Now
@@ -175,7 +202,7 @@ const WhyChoose: React.FC<WhyChooseProps> = ({ onAuthClick, onPageChange }) => {
               </ul>
               
               <button
-                onClick={() => onPageChange('subscription-plans-public')}
+                onClick={handleSubscriptionClick}
                 className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg transition-colors font-medium"
               >
                 Subscribe Now
