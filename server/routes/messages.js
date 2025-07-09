@@ -71,6 +71,114 @@ const filterMessageContent = async (content) => {
   }
 };
 
+// NEW: Direct message endpoint for talent contact (matches frontend POST /api/messages)
+router.post('/', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { toId, toName, subject, message, budget, deadline } = req.body;
+    
+    if (!toId || !message || !subject) {
+      return res.status(400).json({ error: 'Recipient ID, subject, and message are required' });
+    }
+    
+    console.log('Processing direct message:', { from: userId, to: toId, subject });
+    
+    // Create or find existing conversation
+    let conversationResult = await pool.query(
+      `SELECT * FROM conversations 
+       WHERE participants @> ARRAY[$1, $2]::uuid[] 
+       AND participants <@ ARRAY[$1, $2]::uuid[]`,
+      [userId, toId]
+    );
+    
+    let conversation;
+    if (conversationResult.rows.length === 0) {
+      // Create new conversation
+      const newConversationResult = await pool.query(
+        `INSERT INTO conversations 
+         (participants, project_title) 
+         VALUES ($1, $2) 
+         RETURNING *`,
+        [[userId, toId], subject]
+      );
+      conversation = newConversationResult.rows[0];
+      console.log('Created new conversation:', conversation.id);
+    } else {
+      conversation = conversationResult.rows[0];
+      console.log('Using existing conversation:', conversation.id);
+    }
+    
+    // Filter message content
+    const { filteredContent, isFiltered } = await filterMessageContent(message);
+    
+    // Create the message
+    const messageResult = await pool.query(
+      `INSERT INTO messages 
+       (conversation_id, sender_id, recipient_id, content, filtered_content, is_filtered, type, metadata) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+       RETURNING *`,
+      [
+        conversation.id,
+        userId,
+        toId,
+        message,
+        isFiltered ? filteredContent : null,
+        isFiltered,
+        'text',
+        JSON.stringify({ 
+          subject, 
+          budget, 
+          deadline,
+          messageType: 'project_inquiry',
+          originalSubject: subject
+        })
+      ]
+    );
+    
+    // Update conversation last message timestamp
+    await pool.query(
+      `UPDATE conversations 
+       SET last_message_at = NOW() 
+       WHERE id = $1`,
+      [conversation.id]
+    );
+    
+    console.log('Message created successfully:', messageResult.rows[0].id);
+    
+    // Send email notification using your existing service
+    try {
+      const { sendMessageNotification } = await import('../services/emailNotifications.js');
+      await sendMessageNotification({
+        recipient_id: toId,
+        sender_id: userId,
+        subject: subject,
+        content: message,
+        metadata: { 
+          budget, 
+          deadline, 
+          conversationId: conversation.id,
+          messageType: 'project_inquiry'
+        }
+      });
+      console.log('Email notification sent successfully');
+    } catch (emailError) {
+      console.error('Email notification failed:', emailError);
+      // Don't fail the request if email fails
+    }
+    
+    res.status(201).json({ 
+      success: true,
+      messageId: messageResult.rows[0].id,
+      conversationId: conversation.id,
+      message: 'Message sent and email notification delivered'
+    });
+    
+  } catch (error) {
+    console.error('Direct message error:', error);
+    res.status(500).json({ error: 'Server error while sending message' });
+  }
+});
+
 // Get conversations for user
 router.get('/conversations', authenticateToken, async (req, res) => {
   try {
