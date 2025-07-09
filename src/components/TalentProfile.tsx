@@ -55,11 +55,13 @@ interface TalentStats {
 
 interface TalentNotification {
   id: string;
-  type: 'favorite' | 'shortlist';
+  type: 'favorite' | 'shortlist' | 'message';
   clientId: string;
   clientName: string;
   projectId?: string;
   projectTitle?: string;
+  messageId?: string;
+  messageSubject?: string;
   createdAt: string;
   read: boolean;
 }
@@ -67,7 +69,7 @@ interface TalentNotification {
 // Enhanced favorites and shortlist management
 class FavoritesManager {
   // Helper function to create talent notifications
-  static createTalentNotification(talentId: string, type: 'favorite' | 'shortlist', clientData: any, projectData?: any) {
+  static createTalentNotification(talentId: string, type: 'favorite' | 'shortlist' | 'message', clientData: any, projectData?: any, messageData?: any) {
     const notifications = JSON.parse(localStorage.getItem('talentNotifications') || '{}');
     
     if (!notifications[talentId]) {
@@ -81,6 +83,8 @@ class FavoritesManager {
       clientName: clientData.clientName,
       projectId: projectData?.projectId,
       projectTitle: projectData?.projectTitle,
+      messageId: messageData?.messageId,
+      messageSubject: messageData?.messageSubject,
       createdAt: new Date().toISOString(),
       read: false
     };
@@ -207,7 +211,12 @@ class FavoritesManager {
   // Get talent notifications
   static getTalentNotifications(talentId: string) {
     const notifications = JSON.parse(localStorage.getItem('talentNotifications') || '{}');
-    return notifications[talentId] || [];
+    const talentNotifications = notifications[talentId] || [];
+    
+    // Sort by date (newest first)
+    return talentNotifications.sort((a: any, b: any) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
   }
 
   // Mark notifications as read
@@ -486,10 +495,12 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
       return;
     }
     
+    const messageId = Date.now().toString();
+    
     // Store in messages for messaging center
     const messages = JSON.parse(localStorage.getItem('messages') || '[]');
     const newMessage = {
-      id: Date.now().toString(),
+      id: messageId,
       fromId: user.id,
       fromName: user.name || 'Client',
       fromType: 'client',
@@ -507,6 +518,21 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     
     messages.push(newMessage);
     localStorage.setItem('messages', JSON.stringify(messages));
+    
+    // Create notification for talent about new message
+    FavoritesManager.createTalentNotification(
+      talent.id,
+      'message',
+      {
+        clientId: user.id,
+        clientName: user.name || 'Client'
+      },
+      undefined,
+      {
+        messageId: messageId,
+        messageSubject: contactForm.subject
+      }
+    );
     
     // Also store in sentMessages for backward compatibility
     const sentMessages = JSON.parse(localStorage.getItem('sentMessages') || '[]');
@@ -742,12 +768,19 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                               <span className="text-white font-medium">{notification.clientName}</span>
                               <span className="text-gray-300">favorited your profile</span>
                             </div>
-                          ) : (
+                          ) : notification.type === 'shortlist' ? (
                             <div className="flex items-center gap-2">
                               <Briefcase className="h-4 w-4 text-green-400" />
                               <span className="text-white font-medium">{notification.clientName}</span>
                               <span className="text-gray-300">shortlisted you for</span>
                               <span className="text-blue-400 font-medium">{notification.projectTitle}</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <Send className="h-4 w-4 text-blue-400" />
+                              <span className="text-white font-medium">{notification.clientName}</span>
+                              <span className="text-gray-300">sent you a message:</span>
+                              <span className="text-blue-400 font-medium">"{notification.messageSubject}"</span>
                             </div>
                           )}
                           <p className="text-xs text-gray-400 mt-1">
@@ -765,7 +798,6 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
             )}
           </>
         )}
-        
         
         {/* Header Section */}
         <div className="bg-slate-800 rounded-xl shadow-lg p-8 mb-8 border border-gray-700">
