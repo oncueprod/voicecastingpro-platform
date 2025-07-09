@@ -589,23 +589,6 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
       loadTalentNotifications();
       loadUserProjects();
     }
-    
-    // Add manual cleanup to window for console access
-    (window as any).manualCleanup = () => {
-      console.log('🧹 Manual cleanup requested from console');
-      const result = FavoritesManager.performManualCleanup();
-      if (result) {
-        console.log('✅ Manual cleanup successful - try your action again');
-      } else {
-        console.log('❌ Manual cleanup failed');
-      }
-      return result;
-    };
-    
-    // Add storage info check to window
-    (window as any).checkStorage = () => {
-      return FavoritesManager.getStorageInfo();
-    };
   }, [talentId, user?.id]);
 
   useEffect(() => {
@@ -770,7 +753,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     setShowContactModal(true);
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     console.log('handleSendMessage called');
     if (!canPerformClientActions()) {
       console.log('Cannot perform client actions - authentication required');
@@ -785,13 +768,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     
     console.log('Sending message from:', user.id, 'to:', talent.id);
     
-    const messageId = Date.now().toString();
-    const currentTime = new Date().toISOString();
-    
-    // Store in messages for messaging center
-    const messages = JSON.parse(localStorage.getItem('messages') || '[]');
-    const newMessage = {
-      id: messageId,
+    const messageData = {
       fromId: user.id,
       fromName: user.name || 'Client',
       fromType: 'client',
@@ -802,69 +779,81 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
       message: contactForm.message,
       budget: contactForm.budget,
       deadline: contactForm.deadline,
-      sentAt: currentTime,
-      status: 'sent',
-      read: false
+      messageType: 'project_inquiry'
     };
     
-    messages.push(newMessage);
-    
-    // Use safe localStorage method
-    if (FavoritesManager.safeSetItem('messages', JSON.stringify(messages))) {
-      console.log('Message stored in messages array, total messages:', messages.length);
-    } else {
-      console.error('Failed to store message due to storage quota');
-    }
-    
-    // Create notification for talent about new message
-    FavoritesManager.createTalentNotification(
-      talent.id,
-      'message',
-      {
-        clientId: user.id,
-        clientName: user.name || 'Client'
-      },
-      undefined,
-      {
-        messageId: messageId,
-        messageSubject: contactForm.subject
+    try {
+      // Send message to backend API
+      const response = await fetch('/api/messages/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify(messageData)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    );
-    
-    // Also store in sentMessages for backward compatibility
-    const sentMessages = JSON.parse(localStorage.getItem('sentMessages') || '[]');
-    sentMessages.push({
-      id: Date.now(),
-      talentId: talent.id,
-      talentName: talent.name,
-      clientId: user.id,
-      clientName: user.name || 'Client',
-      subject: contactForm.subject,
-      message: contactForm.message,
-      budget: contactForm.budget,
-      deadline: contactForm.deadline,
-      sentAt: currentTime,
-      status: 'sent'
-    });
-    
-    if (FavoritesManager.safeSetItem('sentMessages', JSON.stringify(sentMessages))) {
-      console.log('Message also stored in sentMessages array, total sent messages:', sentMessages.length);
-    } else {
-      console.error('Failed to store sent message due to storage quota');
+      
+      const result = await response.json();
+      console.log('✅ Message sent successfully:', result);
+      
+      // Create notification for talent about new message
+      await createTalentNotification(talent.id, 'message', {
+        clientId: user.id,
+        clientName: user.name || 'Client',
+        messageId: result.messageId,
+        messageSubject: contactForm.subject
+      });
+      
+      // Clear form and close modal
+      setContactForm({ subject: '', message: '', budget: '', deadline: '' });
+      setShowContactModal(false);
+      
+      // Refresh notifications if viewing own profile
+      loadTalentNotifications();
+      
+      console.log('✅ Message sent and email notification triggered');
+      
+    } catch (error) {
+      console.error('❌ Failed to send message:', error);
+      // You might want to show a user-friendly error message here
+      alert('Failed to send message. Please try again.');
     }
-    
-    // Clear form and close modal
-    setContactForm({ subject: '', message: '', budget: '', deadline: '' });
-    setShowContactModal(false);
-    
-    // Refresh notifications if viewing own profile
-    loadTalentNotifications();
-    
-    console.log(`Message sent to ${talent.name} successfully`);
+  };
+
+  // Backend API call for creating talent notifications
+  const createTalentNotification = async (talentId: string, type: string, data: any) => {
+    try {
+      const response = await fetch('/api/notifications/talent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify({
+          talentId,
+          type,
+          ...data
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('✅ Talent notification created:', result);
+      
+    } catch (error) {
+      console.error('❌ Failed to create talent notification:', error);
+    }
   };
 
   // Enhanced save functionality - Tier 1: General Favorites
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     console.log('handleSaveProfile called');
     if (!talent) {
       console.log('No talent data available');
@@ -888,32 +877,73 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     
     console.log('Current state:', { isSaved, userId: user.id, talentId: talent.id, userName: user.name });
     
-    // Check storage before operation
-    FavoritesManager.getStorageInfo();
-    
-    if (!isSaved) {
-      console.log('Adding to favorites...');
-      const success = FavoritesManager.addToGeneralFavorites(user.id, talent.id, talent, user.name);
-      if (success) {
+    try {
+      if (!isSaved) {
+        console.log('Adding to favorites...');
+        
+        const response = await fetch('/api/favorites/add', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          },
+          body: JSON.stringify({
+            talentId: talent.id,
+            talentName: talent.name,
+            talentTitle: talent.title,
+            talentAvatar: talent.avatar
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('✅ Added to favorites:', result);
+        
         setIsSaved(true);
         loadTalentStats(); // Refresh stats
         loadTalentNotifications(); // Refresh notifications
+        
+        // Create notification for talent
+        await createTalentNotification(talent.id, 'favorite', {
+          clientId: user.id,
+          clientName: user.name || 'Client'
+        });
+        
         console.log(`✅ ${talent.name} has been added to your favorites`);
+        
       } else {
-        console.error('❌ Failed to add to favorites - storage quota exceeded');
-        console.log('💡 Try manually clearing browser data or contact support');
-        // Could show a user-friendly notification here
-      }
-    } else {
-      console.log('Removing from favorites...');
-      const success = FavoritesManager.removeFromGeneralFavorites(user.id, talent.id);
-      if (success) {
+        console.log('Removing from favorites...');
+        
+        const response = await fetch('/api/favorites/remove', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          },
+          body: JSON.stringify({
+            talentId: talent.id
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('✅ Removed from favorites:', result);
+        
         setIsSaved(false);
         loadTalentStats(); // Refresh stats
+        
         console.log(`✅ ${talent.name} has been removed from your favorites`);
-      } else {
-        console.error('❌ Failed to remove from favorites - storage quota exceeded');
       }
+      
+    } catch (error) {
+      console.error('❌ Failed to update favorites:', error);
+      alert('Failed to update favorites. Please try again.');
     }
   };
 
@@ -937,7 +967,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     }
   };
 
-  const handleAddToProjectClick = () => {
+  const handleAddToProjectClick = async () => {
     if (!isAuthenticated) {
       console.log('Please sign in as a client to add talent to projects');
       return;
@@ -952,7 +982,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     }
     
     // Load fresh user projects
-    loadUserProjects();
+    await loadUserProjects();
     setShowShortlistModal(true);
   };
 
@@ -1429,13 +1459,13 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                   </button>
                 </div>
 
-                <form onSubmit={(e) => { 
+                <form onSubmit={async (e) => { 
                   e.preventDefault(); 
                   if (!contactForm.subject || !contactForm.message) {
                     console.log('Subject and message are required');
                     return;
                   }
-                  handleSendMessage(); 
+                  await handleSendMessage(); 
                 }} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
