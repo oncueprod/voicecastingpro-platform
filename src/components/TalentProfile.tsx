@@ -403,7 +403,8 @@ class NotificationSystem {
     notification.style.cssText = `
       position: fixed !important;
       top: 20px !important;
-      right: 20px !important;
+      left: 50% !important;
+      transform: translateX(-50%) translateY(-100px) !important;
       z-index: 999999 !important;
       padding: 16px 24px !important;
       border-radius: 8px !important;
@@ -411,14 +412,16 @@ class NotificationSystem {
       font-family: system-ui, -apple-system, sans-serif !important;
       font-size: 14px !important;
       font-weight: 500 !important;
-      max-width: 400px !important;
+      max-width: 90vw !important;
+      width: auto !important;
       min-width: 300px !important;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
       transition: all 0.3s ease !important;
-      transform: translateX(100%) !important;
-      ${type === 'success' ? 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;' : ''}
-      ${type === 'error' ? 'background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%) !important;' : ''}
-      ${type === 'info' ? 'background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%) !important;' : ''}
+      text-align: center !important;
+      word-wrap: break-word !important;
+      ${type === 'success' ? 'background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;' : ''}
+      ${type === 'error' ? 'background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;' : ''}
+      ${type === 'info' ? 'background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;' : ''}
       border: none !important;
       outline: none !important;
     `;
@@ -430,23 +433,23 @@ class NotificationSystem {
     // Add to DOM
     document.body.appendChild(notification);
     
-    // Animate in
+    // Animate in from top
     setTimeout(() => {
-      notification.style.transform = 'translateX(0) !important';
+      notification.style.transform = 'translateX(-50%) translateY(0) !important';
     }, 10);
     
-    // Auto remove after 4 seconds
+    // Auto remove after 5 seconds
     setTimeout(() => {
       if (document.body.contains(notification)) {
         notification.style.opacity = '0';
-        notification.style.transform = 'translateX(100%)';
+        notification.style.transform = 'translateX(-50%) translateY(-100px) !important';
         setTimeout(() => {
           if (document.body.contains(notification)) {
             document.body.removeChild(notification);
           }
         }, 300);
       }
-    }, 4000);
+    }, 5000);
 
     // Also clear any notifications that might appear after ours
     setTimeout(() => {
