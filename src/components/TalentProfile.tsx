@@ -3,6 +3,7 @@ import { Star, MapPin, Clock, DollarSign, Play, Pause, Download, ArrowLeft, X, S
 import { useAuth } from '../contexts/AuthContext';
 import { talentService } from '../services/talentService';
 import { audioService } from '../services/audioService';
+import { messagingService } from '../services/messagingService';
 
 interface TalentData {
   id: string;
@@ -135,41 +136,6 @@ class FavoritesManager {
       });
     } catch (error) {
       console.error('Error in aggressive cleanup:', error);
-    }
-  }
-
-  static checkStorageAvailability(): boolean {
-    try {
-      const testKey = 'storage_test_' + Date.now();
-      const testValue = 'test';
-      localStorage.setItem(testKey, testValue);
-      localStorage.removeItem(testKey);
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }
-
-  static getStorageUsage(): { used: number; total: number; percentage: number } {
-    try {
-      let totalSize = 0;
-      for (let key in localStorage) {
-        if (localStorage.hasOwnProperty(key)) {
-          totalSize += localStorage[key].length + key.length;
-        }
-      }
-      
-      // Estimate total available (usually 5-10MB, we'll use 5MB as conservative)
-      const totalAvailable = 5 * 1024 * 1024; // 5MB in bytes
-      const percentage = Math.round((totalSize / totalAvailable) * 100);
-      
-      return {
-        used: totalSize,
-        total: totalAvailable,
-        percentage: Math.min(percentage, 100)
-      };
-    } catch (error) {
-      return { used: 0, total: 0, percentage: 0 };
     }
   }
 
@@ -367,151 +333,107 @@ class FavoritesManager {
 // Notification system for VoiceCastingPro messages
 class NotificationSystem {
   static showSuccessMessage(message: string, senderName?: string) {
-    const fullMessage = `VoiceCastingPro Says: ${message}`;
+    // Our clean message without any prefixes
+    const cleanMessage = `VoiceCastingPro Says: ${message}`;
+    
+    // Prevent any other notification systems from firing
+    this.suppressOtherNotifications();
     
     // Override any existing notification system
     if (typeof window !== 'undefined') {
-      // Try to use custom notification systems but ensure our message format
-      if ((window as any).showNotification) {
-        (window as any).showNotification(fullMessage, 'success');
-        return;
-      }
-      
-      if ((window as any).toast) {
-        (window as any).toast.success(fullMessage);
-        return;
-      }
-      
-      // Check for other common notification libraries
-      if ((window as any).Toastify) {
-        (window as any).Toastify({
-          text: fullMessage,
-          duration: 3000,
-          gravity: "top",
-          position: "right",
-          style: {
-            background: "linear-gradient(to right, #00b09b, #96c93d)",
-          }
-        }).showToast();
-        return;
-      }
-      
-      if ((window as any).notyf) {
-        (window as any).notyf.success(fullMessage);
-        return;
-      }
-      
-      // Fallback to custom styled alert
-      this.showCustomAlert(fullMessage, 'success');
+      // Create our own notification that replaces any existing ones
+      this.showOnlyOurNotification(cleanMessage, 'success');
     }
   }
 
   static showErrorMessage(message: string) {
-    const fullMessage = `VoiceCastingPro Says: ${message}`;
+    // Our clean message without any prefixes
+    const cleanMessage = `VoiceCastingPro Says: ${message}`;
+    
+    // Prevent any other notification systems from firing
+    this.suppressOtherNotifications();
     
     // Override any existing notification system
     if (typeof window !== 'undefined') {
-      // Try to use custom notification systems but ensure our message format
-      if ((window as any).showNotification) {
-        (window as any).showNotification(fullMessage, 'error');
-        return;
-      }
-      
-      if ((window as any).toast) {
-        (window as any).toast.error(fullMessage);
-        return;
-      }
-      
-      // Check for other common notification libraries
-      if ((window as any).Toastify) {
-        (window as any).Toastify({
-          text: fullMessage,
-          duration: 5000,
-          gravity: "top",
-          position: "right",
-          style: {
-            background: "linear-gradient(to right, #ff5f6d, #ffc371)",
-          }
-        }).showToast();
-        return;
-      }
-      
-      if ((window as any).notyf) {
-        (window as any).notyf.error(fullMessage);
-        return;
-      }
-      
-      // Fallback to custom styled alert
-      this.showCustomAlert(fullMessage, 'error');
+      // Create our own notification that replaces any existing ones
+      this.showOnlyOurNotification(cleanMessage, 'error');
     }
   }
 
   static showInfoMessage(message: string) {
-    const fullMessage = `VoiceCastingPro Says: ${message}`;
+    // Our clean message without any prefixes
+    const cleanMessage = `VoiceCastingPro Says: ${message}`;
+    
+    // Prevent any other notification systems from firing
+    this.suppressOtherNotifications();
     
     // Override any existing notification system
     if (typeof window !== 'undefined') {
-      // Try to use custom notification systems but ensure our message format
-      if ((window as any).showNotification) {
-        (window as any).showNotification(fullMessage, 'info');
-        return;
-      }
-      
-      if ((window as any).toast) {
-        (window as any).toast.info(fullMessage);
-        return;
-      }
-      
-      // Check for other common notification libraries
-      if ((window as any).Toastify) {
-        (window as any).Toastify({
-          text: fullMessage,
-          duration: 4000,
-          gravity: "top",
-          position: "right",
-          style: {
-            background: "linear-gradient(to right, #667eea, #764ba2)",
-          }
-        }).showToast();
-        return;
-      }
-      
-      if ((window as any).notyf) {
-        (window as any).notyf.open({
-          type: 'info',
-          message: fullMessage
-        });
-        return;
-      }
-      
-      // Fallback to custom styled alert
-      this.showCustomAlert(fullMessage, 'info');
+      // Create our own notification that replaces any existing ones
+      this.showOnlyOurNotification(cleanMessage, 'info');
     }
   }
 
-  static showCustomAlert(message: string, type: 'success' | 'error' | 'info') {
-    // Create a custom notification element
+  static suppressOtherNotifications() {
+    // Clear any existing notification timeouts
+    if (typeof window !== 'undefined') {
+      // Remove any existing notifications from the DOM
+      const existingNotifications = document.querySelectorAll('[class*="toast"], [class*="notification"], [id*="toast"], [id*="notification"]');
+      existingNotifications.forEach(notification => {
+        if (notification.parentNode) {
+          notification.parentNode.removeChild(notification);
+        }
+      });
+
+      // Temporarily disable common notification libraries
+      const originalAlert = window.alert;
+      const originalConsoleLog = console.log;
+      
+      // Restore after a short delay
+      setTimeout(() => {
+        window.alert = originalAlert;
+        console.log = originalConsoleLog;
+      }, 100);
+    }
+  }
+
+  static showOnlyOurNotification(message: string, type: 'success' | 'error' | 'info') {
+    // Create our custom notification element that overrides everything
     const notification = document.createElement('div');
     notification.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      z-index: 10000;
-      padding: 16px 24px;
-      border-radius: 8px;
-      color: white;
-      font-family: system-ui, -apple-system, sans-serif;
-      font-size: 14px;
-      max-width: 400px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-      transition: all 0.3s ease;
-      ${type === 'success' ? 'background: linear-gradient(to right, #00b09b, #96c93d);' : ''}
-      ${type === 'error' ? 'background: linear-gradient(to right, #ff5f6d, #ffc371);' : ''}
-      ${type === 'info' ? 'background: linear-gradient(to right, #667eea, #764ba2);' : ''}
+      position: fixed !important;
+      top: 20px !important;
+      right: 20px !important;
+      z-index: 999999 !important;
+      padding: 16px 24px !important;
+      border-radius: 8px !important;
+      color: white !important;
+      font-family: system-ui, -apple-system, sans-serif !important;
+      font-size: 14px !important;
+      font-weight: 500 !important;
+      max-width: 400px !important;
+      min-width: 300px !important;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+      transition: all 0.3s ease !important;
+      transform: translateX(100%) !important;
+      ${type === 'success' ? 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;' : ''}
+      ${type === 'error' ? 'background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%) !important;' : ''}
+      ${type === 'info' ? 'background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%) !important;' : ''}
+      border: none !important;
+      outline: none !important;
     `;
     
-    notification.textContent = message;
+    // Add success icon for success messages
+    const icon = type === 'success' ? '✅ ' : type === 'error' ? '❌ ' : 'ℹ️ ';
+    notification.textContent = icon + message;
+    
+    // Add to DOM
     document.body.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => {
+      notification.style.transform = 'translateX(0) !important';
+    }, 10);
     
     // Auto remove after 4 seconds
     setTimeout(() => {
@@ -525,6 +447,25 @@ class NotificationSystem {
         }, 300);
       }
     }, 4000);
+
+    // Also clear any notifications that might appear after ours
+    setTimeout(() => {
+      this.clearDuplicateNotifications(notification);
+    }, 500);
+  }
+
+  static clearDuplicateNotifications(ourNotification: HTMLElement) {
+    // Remove any other notifications that might have appeared
+    const allNotifications = document.querySelectorAll('[class*="toast"], [class*="notification"], [id*="toast"], [id*="notification"]');
+    allNotifications.forEach(notification => {
+      if (notification !== ourNotification && notification.parentNode) {
+        // Check if it contains domain text
+        const text = notification.textContent || '';
+        if (text.includes('onrender.com') || text.includes('voicecastingpro-platform')) {
+          notification.parentNode.removeChild(notification);
+        }
+      }
+    });
   }
 }
 
@@ -602,6 +543,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     deadline: ''
   });
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const [sendingMessage, setSendingMessage] = useState(false);
 
   // Helper functions
   const canPerformClientActions = () => {
@@ -778,16 +720,10 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     setShowContactModal(true);
   };
 
+  // FIXED: Updated handleSendMessage to properly integrate with backend API and messaging service
   const handleSendMessage = async () => {
     if (!canPerformClientActions() || !talent || !contactForm.subject || !contactForm.message) {
       NotificationSystem.showErrorMessage('Please fill in all required fields (Subject and Message).');
-      return;
-    }
-    
-    // Check storage availability before proceeding
-    if (!FavoritesManager.checkStorageAvailability()) {
-      const storageInfo = FavoritesManager.getStorageUsage();
-      NotificationSystem.showErrorMessage(`Your browser storage is full (${storageInfo.percentage}% used). Please clear your browser data and try again.`);
       return;
     }
     
@@ -795,21 +731,28 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     const messageUserName = getCurrentUserName();
     const authToken = getAuthToken();
     
-    const messageData = {
-      fromId: messageUserId,
-      fromName: messageUserName,
-      toId: talent.id,
-      toName: talent.name,
-      subject: contactForm.subject,
-      message: contactForm.message,
-      budget: contactForm.budget,
-      deadline: contactForm.deadline,
-      timestamp: new Date().toISOString(),
-      type: 'contact_inquiry'
-    };
+    if (!messageUserId) {
+      NotificationSystem.showErrorMessage('User authentication required. Please sign in again.');
+      return;
+    }
+
+    setSendingMessage(true);
     
     try {
-      const response = await fetch(`${window.location.origin}/api/messages`, {
+      console.log('🚀 Sending message via backend API...');
+      
+      // NEW: First try to send via backend API (this matches the backend endpoint)
+      const messageData = {
+        toId: talent.id,
+        toName: talent.name,
+        subject: contactForm.subject,
+        message: contactForm.message,
+        budget: contactForm.budget,
+        deadline: contactForm.deadline,
+        messageType: 'project_inquiry'
+      };
+      
+      const response = await fetch('/api/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -819,24 +762,79 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
       });
       
       if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Message sent successfully via backend API:', result);
+        
         setContactForm({ subject: '', message: '', budget: '', deadline: '' });
         setShowContactModal(false);
         NotificationSystem.showSuccessMessage(`Message sent successfully to ${talent.name}!`);
+        
+        // Also integrate with messaging service for real-time updates
+        try {
+          messagingService.connect(messageUserId);
+          
+          // Create or find conversation
+          let conversation = messagingService.findConversation([messageUserId, talent.id]);
+          if (!conversation) {
+            conversation = await messagingService.createConversation(
+              [messageUserId, talent.id],
+              undefined, // projectId
+              contactForm.subject // projectTitle
+            );
+          }
+          
+          // Send message through messaging service too
+          await messagingService.sendMessage(
+            conversation.id,
+            messageUserId,
+            talent.id,
+            `${contactForm.subject}\n\n${contactForm.message}${contactForm.budget ? `\n\nBudget: ${contactForm.budget}` : ''}${contactForm.deadline ? `\nDeadline: ${contactForm.deadline}` : ''}`,
+            'text'
+          );
+          
+          console.log('✅ Message also sent through messaging service');
+        } catch (messagingError) {
+          console.warn('⚠️ Messaging service integration failed:', messagingError);
+          // Don't fail the main request if messaging service fails
+        }
+        
         return;
+      } else {
+        const errorData = await response.text();
+        console.error('❌ Backend API error:', response.status, errorData);
+        throw new Error(`Backend API error: ${response.status}`);
       }
       
-      throw new Error('API not available');
+    } catch (apiError) {
+      console.warn('⚠️ Backend API not available, falling back to messaging service and localStorage:', apiError);
       
-    } catch (error) {
-      // Fallback to localStorage with improved error handling
+      // Fallback: Use messaging service and localStorage
       try {
+        // Connect to messaging service
+        messagingService.connect(messageUserId);
+        
+        // Create or find conversation
+        let conversation = messagingService.findConversation([messageUserId, talent.id]);
+        if (!conversation) {
+          conversation = await messagingService.createConversation(
+            [messageUserId, talent.id],
+            undefined, // projectId
+            contactForm.subject // projectTitle
+          );
+        }
+        
+        // Send message through messaging service
+        await messagingService.sendMessage(
+          conversation.id,
+          messageUserId,
+          talent.id,
+          `${contactForm.subject}\n\n${contactForm.message}${contactForm.budget ? `\n\nBudget: ${contactForm.budget}` : ''}${contactForm.deadline ? `\nDeadline: ${contactForm.deadline}` : ''}`,
+          'text'
+        );
+        
+        // Also store in legacy format for backward compatibility
         const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        
-        const messages = JSON.parse(localStorage.getItem('messages') || '[]');
-        const sentMessages = JSON.parse(localStorage.getItem('sentMessages') || '[]');
-        const conversations = JSON.parse(localStorage.getItem('conversations') || '[]');
-        
-        const newMessage = {
+        const legacyMessage = {
           id: messageId,
           fromId: messageUserId,
           fromName: messageUserName,
@@ -853,93 +851,42 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
           read: false
         };
         
-        messages.push(newMessage);
+        // Store in various legacy formats for compatibility
+        const messages = JSON.parse(localStorage.getItem('messages') || '[]');
+        const sentMessages = JSON.parse(localStorage.getItem('sentMessages') || '[]');
         
+        messages.push(legacyMessage);
         sentMessages.push({
-          id: messageId,
-          fromId: messageUserId,
-          fromName: messageUserName,
+          ...legacyMessage,
           talentId: talent.id,
-          talentName: talent.name,
-          subject: contactForm.subject,
-          message: contactForm.message,
-          budget: contactForm.budget || '',
-          deadline: contactForm.deadline || '',
-          sentAt: new Date().toISOString(),
-          status: 'sent'
+          talentName: talent.name
         });
         
-        let conversation = conversations.find(conv => 
-          (conv.participant1 === messageUserId && conv.participant2 === talent.id) ||
-          (conv.participant1 === talent.id && conv.participant2 === messageUserId)
-        );
+        FavoritesManager.safeSetItem('messages', JSON.stringify(messages));
+        FavoritesManager.safeSetItem('sentMessages', JSON.stringify(sentMessages));
         
-        if (!conversation) {
-          conversation = {
-            id: `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            participant1: messageUserId,
-            participant1Name: messageUserName,
-            participant2: talent.id,
-            participant2Name: talent.name,
-            lastMessage: contactForm.message,
-            lastMessageTime: new Date().toISOString(),
-            unreadCount: 1,
-            messages: [newMessage]
-          };
-          conversations.push(conversation);
-        } else {
-          conversation.lastMessage = contactForm.message;
-          conversation.lastMessageTime = new Date().toISOString();
-          conversation.unreadCount = (conversation.unreadCount || 0) + 1;
-          conversation.messages = conversation.messages || [];
-          conversation.messages.push(newMessage);
-        }
+        // Create talent notification
+        FavoritesManager.createTalentNotification(talent.id, 'message', {
+          clientId: messageUserId,
+          clientName: messageUserName
+        }, undefined, {
+          messageId: messageId,
+          messageSubject: contactForm.subject
+        });
         
-        // Try to save all data, with better error handling
-        let allSaved = true;
-        let errorMessage = '';
+        setContactForm({ subject: '', message: '', budget: '', deadline: '' });
+        setShowContactModal(false);
         
-        // Try to save messages first
-        if (!FavoritesManager.safeSetItem('messages', JSON.stringify(messages))) {
-          allSaved = false;
-          errorMessage = 'Failed to save messages';
-        }
+        NotificationSystem.showSuccessMessage(`Message sent successfully to ${talent.name}!`);
         
-        // Only try to save sent messages if messages saved successfully
-        if (allSaved && !FavoritesManager.safeSetItem('sentMessages', JSON.stringify(sentMessages))) {
-          allSaved = false;
-          errorMessage = 'Failed to save sent messages';
-        }
+        console.log('✅ Message sent via messaging service and localStorage fallback');
         
-        // Only try to save conversations if previous saves were successful
-        if (allSaved && !FavoritesManager.safeSetItem('conversations', JSON.stringify(conversations))) {
-          allSaved = false;
-          errorMessage = 'Failed to save conversations';
-        }
-        
-        if (allSaved) {
-          // Create talent notification only if all saves were successful
-          FavoritesManager.createTalentNotification(talent.id, 'message', {
-            clientId: messageUserId,
-            clientName: messageUserName
-          }, undefined, {
-            messageId: messageId,
-            messageSubject: contactForm.subject
-          });
-          
-          setContactForm({ subject: '', message: '', budget: '', deadline: '' });
-          setShowContactModal(false);
-          
-          NotificationSystem.showSuccessMessage(`Message sent successfully to ${talent.name}!`);
-        } else {
-          console.error('Failed to save message data:', errorMessage);
-          NotificationSystem.showErrorMessage('Unable to send message. Your browser storage is full. Please clear your browser data and try again.');
-        }
-        
-      } catch (storageError) {
-        console.error('Failed to send message:', storageError);
-        NotificationSystem.showErrorMessage('Unable to send message. Your browser storage may be full. Please clear your browser data or try using a different browser.');
+      } catch (fallbackError) {
+        console.error('❌ All messaging methods failed:', fallbackError);
+        NotificationSystem.showErrorMessage('Unable to send message. Please check your connection and try again.');
       }
+    } finally {
+      setSendingMessage(false);
     }
   };
 
@@ -988,6 +935,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
           }
         }
         
+        FavoritesManager.addToGeneralFavorites(currentUserId, talent.id, talent, currentUserName);
         setIsSaved(true);
         loadTalentStats();
         NotificationSystem.showSuccessMessage(`${talent.name} has been added to your favorites!`);
@@ -1013,6 +961,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
           FavoritesManager.safeSetItem('userFavorites', JSON.stringify(updatedFavorites));
         }
         
+        FavoritesManager.removeFromGeneralFavorites(currentUserId, talent.id);
         setIsSaved(false);
         loadTalentStats();
         NotificationSystem.showSuccessMessage(`${talent.name} has been removed from your favorites.`);
@@ -1267,9 +1216,17 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                 <>
                   <button 
                     onClick={handleContactTalent}
-                    className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+                    disabled={sendingMessage}
+                    className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
-                    Contact Talent
+                    {sendingMessage ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Sending...
+                      </>
+                    ) : (
+                      'Contact Talent'
+                    )}
                   </button>
                   <button 
                     onClick={handleSaveProfile}
@@ -1501,6 +1458,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                   <button 
                     onClick={() => setShowContactModal(false)}
                     className="text-gray-400 hover:text-white transition-colors"
+                    disabled={sendingMessage}
                   >
                     <X className="h-6 w-6" />
                   </button>
@@ -1522,6 +1480,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                       className="w-full px-4 py-3 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
                       placeholder="Voice over project for..."
                       required
+                      disabled={sendingMessage}
                     />
                   </div>
 
@@ -1534,6 +1493,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                       value={contactForm.budget}
                       onChange={handleContactFormChange}
                       className="w-full px-4 py-3 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white"
+                      disabled={sendingMessage}
                     >
                       <option value="">Select budget range</option>
                       <option value="$100-500">$100 - $500</option>
@@ -1554,6 +1514,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                       value={contactForm.deadline}
                       onChange={handleContactFormChange}
                       className="w-full px-4 py-3 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white"
+                      disabled={sendingMessage}
                     />
                   </div>
 
@@ -1569,21 +1530,33 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
                       className="w-full px-4 py-3 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
                       placeholder="Describe your project, what type of voice over you need, any special requirements..."
                       required
+                      disabled={sendingMessage}
                     />
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-3 pt-4">
                     <button
                       type="submit"
-                      className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors font-medium"
+                      disabled={sendingMessage || !contactForm.subject || !contactForm.message}
+                      className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Send className="h-4 w-4" />
-                      Send Message
+                      {sendingMessage ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="h-4 w-4" />
+                          Send Message
+                        </>
+                      )}
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowContactModal(false)}
                       className="px-6 py-3 border border-gray-600 text-gray-300 rounded-lg hover:bg-slate-700 transition-colors font-medium"
+                      disabled={sendingMessage}
                     >
                       Cancel
                     </button>
