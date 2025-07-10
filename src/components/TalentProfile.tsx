@@ -804,6 +804,17 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     const authToken = getAuthToken();
     console.log('Using auth token:', authToken ? `${authToken.substring(0, 20)}...` : 'No token found');
     
+    // DEBUG: Let's examine what's currently in localStorage for messages
+    console.log('🔍 DEBUGGING MESSAGE CENTER DATA:');
+    console.log('Current messages:', JSON.parse(localStorage.getItem('messages') || '[]'));
+    console.log('Current sentMessages:', JSON.parse(localStorage.getItem('sentMessages') || '[]'));
+    console.log('Current conversations:', JSON.parse(localStorage.getItem('conversations') || '[]'));
+    
+    // Check for other possible message storage keys
+    console.log('All localStorage keys containing "message":', 
+      Object.keys(localStorage).filter(key => key.toLowerCase().includes('message'))
+    );
+    
     const messageData = {
       fromId: user.id,
       fromName: user.name || 'Anonymous Client',
@@ -857,40 +868,46 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
       try {
         const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         
-        // Get existing messages and conversations
+        // Get existing data
         const messages = JSON.parse(localStorage.getItem('messages') || '[]');
         const sentMessages = JSON.parse(localStorage.getItem('sentMessages') || '[]');
         const conversations = JSON.parse(localStorage.getItem('conversations') || '[]');
         
-        // Create message object matching your existing format
+        // Create message object matching the EXACT format of dummy messages
         const newMessage = {
           id: messageId,
           fromId: user.id,
           fromName: user.name || 'Anonymous Client',
+          fromType: 'client',  // ✅ CRITICAL: Match dummy message format
           toId: talent.id,
           toName: talent.name,
+          toType: 'talent',    // ✅ CRITICAL: Match dummy message format  
           subject: contactForm.subject,
           message: contactForm.message,
           budget: contactForm.budget || '',
           deadline: contactForm.deadline || '',
-          timestamp: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-          read: false,
-          replied: false,
-          type: 'contact_inquiry'
+          sentAt: new Date().toISOString(),  // ✅ CRITICAL: Use 'sentAt' not 'timestamp'
+          status: 'sent',      // ✅ CRITICAL: Match dummy message status
+          read: false          // ✅ CRITICAL: Match dummy message read field
         };
         
         // Add to messages (inbox for talent)
         messages.push(newMessage);
         
-        // Add to sent messages (outbox for client)
+        // Add to sent messages (outbox for client) - match the dummy format
         sentMessages.push({
-          ...newMessage,
-          status: 'sent',
-          sentAt: new Date().toISOString()
+          id: messageId,
+          talentId: talent.id,
+          talentName: talent.name,
+          subject: contactForm.subject,
+          message: contactForm.message,
+          budget: contactForm.budget || '',
+          deadline: contactForm.deadline || '',
+          sentAt: new Date().toISOString(),
+          status: 'sent'
         });
         
-        // Update or create conversation
+        // Update conversation
         let conversation = conversations.find(conv => 
           (conv.participant1 === user.id && conv.participant2 === talent.id) ||
           (conv.participant1 === talent.id && conv.participant2 === user.id)
@@ -906,20 +923,18 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
             lastMessage: contactForm.message,
             lastMessageTime: new Date().toISOString(),
             unreadCount: 1,
-            messages: []
+            messages: [newMessage]
           };
           conversations.push(conversation);
         } else {
           conversation.lastMessage = contactForm.message;
           conversation.lastMessageTime = new Date().toISOString();
           conversation.unreadCount = (conversation.unreadCount || 0) + 1;
+          conversation.messages = conversation.messages || [];
+          conversation.messages.push(newMessage);
         }
         
-        // Add message to conversation
-        conversation.messages = conversation.messages || [];
-        conversation.messages.push(newMessage);
-        
-        // Save all data to localStorage with error handling
+        // Save all data
         if (FavoritesManager.safeSetItem('messages', JSON.stringify(messages)) &&
             FavoritesManager.safeSetItem('sentMessages', JSON.stringify(sentMessages)) &&
             FavoritesManager.safeSetItem('conversations', JSON.stringify(conversations))) {
@@ -933,15 +948,13 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
             messageSubject: contactForm.subject
           });
           
-          console.log('✅ Message saved to localStorage successfully');
-          console.log('Saved message:', newMessage);
-          console.log('Updated conversations:', conversations);
+          console.log('✅ Message saved with correct format:', newMessage);
+          console.log('📋 Message fields match dummy format:', Object.keys(newMessage));
           
           // Clear form and close modal
           setContactForm({ subject: '', message: '', budget: '', deadline: '' });
           setShowContactModal(false);
           
-          // Clean success message without URL mention
           alert(`Message sent successfully to ${talent.name}! They will be notified and can respond in their message center.`);
           
         } else {
