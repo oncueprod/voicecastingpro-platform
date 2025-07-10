@@ -75,36 +75,127 @@ class FavoritesManager {
     } catch (error) {
       console.error('LocalStorage quota exceeded, attempting to clear old data');
       try {
-        // Try to clear some old data to make space
-        this.clearOldData();
+        // Try aggressive cleanup first
+        this.aggressiveCleanup();
         localStorage.setItem(key, value);
         return true;
       } catch (retryError) {
-        console.error('Failed to save to localStorage even after cleanup:', retryError);
-        return false;
+        console.error('Failed to save after cleanup, trying emergency cleanup:', retryError);
+        try {
+          // Emergency cleanup - remove almost everything
+          this.emergencyCleanup();
+          localStorage.setItem(key, value);
+          return true;
+        } catch (finalError) {
+          console.error('Failed to save even after emergency cleanup:', finalError);
+          return false;
+        }
       }
     }
   }
 
-  static clearOldData() {
+  static aggressiveCleanup() {
     try {
-      // Clear old messages (keep only last 100)
+      // Clear old messages (keep only last 20)
       const messages = JSON.parse(localStorage.getItem('messages') || '[]');
-      if (messages.length > 100) {
-        const recentMessages = messages.slice(-100);
+      if (messages.length > 20) {
+        const recentMessages = messages.slice(-20);
         localStorage.setItem('messages', JSON.stringify(recentMessages));
       }
 
-      // Clear old notifications (keep only last 50)
+      // Clear old sent messages (keep only last 20)
+      const sentMessages = JSON.parse(localStorage.getItem('sentMessages') || '[]');
+      if (sentMessages.length > 20) {
+        const recentSentMessages = sentMessages.slice(-20);
+        localStorage.setItem('sentMessages', JSON.stringify(recentSentMessages));
+      }
+
+      // Clear old conversations (keep only last 10)
+      const conversations = JSON.parse(localStorage.getItem('conversations') || '[]');
+      if (conversations.length > 10) {
+        const recentConversations = conversations.slice(-10);
+        localStorage.setItem('conversations', JSON.stringify(recentConversations));
+      }
+
+      // Clear old notifications (keep only last 10 per talent)
       const notifications = JSON.parse(localStorage.getItem('talentNotifications') || '{}');
       Object.keys(notifications).forEach(talentId => {
-        if (notifications[talentId].length > 50) {
-          notifications[talentId] = notifications[talentId].slice(-50);
+        if (notifications[talentId].length > 10) {
+          notifications[talentId] = notifications[talentId].slice(-10);
         }
       });
       localStorage.setItem('talentNotifications', JSON.stringify(notifications));
+
+      // Clear some other potentially large items
+      const keysToTrim = ['searchResults', 'cachedTalents', 'recentSearches', 'browsingSessions'];
+      keysToTrim.forEach(key => {
+        if (localStorage.getItem(key)) {
+          localStorage.removeItem(key);
+        }
+      });
     } catch (error) {
-      console.error('Error clearing old data:', error);
+      console.error('Error in aggressive cleanup:', error);
+    }
+  }
+
+  static checkStorageAvailability(): boolean {
+    try {
+      const testKey = 'storage_test_' + Date.now();
+      const testValue = 'test';
+      localStorage.setItem(testKey, testValue);
+      localStorage.removeItem(testKey);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  static getStorageUsage(): { used: number; total: number; percentage: number } {
+    try {
+      let totalSize = 0;
+      for (let key in localStorage) {
+        if (localStorage.hasOwnProperty(key)) {
+          totalSize += localStorage[key].length + key.length;
+        }
+      }
+      
+      // Estimate total available (usually 5-10MB, we'll use 5MB as conservative)
+      const totalAvailable = 5 * 1024 * 1024; // 5MB in bytes
+      const percentage = Math.round((totalSize / totalAvailable) * 100);
+      
+      return {
+        used: totalSize,
+        total: totalAvailable,
+        percentage: Math.min(percentage, 100)
+      };
+    } catch (error) {
+      return { used: 0, total: 0, percentage: 0 };
+    }
+  }
+
+  static emergencyCleanup() {
+    try {
+      // Keep only essential data - remove almost everything
+      const essentialKeys = ['userId', 'userName', 'userType', 'auth_token', 'authToken'];
+      const allKeys = Object.keys(localStorage);
+      
+      allKeys.forEach(key => {
+        if (!essentialKeys.includes(key)) {
+          localStorage.removeItem(key);
+        }
+      });
+
+      // Reset to minimal data structures
+      localStorage.setItem('messages', '[]');
+      localStorage.setItem('sentMessages', '[]');
+      localStorage.setItem('conversations', '[]');
+      localStorage.setItem('talentNotifications', '{}');
+      localStorage.setItem('generalFavorites', '{}');
+      localStorage.setItem('projectShortlists', '{}');
+      localStorage.setItem('projects', '[]');
+      localStorage.setItem('userFavorites', '[]');
+    } catch (error) {
+      console.error('Error in emergency cleanup:', error);
     }
   }
 
@@ -278,40 +369,162 @@ class NotificationSystem {
   static showSuccessMessage(message: string, senderName?: string) {
     const fullMessage = `VoiceCastingPro Says: ${message}`;
     
-    // Try to use a custom notification system if available
-    if (typeof window !== 'undefined' && (window as any).showNotification) {
-      (window as any).showNotification(fullMessage, 'success');
-    } else if (typeof window !== 'undefined' && (window as any).toast) {
-      (window as any).toast.success(fullMessage);
-    } else {
-      alert(fullMessage);
+    // Override any existing notification system
+    if (typeof window !== 'undefined') {
+      // Try to use custom notification systems but ensure our message format
+      if ((window as any).showNotification) {
+        (window as any).showNotification(fullMessage, 'success');
+        return;
+      }
+      
+      if ((window as any).toast) {
+        (window as any).toast.success(fullMessage);
+        return;
+      }
+      
+      // Check for other common notification libraries
+      if ((window as any).Toastify) {
+        (window as any).Toastify({
+          text: fullMessage,
+          duration: 3000,
+          gravity: "top",
+          position: "right",
+          style: {
+            background: "linear-gradient(to right, #00b09b, #96c93d)",
+          }
+        }).showToast();
+        return;
+      }
+      
+      if ((window as any).notyf) {
+        (window as any).notyf.success(fullMessage);
+        return;
+      }
+      
+      // Fallback to custom styled alert
+      this.showCustomAlert(fullMessage, 'success');
     }
   }
 
   static showErrorMessage(message: string) {
     const fullMessage = `VoiceCastingPro Says: ${message}`;
     
-    // Try to use a custom notification system if available
-    if (typeof window !== 'undefined' && (window as any).showNotification) {
-      (window as any).showNotification(fullMessage, 'error');
-    } else if (typeof window !== 'undefined' && (window as any).toast) {
-      (window as any).toast.error(fullMessage);
-    } else {
-      alert(fullMessage);
+    // Override any existing notification system
+    if (typeof window !== 'undefined') {
+      // Try to use custom notification systems but ensure our message format
+      if ((window as any).showNotification) {
+        (window as any).showNotification(fullMessage, 'error');
+        return;
+      }
+      
+      if ((window as any).toast) {
+        (window as any).toast.error(fullMessage);
+        return;
+      }
+      
+      // Check for other common notification libraries
+      if ((window as any).Toastify) {
+        (window as any).Toastify({
+          text: fullMessage,
+          duration: 5000,
+          gravity: "top",
+          position: "right",
+          style: {
+            background: "linear-gradient(to right, #ff5f6d, #ffc371)",
+          }
+        }).showToast();
+        return;
+      }
+      
+      if ((window as any).notyf) {
+        (window as any).notyf.error(fullMessage);
+        return;
+      }
+      
+      // Fallback to custom styled alert
+      this.showCustomAlert(fullMessage, 'error');
     }
   }
 
   static showInfoMessage(message: string) {
     const fullMessage = `VoiceCastingPro Says: ${message}`;
     
-    // Try to use a custom notification system if available
-    if (typeof window !== 'undefined' && (window as any).showNotification) {
-      (window as any).showNotification(fullMessage, 'info');
-    } else if (typeof window !== 'undefined' && (window as any).toast) {
-      (window as any).toast.info(fullMessage);
-    } else {
-      alert(fullMessage);
+    // Override any existing notification system
+    if (typeof window !== 'undefined') {
+      // Try to use custom notification systems but ensure our message format
+      if ((window as any).showNotification) {
+        (window as any).showNotification(fullMessage, 'info');
+        return;
+      }
+      
+      if ((window as any).toast) {
+        (window as any).toast.info(fullMessage);
+        return;
+      }
+      
+      // Check for other common notification libraries
+      if ((window as any).Toastify) {
+        (window as any).Toastify({
+          text: fullMessage,
+          duration: 4000,
+          gravity: "top",
+          position: "right",
+          style: {
+            background: "linear-gradient(to right, #667eea, #764ba2)",
+          }
+        }).showToast();
+        return;
+      }
+      
+      if ((window as any).notyf) {
+        (window as any).notyf.open({
+          type: 'info',
+          message: fullMessage
+        });
+        return;
+      }
+      
+      // Fallback to custom styled alert
+      this.showCustomAlert(fullMessage, 'info');
     }
+  }
+
+  static showCustomAlert(message: string, type: 'success' | 'error' | 'info') {
+    // Create a custom notification element
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      padding: 16px 24px;
+      border-radius: 8px;
+      color: white;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      max-width: 400px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      transition: all 0.3s ease;
+      ${type === 'success' ? 'background: linear-gradient(to right, #00b09b, #96c93d);' : ''}
+      ${type === 'error' ? 'background: linear-gradient(to right, #ff5f6d, #ffc371);' : ''}
+      ${type === 'info' ? 'background: linear-gradient(to right, #667eea, #764ba2);' : ''}
+    `;
+    
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    // Auto remove after 4 seconds
+    setTimeout(() => {
+      if (document.body.contains(notification)) {
+        notification.style.opacity = '0';
+        notification.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+          if (document.body.contains(notification)) {
+            document.body.removeChild(notification);
+          }
+        }, 300);
+      }
+    }, 4000);
   }
 }
 
@@ -571,6 +784,13 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
       return;
     }
     
+    // Check storage availability before proceeding
+    if (!FavoritesManager.checkStorageAvailability()) {
+      const storageInfo = FavoritesManager.getStorageUsage();
+      NotificationSystem.showErrorMessage(`Your browser storage is full (${storageInfo.percentage}% used). Please clear your browser data and try again.`);
+      return;
+    }
+    
     const messageUserId = getCurrentUserId();
     const messageUserName = getCurrentUserName();
     const authToken = getAuthToken();
@@ -676,12 +896,29 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
         }
         
         // Try to save all data, with better error handling
-        const messagesSuccess = FavoritesManager.safeSetItem('messages', JSON.stringify(messages));
-        const sentMessagesSuccess = FavoritesManager.safeSetItem('sentMessages', JSON.stringify(sentMessages));
-        const conversationsSuccess = FavoritesManager.safeSetItem('conversations', JSON.stringify(conversations));
+        let allSaved = true;
+        let errorMessage = '';
         
-        if (messagesSuccess && sentMessagesSuccess && conversationsSuccess) {
-          // Create talent notification
+        // Try to save messages first
+        if (!FavoritesManager.safeSetItem('messages', JSON.stringify(messages))) {
+          allSaved = false;
+          errorMessage = 'Failed to save messages';
+        }
+        
+        // Only try to save sent messages if messages saved successfully
+        if (allSaved && !FavoritesManager.safeSetItem('sentMessages', JSON.stringify(sentMessages))) {
+          allSaved = false;
+          errorMessage = 'Failed to save sent messages';
+        }
+        
+        // Only try to save conversations if previous saves were successful
+        if (allSaved && !FavoritesManager.safeSetItem('conversations', JSON.stringify(conversations))) {
+          allSaved = false;
+          errorMessage = 'Failed to save conversations';
+        }
+        
+        if (allSaved) {
+          // Create talent notification only if all saves were successful
           FavoritesManager.createTalentNotification(talent.id, 'message', {
             clientId: messageUserId,
             clientName: messageUserName
@@ -695,12 +932,13 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
           
           NotificationSystem.showSuccessMessage(`Message sent successfully to ${talent.name}!`);
         } else {
-          throw new Error('Failed to save message - storage quota exceeded');
+          console.error('Failed to save message data:', errorMessage);
+          NotificationSystem.showErrorMessage('Unable to send message. Your browser storage is full. Please clear your browser data and try again.');
         }
         
       } catch (storageError) {
         console.error('Failed to send message:', storageError);
-        NotificationSystem.showErrorMessage('Failed to send message. Storage may be full. Please try clearing your browser data and try again.');
+        NotificationSystem.showErrorMessage('Unable to send message. Your browser storage may be full. Please clear your browser data or try using a different browser.');
       }
     }
   };
