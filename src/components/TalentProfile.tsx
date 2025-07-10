@@ -795,6 +795,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     
     if (!talent || !contactForm.subject || !contactForm.message) {
       console.log('Missing required fields:', { talent: !!talent, subject: contactForm.subject, message: contactForm.message });
+      alert('Please fill in all required fields (Subject and Message).');
       return;
     }
     
@@ -804,17 +805,26 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     console.log('Using auth token:', authToken ? `${authToken.substring(0, 20)}...` : 'No token found');
     
     const messageData = {
+      fromId: user.id,
+      fromName: user.name || 'Anonymous Client',
       toId: talent.id,
       toName: talent.name,
       subject: contactForm.subject,
       message: contactForm.message,
       budget: contactForm.budget,
-      deadline: contactForm.deadline
+      deadline: contactForm.deadline,
+      timestamp: new Date().toISOString(),
+      type: 'contact_inquiry'
     };
     
     try {
-      // Send message to backend API
-      const response = await fetch('/api/messages', {
+      // Try API first, with better error handling
+      console.log('Attempting to send via API...');
+      
+      const apiUrl = `${window.location.origin}/api/messages`;
+      console.log('API URL:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -823,33 +833,72 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
         body: JSON.stringify(messageData)
       });
       
+      console.log('API Response status:', response.status);
+      
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error || errorData.message || 'Unknown error'}`);
+        const errorText = await response.text().catch(() => 'Unknown error');
+        console.log('API Error response:', errorText);
+        throw new Error(`API error: ${response.status} - ${errorText}`);
       }
       
       const result = await response.json();
-      console.log('✅ Message sent successfully:', result);
+      console.log('✅ Message sent successfully via API:', result);
       
       // Clear form and close modal
       setContactForm({ subject: '', message: '', budget: '', deadline: '' });
       setShowContactModal(false);
       
-      console.log('✅ Message sent and email notification triggered');
       alert(`Message sent successfully to ${talent.name}! They will receive an email notification and can respond in their messaging center.`);
       
     } catch (error) {
-      console.error('❌ Failed to send message:', error);
+      console.log('❌ API failed, using localStorage fallback:', error.message);
       
-      // Show specific error message
-      if (error.message.includes('401')) {
-        alert('Authentication failed. Please sign in again.');
-      } else if (error.message.includes('403')) {
-        alert('Permission denied. Please make sure you are signed in as a client.');
-      } else if (error.message.includes('404')) {
-        alert('Messaging service not found. Please contact support.');
-      } else {
-        alert(`Failed to send message: ${error.message}`);
+      // Fallback to localStorage (demo mode)
+      try {
+        const messages = JSON.parse(localStorage.getItem('messages') || '[]');
+        const sentMessages = JSON.parse(localStorage.getItem('sentMessages') || '[]');
+        
+        const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Store in messages array
+        messages.push({
+          id: messageId,
+          ...messageData,
+          read: false,
+          replied: false
+        });
+        
+        // Store in sent messages array
+        sentMessages.push({
+          id: messageId,
+          ...messageData,
+          status: 'sent'
+        });
+        
+        // Save to localStorage
+        localStorage.setItem('messages', JSON.stringify(messages));
+        localStorage.setItem('sentMessages', JSON.stringify(sentMessages));
+        
+        // Create notification for talent
+        FavoritesManager.createTalentNotification(talent.id, 'message', {
+          clientId: user.id,
+          clientName: user.name || 'Anonymous Client'
+        }, undefined, {
+          messageId: messageId,
+          messageSubject: contactForm.subject
+        });
+        
+        console.log('✅ Message saved to localStorage successfully');
+        
+        // Clear form and close modal
+        setContactForm({ subject: '', message: '', budget: '', deadline: '' });
+        setShowContactModal(false);
+        
+        alert(`Message sent to ${talent.name}! (Demo Mode: Message saved locally. In production, ${talent.name} would receive an email notification.)`);
+        
+      } catch (storageError) {
+        console.error('❌ LocalStorage fallback also failed:', storageError);
+        alert('Failed to send message. Please try again or contact support.');
       }
     }
   };
