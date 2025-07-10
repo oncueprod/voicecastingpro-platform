@@ -581,6 +581,16 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     return isAuthenticated && isClient && user?.id;
   };
 
+  // FIXED: Helper function to get auth token from localStorage
+  const getAuthToken = () => {
+    // Try different possible token storage keys, including auth_token with underscore
+    return localStorage.getItem('auth_token') ||     // ✅ ADDED: Check for auth_token with underscore
+           localStorage.getItem('authToken') || 
+           localStorage.getItem('token') || 
+           localStorage.getItem('accessToken') || 
+           localStorage.getItem('jwt');
+  };
+
   useEffect(() => {
     if (talentId) {
       loadTalentData();
@@ -603,6 +613,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
       
       // Check all possible token keys
       console.log('Token variations:');
+      console.log('auth_token:', localStorage.getItem('auth_token') ? 'Found' : 'Not found');  // ✅ ADDED
       console.log('authToken:', localStorage.getItem('authToken') ? 'Found' : 'Not found');
       console.log('token:', localStorage.getItem('token') ? 'Found' : 'Not found');
       console.log('accessToken:', localStorage.getItem('accessToken') ? 'Found' : 'Not found');
@@ -774,15 +785,6 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     setShowContactModal(true);
   };
 
-  // Helper function to get auth token from localStorage
-  const getAuthToken = () => {
-    // Try different possible token storage keys
-    return localStorage.getItem('authToken') || 
-           localStorage.getItem('token') || 
-           localStorage.getItem('accessToken') || 
-           localStorage.getItem('jwt');
-  };
-
   const handleSendMessage = async () => {
     console.log('handleSendMessage called');
     if (!canPerformClientActions()) {
@@ -799,7 +801,7 @@ const TalentProfile: React.FC<TalentProfileProps> = ({ talentId, onClose }) => {
     console.log('Sending message from:', user.id, 'to:', talent.id);
     
     const authToken = getAuthToken();
-    console.log('Using auth token:', authToken ? 'Token found' : 'No token found');
+    console.log('Using auth token:', authToken ? `${authToken.substring(0, 20)}...` : 'No token found');
     
     const messageData = {
       toId: talent.id,
