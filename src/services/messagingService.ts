@@ -45,8 +45,10 @@ class MessagingService {
   private messages: Message[] = [];
   private listeners: Map<string, Function[]> = new Map();
   private currentUserId: string | null = null;
+  private apiBaseUrl: string;
 
   constructor() {
+    this.apiBaseUrl = window.location.origin;
     this.loadFromStorage();
   }
 
@@ -55,27 +57,39 @@ class MessagingService {
     this.currentUserId = userId;
     
     // Connect to the WebSocket server using the environment variable
-    const websocketUrl = import.meta.env.VITE_WEBSOCKET_URL || 'wss://voicecastingpro.onrender.com';
-    console.log('Connecting to WebSocket server:', websocketUrl);
+    const websocketUrl = import.meta.env.VITE_WEBSOCKET_URL || 
+                        import.meta.env.VITE_BACKEND_URL || 
+                        'wss://voicecastingpro-platform.onrender.com';
+    
+    console.log('🔌 Connecting to WebSocket server:', websocketUrl);
     
     this.socket = io(websocketUrl, {
-      auth: { userId }
+      auth: { userId },
+      transports: ['websocket', 'polling'],
+      timeout: 20000,
+      forceNew: true
     });
 
     // Handle connection events
     this.socket.on('connect', () => {
-      console.log('WebSocket connected successfully');
+      console.log('✅ WebSocket connected successfully with ID:', this.socket?.id);
       // Dispatch custom event for components to listen to
       window.dispatchEvent(new CustomEvent('socket_connected'));
     });
     
     this.socket.on('connect_error', (error) => {
-      console.error('WebSocket connection error:', error);
+      console.error('❌ WebSocket connection error:', error);
       // Dispatch custom event for components to listen to
       window.dispatchEvent(new CustomEvent('socket_error', { detail: error }));
     });
 
+    this.socket.on('disconnect', (reason) => {
+      console.log('🔌 WebSocket disconnected:', reason);
+    });
+
     this.socket.on('message', (message: Message) => {
+      console.log('📨 Received WebSocket message:', message);
+      
       // Verify message is for authenticated user
       if (this.isAuthorizedForMessage(message)) {
         this.addMessage(message);
@@ -84,12 +98,17 @@ class MessagingService {
     });
 
     this.socket.on('conversation_created', (conversation: Conversation) => {
+      console.log('💬 Received WebSocket conversation created:', conversation);
+      
       // Verify user is participant in conversation
       if (this.isAuthorizedForConversation(conversation)) {
         this.addConversation(conversation);
         this.emit('conversation_created', conversation);
       }
     });
+
+    // Load initial data from backend
+    this.loadConversationsFromBackend();
 
     // Simulate real-time with storage events for demo
     window.addEventListener('storage', (e) => {
@@ -103,6 +122,7 @@ class MessagingService {
   disconnect() {
     this.currentUserId = null;
     if (this.socket) {
+      console.log('🔌 Disconnecting WebSocket...');
       this.socket.disconnect();
       this.socket = null;
     }
@@ -122,6 +142,143 @@ class MessagingService {
     return this.currentUserId === userId;
   }
 
+  private getAuthToken(): string | null {
+    return localStorage.getItem('auth_token') ||
+           localStorage.getItem('authToken') || 
+           localStorage.getItem('token') || 
+           localStorage.getItem('accessToken') || 
+           localStorage.getItem('jwt');
+  }
+
+  // FIXED: Load conversations from backend API
+  private async loadConversationsFromBackend() {
+    if (!this.currentUserId) return;
+
+    try {
+      const authToken = this.getAuthToken();
+      if (!authToken) {
+        console.log('⚠️ No auth token found, skipping backend load');
+        return;
+      }
+
+      console.log('🌐 Loading conversations from backend...');
+      
+      const response = await fetch(`${this.apiBaseUrl}/api/messages/conversations`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Backend conversations loaded:', data.conversations?.length || 0);
+        
+        if (data.conversations && Array.isArray(data.conversations)) {
+          const backendConversations: Conversation[] = data.conversations.map((conv: any) => ({
+            id: conv.id,
+            participants: conv.participants || [],
+            projectId: conv.project_id,
+            projectTitle: conv.project_title,
+            lastMessage: conv.last_message ? {
+              id: conv.last_message.id,
+              conversationId: conv.last_message.conversation_id,
+              senderId: conv.last_message.sender_id,
+              receiverId: conv.last_message.recipient_id,
+              content: conv.last_message.filtered_content || conv.last_message.content,
+              originalContent: conv.last_message.is_filtered ? conv.last_message.content : undefined,
+              timestamp: new Date(conv.last_message.created_at),
+              type: conv.last_message.type || 'text',
+              read: !!conv.last_message.read_at,
+              filtered: !!conv.last_message.is_filtered
+            } : undefined,
+            createdAt: new Date(conv.created_at),
+            updatedAt: new Date(conv.last_message_at || conv.created_at)
+          }));
+
+          // Merge with local conversations
+          this.mergeBackendConversations(backendConversations);
+        }
+      } else {
+        console.log('⚠️ Backend conversations API not available:', response.status);
+      }
+    } catch (error) {
+      console.log('⚠️ Failed to load conversations from backend:', error);
+    }
+  }
+
+  // FIXED: Load messages from backend API
+  private async loadMessagesFromBackend(conversationId: string): Promise<Message[]> {
+    if (!this.currentUserId) return [];
+
+    try {
+      const authToken = this.getAuthToken();
+      if (!authToken) {
+        console.log('⚠️ No auth token found, skipping backend load');
+        return [];
+      }
+
+      console.log('🌐 Loading messages from backend for conversation:', conversationId);
+      
+      const response = await fetch(`${this.apiBaseUrl}/api/messages/conversations/${conversationId}`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Backend messages loaded:', data.messages?.length || 0);
+        
+        if (data.messages && Array.isArray(data.messages)) {
+          const backendMessages: Message[] = data.messages.map((msg: any) => ({
+            id: msg.id,
+            conversationId: msg.conversation_id,
+            senderId: msg.sender_id,
+            receiverId: msg.recipient_id,
+            content: msg.filtered_content || msg.content,
+            originalContent: msg.is_filtered ? msg.content : undefined,
+            timestamp: new Date(msg.created_at),
+            type: msg.type || 'text',
+            metadata: msg.metadata ? JSON.parse(msg.metadata) : undefined,
+            read: !!msg.read_at,
+            filtered: !!msg.is_filtered
+          }));
+
+          return backendMessages;
+        }
+      } else {
+        console.log('⚠️ Backend messages API not available:', response.status);
+      }
+    } catch (error) {
+      console.log('⚠️ Failed to load messages from backend:', error);
+    }
+
+    return [];
+  }
+
+  private mergeBackendConversations(backendConversations: Conversation[]) {
+    const merged = [...this.conversations];
+    
+    backendConversations.forEach(backendConv => {
+      const existingIndex = merged.findIndex(c => c.id === backendConv.id);
+      if (existingIndex >= 0) {
+        // Update existing conversation
+        merged[existingIndex] = backendConv;
+      } else {
+        // Add new conversation
+        merged.push(backendConv);
+      }
+    });
+
+    this.conversations = merged.sort((a, b) => 
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+    
+    this.saveToStorage();
+  }
+
   async createConversation(
     participantIds: string[], 
     projectId?: string,
@@ -132,6 +289,52 @@ class MessagingService {
       throw new Error('Unauthorized: You can only create conversations you participate in');
     }
 
+    console.log('💬 Creating conversation:', { participantIds, projectId, projectTitle });
+
+    // Try backend API first
+    try {
+      const authToken = this.getAuthToken();
+      if (authToken) {
+        const response = await fetch(`${this.apiBaseUrl}/api/messages/conversations`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify({
+            recipientId: participantIds.find(id => id !== this.currentUserId),
+            projectId,
+            projectTitle
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ Conversation created via backend:', data.conversation);
+          
+          const backendConversation: Conversation = {
+            id: data.conversation.id,
+            participants: data.conversation.participants,
+            projectId: data.conversation.project_id,
+            projectTitle: data.conversation.project_title,
+            createdAt: new Date(data.conversation.created_at),
+            updatedAt: new Date(data.conversation.created_at)
+          };
+
+          this.addConversation(backendConversation);
+          
+          if (this.socket) {
+            this.socket.emit('create_conversation', backendConversation);
+          }
+
+          return backendConversation;
+        }
+      }
+    } catch (error) {
+      console.log('⚠️ Backend conversation creation failed, using fallback:', error);
+    }
+
+    // Fallback to local creation
     const conversation: Conversation = {
       id: `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       participants: participantIds,
@@ -147,6 +350,7 @@ class MessagingService {
       this.socket.emit('create_conversation', conversation);
     }
 
+    console.log('✅ Conversation created locally:', conversation);
     return conversation;
   }
 
@@ -169,7 +373,64 @@ class MessagingService {
       throw new Error('Unauthorized: You are not a participant in this conversation');
     }
 
-    // Filter message content for off-platform contact attempts
+    console.log('📤 Sending message:', { conversationId, content: content.substring(0, 50) + '...' });
+
+    // Try backend API first
+    try {
+      const authToken = this.getAuthToken();
+      if (authToken) {
+        const response = await fetch(`${this.apiBaseUrl}/api/messages/conversations/${conversationId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify({
+            content,
+            type,
+            metadata
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ Message sent via backend:', data.message);
+          
+          const backendMessage: Message = {
+            id: data.message.id,
+            conversationId: data.message.conversation_id,
+            senderId: data.message.sender_id,
+            receiverId: data.message.recipient_id,
+            content: data.message.filtered_content || data.message.content,
+            originalContent: data.message.is_filtered ? data.message.content : undefined,
+            timestamp: new Date(data.message.created_at),
+            type: data.message.type || 'text',
+            metadata: data.message.metadata ? JSON.parse(data.message.metadata) : undefined,
+            read: false,
+            filtered: !!data.message.is_filtered
+          };
+
+          this.addMessage(backendMessage);
+
+          // Update conversation's last message
+          if (conversation) {
+            conversation.lastMessage = backendMessage;
+            conversation.updatedAt = new Date();
+            this.saveToStorage();
+          }
+
+          if (this.socket) {
+            this.socket.emit('send_message', backendMessage);
+          }
+
+          return backendMessage;
+        }
+      }
+    } catch (error) {
+      console.log('⚠️ Backend message sending failed, using fallback:', error);
+    }
+
+    // Fallback to local message creation with filtering
     const filterResult = messageFilterService.filterMessage(content);
     
     const message: Message = {
@@ -212,6 +473,7 @@ class MessagingService {
       this.socket.emit('send_message', message);
     }
 
+    console.log('✅ Message sent locally:', message);
     return message;
   }
 
@@ -226,8 +488,55 @@ class MessagingService {
       throw new Error('Unauthorized: You can only send files as yourself');
     }
 
+    console.log('📎 Sending file message:', file.name);
+
     try {
-      // Upload file first
+      // Try backend API first for file upload
+      const authToken = this.getAuthToken();
+      if (authToken) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`${this.apiBaseUrl}/api/messages/conversations/${conversationId}/attachments`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: formData
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ File uploaded via backend:', data);
+          
+          const backendMessage: Message = {
+            id: data.message.id,
+            conversationId: data.message.conversation_id,
+            senderId: data.message.sender_id,
+            receiverId: data.message.recipient_id,
+            content: data.message.content,
+            timestamp: new Date(data.message.created_at),
+            type: 'file',
+            metadata: {
+              fileId: data.file.id,
+              fileName: data.file.file_name,
+              fileType: data.file.file_type,
+              fileSize: data.file.file_size
+            },
+            read: false
+          };
+
+          this.addMessage(backendMessage);
+          return backendMessage;
+        }
+      }
+    } catch (error) {
+      console.log('⚠️ Backend file upload failed, using fallback:', error);
+    }
+
+    // Fallback to local file handling
+    try {
+      // Upload file using fileService
       const attachment = await fileService.uploadFile(file, senderId, conversationId);
       
       // Create message with file metadata
@@ -322,17 +631,39 @@ class MessagingService {
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
 
-  getMessages(conversationId: string): Message[] {
+  async getMessages(conversationId: string): Promise<Message[]> {
     // Verify user has access to this conversation
     const conversation = this.conversations.find(c => c.id === conversationId);
     if (!conversation || !this.isAuthorizedForConversation(conversation)) {
       return []; // Return empty array for unauthorized access
     }
 
-    return this.messages
-      .filter(m => m.conversationId === conversationId)
-      .filter(m => this.isAuthorizedForMessage(m)) // Double-check message authorization
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    // Try to load messages from backend first
+    const backendMessages = await this.loadMessagesFromBackend(conversationId);
+    
+    // Merge with local messages
+    let allMessages = [...this.messages.filter(m => m.conversationId === conversationId)];
+    
+    backendMessages.forEach(backendMsg => {
+      const existingIndex = allMessages.findIndex(m => m.id === backendMsg.id);
+      if (existingIndex >= 0) {
+        allMessages[existingIndex] = backendMsg;
+      } else {
+        allMessages.push(backendMsg);
+      }
+    });
+
+    // Filter to only messages the user is authorized to see
+    allMessages = allMessages.filter(m => this.isAuthorizedForMessage(m));
+    
+    // Sort by timestamp
+    allMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    // Update local messages array
+    this.messages = this.messages.filter(m => m.conversationId !== conversationId).concat(allMessages);
+    this.saveToStorage();
+
+    return allMessages;
   }
 
   markAsRead(messageId: string): void {
@@ -340,6 +671,20 @@ class MessagingService {
     if (message && this.isAuthorizedForMessage(message)) {
       message.read = true;
       this.saveToStorage();
+
+      // Try to mark as read on backend too
+      const authToken = this.getAuthToken();
+      if (authToken) {
+        fetch(`${this.apiBaseUrl}/api/messages/${messageId}/read`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          }
+        }).catch(error => {
+          console.log('⚠️ Failed to mark message as read on backend:', error);
+        });
+      }
     }
   }
 
@@ -417,8 +762,27 @@ class MessagingService {
   }
 
   private saveToStorage() {
-    localStorage.setItem('conversations', JSON.stringify(this.conversations));
-    localStorage.setItem('messages', JSON.stringify(this.messages));
+    try {
+      const conversationsData = this.conversations.map(c => ({
+        ...c,
+        createdAt: c.createdAt.toISOString(),
+        updatedAt: c.updatedAt.toISOString(),
+        lastMessage: c.lastMessage ? {
+          ...c.lastMessage,
+          timestamp: c.lastMessage.timestamp.toISOString()
+        } : undefined
+      }));
+
+      const messagesData = this.messages.map(m => ({
+        ...m,
+        timestamp: m.timestamp.toISOString()
+      }));
+
+      localStorage.setItem('conversations', JSON.stringify(conversationsData));
+      localStorage.setItem('messages', JSON.stringify(messagesData));
+    } catch (error) {
+      console.error('Failed to save messaging data to storage:', error);
+    }
   }
 
   private loadFromStorage() {
