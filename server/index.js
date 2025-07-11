@@ -36,12 +36,12 @@ const PORT = process.env.PORT || 3000;
 // Create HTTP server
 const server = createServer(app);
 
-// Initialize Socket.IO
+// Initialize Socket.IO with FIXED CORS
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: "*", // Allow all origins for testing - CHANGE IN PRODUCTION
     methods: ['GET', 'POST'],
-    credentials: true
+    credentials: false // Must be false when origin is "*"
   }
 });
 
@@ -170,12 +170,20 @@ const optionalAuth = (req, res, next) => {
   next();
 };
 
-// ENHANCED: CORS configuration with better headers
+// FIXED: CORS configuration - Allow all origins for testing
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true,
+  origin: "*", // TESTING ONLY - Change to specific domains in production
+  credentials: false, // Must be false when origin is "*"
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization', 'user-id', 'x-user-name']
+  allowedHeaders: [
+    'Origin', 
+    'X-Requested-With', 
+    'Content-Type', 
+    'Accept', 
+    'Authorization', 
+    'user-id', 
+    'x-user-name'
+  ]
 }));
 
 // Enhanced middleware
@@ -184,10 +192,10 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Additional CORS headers for WebSocket compatibility
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', process.env.FRONTEND_URL || '*');
+  res.header('Access-Control-Allow-Origin', '*'); // TESTING ONLY
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, user-id, x-user-name');
-  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Credentials', 'false'); // Changed for testing
   
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
@@ -215,10 +223,26 @@ if (!fs.existsSync(uploadsDir)) {
 // IMPORTANT: Serve static files BEFORE API routes and catch-all
 app.use('/uploads', express.static(uploadsDir));
 
-// Serve static files in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../../dist')));
-}
+// Simple root endpoint for backend-only deployment
+app.get('/', (req, res) => {
+  res.json({
+    name: 'VoiceCastingPro Backend API',
+    version: '1.0.0',
+    status: 'running',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: '/api/health',
+      messages: '/api/messages',
+      messageSend: '/api/messages/send',
+      auth: '/api/auth',
+      talent: '/api/talent',
+      users: '/api/users',
+      contact: '/api/contact'
+    },
+    websocket: 'Socket.io enabled',
+    documentation: 'Backend API for VoiceCastingPro platform'
+  });
+});
 
 // CRITICAL FIX: Missing User Preferences endpoint (was causing 403 errors)
 app.get('/api/users/preferences', authenticateUser, async (req, res) => {
@@ -903,7 +927,12 @@ app.get('/api/health', async (req, res) => {
     res.status(200).json({ 
       status: 'healthy',
       timestamp: new Date().toISOString(),
-      database: 'connected',
+      services: {
+        messaging: 'active',
+        websocket: 'active',
+        email: 'active',
+        fileUpload: 'active'
+      },
       endpoints: {
         messages: '/api/messages',
         messageSend: '/api/messages/send',
@@ -925,19 +954,6 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// IMPORTANT: Catch-all route MUST be LAST
-// Handle SPA routing in production - this MUST come after all static file serving
-if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
-    // Only redirect if it's not an API call or static file
-    if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
-      res.sendFile(path.join(__dirname, '../../dist/index.html'));
-    } else {
-      res.status(404).json({ error: 'API endpoint not found', path: req.path });
-    }
-  });
-}
-
 // Socket.IO connection handling with enhanced email notifications
 io.on('connection', (socket) => {
   console.log('🔌 User connected:', socket.id);
@@ -953,6 +969,8 @@ io.on('connection', (socket) => {
   // Handle messaging
   socket.on('send_message', async (message) => {
     try {
+      console.log('📥 Socket message received:', message);
+      
       // Store message in database
       const { pool } = await import('./db/index.js');
       const client = await pool.connect();
@@ -978,7 +996,11 @@ io.on('connection', (socket) => {
         socket.to(`user:${message.receiverId}`).emit('message', newMessage);
         
         // Also send back to sender for confirmation
-        socket.emit('message_sent', newMessage);
+        socket.emit('message_sent', {
+          messageId: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          success: true,
+          timestamp: new Date().toISOString()
+        });
         
         // Send email notification if recipient is offline
         try {
@@ -992,7 +1014,7 @@ io.on('connection', (socket) => {
           console.error('Socket email notification failed:', emailError);
         }
         
-        console.log(`✅ Socket message processed`);
+        console.log(`✅ Socket message processed and stored`);
         
       } finally {
         client.release();
@@ -1052,6 +1074,8 @@ server.listen(PORT, () => {
   console.log(`🚀 VoiceCastingPro Server Started Successfully!`);
   console.log(`📡 Server running on port ${PORT}`);
   console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log('🔧 CORS: Allowing all origins (TESTING MODE)');
+  console.log('⚠️  IMPORTANT: Change CORS to specific domains in production!');
   console.log('✅ FIXED endpoints now available:');
   console.log('   GET  /api/users/preferences (✅ FIXED - was causing 403)');
   console.log('   PUT  /api/users/preferences (✅ FIXED)');
