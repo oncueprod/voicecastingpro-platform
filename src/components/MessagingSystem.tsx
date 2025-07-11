@@ -1,723 +1,1119 @@
-// MessagingSystem.tsx - COMPLETE VERSION WITH FILE UPLOADS
 import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Send, 
+  Paperclip, 
+  X, 
+  Download,
+  Image as ImageIcon,
+  FileText,
+  Music,
+  AlertTriangle,
+  User,
+  Search,
+  ArrowLeft
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
-import { messagingService, User, Message, Conversation } from '../services/messagingService';
+import { messagingService, Message, Conversation } from '../services/messagingService';
 
 interface MessagingSystemProps {
-  currentUser?: User;
   onClose?: () => void;
-  isOpen?: boolean;
-  talentId?: string;
-  initialMessage?: string;
+  initialConversationId?: string;
 }
 
-interface FileAttachment {
-  id: string;
-  name: string;
-  size: number;
-  type: string;
-  url?: string;
-  data?: string;
-}
-
-const MessagingSystem: React.FC<MessagingSystemProps> = ({ 
-  currentUser, 
-  onClose, 
-  isOpen = true,
-  talentId,
-  initialMessage 
-}) => {
+const MessagingSystem: React.FC<MessagingSystemProps> = ({ onClose, initialConversationId }) => {
+  const { user, isAuthenticated } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState(initialMessage || '');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
-  const [attachments, setAttachments] = useState<FileAttachment[]>([]);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
+  const [newMessage, setNewMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [newConversationMode, setNewConversationMode] = useState(false);
-  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
-  
-  const { user } = useAuth();
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [socketStatus, setSocketStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const activeUser = currentUser || user;
+  // Initialize messaging service and load data
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
 
-  // Auto-scroll to bottom
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+    console.log('🔄 Initializing messaging system for user:', user.id);
+    
+    // Connect to messaging service
+    try {
+      messagingService.connect(user.id);
+      loadConversationsFromService();
+    } catch (error) {
+      console.error('❌ Failed to connect messaging service:', error);
+      setSocketStatus('error');
+    }
+
+    // Listen for real-time message updates
+    const handleMessage = (message: Message) => {
+      console.log('📨 Received new message:', message);
+      if (activeConversation && message.conversationId === activeConversation.id) {
+        setMessages(prev => {
+          // Avoid duplicates
+          if (prev.find(m => m.id === message.id)) return prev;
+          return [...prev, message];
+        });
+        scrollToBottom();
+      }
+      // Refresh conversations to update last message
+      loadConversationsFromService();
+    };
+
+    const handleConversationCreated = (conversation: Conversation) => {
+      console.log('💬 New conversation created:', conversation);
+      setConversations(prev => {
+        // Avoid duplicates
+        if (prev.find(c => c.id === conversation.id)) return prev;
+        return [conversation, ...prev];
+      });
+    };
+
+    // Set up event listeners
+    messagingService.on('message', handleMessage);
+    messagingService.on('conversation_created', handleConversationCreated);
+    
+    // Monitor WebSocket connection status
+    const handleConnect = () => setSocketStatus('connected');
+    const handleConnectError = () => setSocketStatus('error');
+    
+    window.addEventListener('socket_connected', handleConnect);
+    window.addEventListener('socket_error', handleConnectError);
+
+    return () => {
+      messagingService.off('message', handleMessage);
+      messagingService.off('conversation_created', handleConversationCreated);
+      window.removeEventListener('socket_connected', handleConnect);
+      window.removeEventListener('socket_error', handleConnectError);
+      messagingService.disconnect();
+    };
+  }, [user, isAuthenticated, activeConversation]);
+
+  // Load initial conversation if specified
+  useEffect(() => {
+    if (initialConversationId && conversations.length > 0) {
+      const conversation = conversations.find(c => c.id === initialConversationId);
+      if (conversation) {
+        setActiveConversation(conversation);
+        loadMessagesFromService(conversation.id);
+      }
+    }
+  }, [initialConversationId, conversations]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Initialize messaging system
-  useEffect(() => {
-    const initializeMessaging = async () => {
+  // CRITICAL FIX: Load conversations with safe error handling
+  const loadConversationsFromService = async () => {
+    if (!user) return;
+    
+    try {
+      console.log('📂 Loading conversations for user:', user.id);
+      setLoading(true);
+      
+      // SAFE: Get conversations from messaging service with error handling
+      let userConversations: Conversation[] = [];
+      
       try {
-        console.log('🔄 Initializing full-featured MessagingSystem');
-        
-        if (activeUser) {
-          messagingService.setCurrentUser(activeUser);
-        }
-        
-        const serviceUser = messagingService.getCurrentUser();
-        if (!serviceUser) {
-          setError('Please log in to access messaging');
-          setLoading(false);
-          return;
-        }
-        
-        console.log('👤 User authenticated:', serviceUser.id);
-        
-        // Initialize messaging service
-        await messagingService.initialize(serviceUser.id);
-        
-        // Load conversations
-        const convs = await messagingService.loadConversations(serviceUser.id);
-        setConversations(convs);
-        
-        // Load available users for new conversations
-        await loadAvailableUsers();
-        
-        // If talentId provided, create/find conversation
-        if (talentId && convs.length === 0) {
-          await createConversationWithTalent(talentId);
-        }
-        
-        setLoading(false);
-        console.log('✅ Full messaging system initialized');
-        
-      } catch (err) {
-        console.error('❌ Failed to initialize messaging:', err);
-        setError('Failed to load messaging system. Please refresh and try again.');
-        setLoading(false);
+        const serviceConversations = messagingService.getConversations(user.id);
+        // CRITICAL FIX: Ensure we always get an array
+        userConversations = Array.isArray(serviceConversations) ? serviceConversations : [];
+        console.log('📂 Loaded local conversations:', userConversations.length);
+      } catch (serviceError) {
+        console.error('❌ Error from messaging service:', serviceError);
+        userConversations = [];
       }
-    };
-
-    if (isOpen) {
-      initializeMessaging();
-    }
-
-    // Event listeners
-    const handleConversationsLoaded = (convs: Conversation[]) => {
-      setConversations(convs);
-    };
-
-    const handleNewMessage = (message: Message) => {
-      if (selectedConversation && message.conversationId === selectedConversation.id) {
-        setMessages(prev => [...prev, message]);
-      }
-    };
-
-    messagingService.on('conversationsLoaded', handleConversationsLoaded);
-    messagingService.on('newMessage', handleNewMessage);
-
-    return () => {
-      messagingService.off('conversationsLoaded', handleConversationsLoaded);
-      messagingService.off('newMessage', handleNewMessage);
-    };
-  }, [activeUser, isOpen, talentId]);
-
-  // Load available users
-  const loadAvailableUsers = async () => {
-    try {
-      const response = await fetch('/api/users', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-          'Content-Type': 'application/json'
-        }
-      });
       
-      if (response.ok) {
-        const users = await response.json();
-        setAvailableUsers(users.filter((u: User) => u.id !== activeUser?.id));
+      // Try to also fetch from backend API
+      try {
+        const authToken = localStorage.getItem('auth_token') || 
+                         localStorage.getItem('authToken') || 
+                         localStorage.getItem('token');
+        
+        if (authToken) {
+          const response = await fetch('/api/messages/conversations', {
+            headers: {
+              'Authorization': `Bearer ${authToken}`,
+              'Content-Type': 'application/json',
+              'user-id': user.id
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log('🌐 Backend conversations response:', data);
+            
+            // CRITICAL FIX: Safe data extraction
+            let backendConversations: any[] = [];
+            
+            if (data && data.success && Array.isArray(data.conversations)) {
+              backendConversations = data.conversations;
+            } else if (data && Array.isArray(data.conversations)) {
+              backendConversations = data.conversations;
+            } else if (Array.isArray(data)) {
+              backendConversations = data;
+            }
+            
+            console.log('🌐 Backend conversations found:', backendConversations.length);
+            
+            // Merge backend conversations with local ones
+            if (backendConversations.length > 0) {
+              const mergedConversations = [...userConversations];
+              
+              backendConversations.forEach((backendConv: any) => {
+                const exists = mergedConversations.find(c => c.id === backendConv.id);
+                if (!exists && backendConv.id) {
+                  // SAFE: Convert backend format to frontend format
+                  try {
+                    // CRITICAL FIX: Safe participants handling
+                    let participants: string[] = [];
+                    
+                    if (Array.isArray(backendConv.participants)) {
+                      participants = backendConv.participants;
+                    } else if (typeof backendConv.participants === 'string') {
+                      // Handle PostgreSQL array format: "{user1,user2}"
+                      try {
+                        participants = backendConv.participants
+                          .replace(/[{}]/g, '')
+                          .split(',')
+                          .map((p: string) => p.trim())
+                          .filter((p: string) => p.length > 0);
+                      } catch (parseError) {
+                        console.warn('⚠️ Error parsing participants:', parseError);
+                        participants = [user.id];
+                      }
+                    } else {
+                      participants = [user.id];
+                    }
+                    
+                    // SAFE: Only include if user is a participant
+                    if (participants.includes(user.id)) {
+                      const conversation: Conversation = {
+                        id: backendConv.id,
+                        participants: participants,
+                        projectId: backendConv.project_id,
+                        projectTitle: backendConv.project_title || backendConv.projectTitle || 'Conversation',
+                        lastMessage: backendConv.last_message ? {
+                          id: backendConv.last_message.id || `msg_${Date.now()}`,
+                          conversationId: backendConv.last_message.conversation_id || backendConv.id,
+                          senderId: backendConv.last_message.sender_id,
+                          receiverId: backendConv.last_message.recipient_id,
+                          content: backendConv.last_message.content || '',
+                          timestamp: new Date(backendConv.last_message.created_at || Date.now()),
+                          type: backendConv.last_message.type || 'text',
+                          read: !!backendConv.last_message.read_at
+                        } : undefined,
+                        createdAt: new Date(backendConv.created_at || Date.now()),
+                        updatedAt: new Date(backendConv.last_message_at || backendConv.created_at || Date.now())
+                      };
+                      mergedConversations.push(conversation);
+                    }
+                  } catch (conversionError) {
+                    console.error('❌ Error converting backend conversation:', conversionError);
+                  }
+                }
+              });
+              
+              // SAFE: Ensure all conversations have valid participants
+              const validConversations = mergedConversations.filter(conv => {
+                try {
+                  return conv && Array.isArray(conv.participants) && conv.participants.includes(user.id);
+                } catch (filterError) {
+                  console.warn('⚠️ Invalid conversation filtered out:', filterError);
+                  return false;
+                }
+              });
+              
+              setConversations(validConversations);
+              return;
+            }
+          } else {
+            console.warn('⚠️ Backend API response not ok:', response.status);
+          }
+        }
+      } catch (apiError) {
+        console.log('⚠️ Backend API not available, using local data only:', apiError);
       }
+      
+      // SAFE: Always set valid array
+      setConversations(userConversations);
     } catch (error) {
-      console.error('Failed to load users:', error);
+      console.error('❌ Failed to load conversations:', error);
+      // CRITICAL FIX: Always set empty array on error
+      setConversations([]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Create conversation with specific talent
-  const createConversationWithTalent = async (talentId: string) => {
-    const talent = availableUsers.find(u => u.id === talentId);
-    if (talent && activeUser) {
-      const newConv: Conversation = {
-        id: `conv_${activeUser.id}_${talentId}`,
-        participants: [activeUser.id, talentId],
-        lastMessage: '',
-        lastMessageTime: new Date().toISOString(),
-        unreadCount: 0,
-        projectTitle: `Conversation with ${talent.name}`
-      };
+  // SAFE: Load messages with error handling
+  const loadMessagesFromService = async (conversationId: string) => {
+    if (!user || !conversationId) return;
+    
+    try {
+      console.log('💬 Loading messages for conversation:', conversationId);
+      setLoading(true);
       
-      setConversations(prev => [newConv, ...prev]);
-      setSelectedConversation(newConv);
-    }
-  };
-
-  // Handle file selection
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files) return;
-
-    Array.from(files).forEach(file => {
-      if (file.size > 10 * 1024 * 1024) { // 10MB limit
-        setError('File size must be less than 10MB');
-        return;
+      // SAFE: Get messages from messaging service
+      let conversationMessages: Message[] = [];
+      
+      try {
+        const serviceMessages = messagingService.getMessages(conversationId);
+        conversationMessages = Array.isArray(serviceMessages) ? serviceMessages : [];
+        console.log('💬 Loaded local messages:', conversationMessages.length);
+      } catch (serviceError) {
+        console.error('❌ Error from messaging service:', serviceError);
+        conversationMessages = [];
       }
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const attachment: FileAttachment = {
-          id: `file_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          data: e.target?.result as string
-        };
-        
-        setAttachments(prev => [...prev, attachment]);
-      };
       
-      reader.readAsDataURL(file);
-    });
-
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      // Try to also fetch from backend API
+      try {
+        const authToken = localStorage.getItem('auth_token') || 
+                         localStorage.getItem('authToken') || 
+                         localStorage.getItem('token');
+        
+        if (authToken) {
+          const response = await fetch(`/api/conversations/${conversationId}/messages`, {
+            headers: {
+              'Authorization': `Bearer ${authToken}`,
+              'Content-Type': 'application/json',
+              'user-id': user.id
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log('🌐 Backend messages:', data.messages?.length || 0);
+            
+            if (data.messages && Array.isArray(data.messages)) {
+              const backendMessages: Message[] = data.messages.map((msg: any) => ({
+                id: msg.id || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                conversationId: msg.conversation_id || conversationId,
+                senderId: msg.sender_id,
+                receiverId: msg.recipient_id,
+                content: msg.filtered_content || msg.content || '',
+                originalContent: msg.is_filtered ? msg.content : undefined,
+                timestamp: new Date(msg.created_at || Date.now()),
+                type: msg.type || 'text',
+                metadata: msg.metadata ? (typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata) : undefined,
+                read: !!msg.read_at,
+                filtered: !!msg.is_filtered
+              }));
+              
+              // Merge with local messages, avoid duplicates
+              const mergedMessages = [...conversationMessages];
+              backendMessages.forEach(backendMsg => {
+                const exists = mergedMessages.find(m => m.id === backendMsg.id);
+                if (!exists) {
+                  mergedMessages.push(backendMsg);
+                }
+              });
+              
+              // Sort by timestamp
+              mergedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+              
+              setMessages(mergedMessages);
+              
+              // Mark messages as read
+              conversationMessages
+                .filter(m => m.receiverId === user.id && !m.read)
+                .forEach(m => {
+                  try {
+                    messagingService.markAsRead(m.id);
+                  } catch (markError) {
+                    console.warn('⚠️ Error marking message as read:', markError);
+                  }
+                });
+              
+              return;
+            }
+          }
+        }
+      } catch (apiError) {
+        console.log('⚠️ Backend API not available, using local data only');
+      }
+      
+      setMessages(conversationMessages);
+      
+      // Mark messages as read
+      conversationMessages
+        .filter(m => m.receiverId === user.id && !m.read)
+        .forEach(m => {
+          try {
+            messagingService.markAsRead(m.id);
+          } catch (markError) {
+            console.warn('⚠️ Error marking message as read:', markError);
+          }
+        });
+        
+    } catch (error) {
+      console.error('❌ Failed to load messages:', error);
+      setMessages([]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Remove attachment
-  const removeAttachment = (attachmentId: string) => {
-    setAttachments(prev => prev.filter(a => a.id !== attachmentId));
-  };
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !activeConversation || !user) return;
 
-  // Format file size
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  // Handle emoji selection
-  const addEmoji = (emoji: string) => {
-    setNewMessage(prev => prev + emoji);
-    setShowEmojiPicker(false);
-    textareaRef.current?.focus();
-  };
-
-  // Common emojis
-  const commonEmojis = ['😀', '😍', '🤔', '👍', '❤️', '😂', '😎', '🔥', '💯', '🎉', '👏', '💪'];
-
-  // Auto-resize textarea
-  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setNewMessage(e.target.value);
-    
-    // Auto-resize
-    const textarea = e.target;
-    textarea.style.height = 'auto';
-    textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-  };
-
-  // Send message with attachments
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if ((!newMessage.trim() && attachments.length === 0) || !selectedConversation || sending) return;
-
-    const serviceUser = messagingService.getCurrentUser();
-    if (!serviceUser) {
-      setError('Please log in to send messages');
-      return;
-    }
-
-    const recipientId = selectedConversation.participants.find(p => p !== serviceUser.id);
-    if (!recipientId) {
-      setError('No recipient found in this conversation');
-      return;
-    }
-
-    setSending(true);
-    setError(null);
+    const recipientId = activeConversation.participants.find(p => p !== user.id);
+    if (!recipientId) return;
 
     try {
-      console.log('📤 Sending message with attachments:', attachments.length);
+      console.log('📤 Sending message:', { conversationId: activeConversation.id, content: newMessage });
       
-      // Prepare message content
-      let messageContent = newMessage.trim();
-      
-      // Add attachment info to message
-      if (attachments.length > 0) {
-        const attachmentText = attachments.map(att => `📎 ${att.name} (${formatFileSize(att.size)})`).join('\n');
-        messageContent = messageContent ? `${messageContent}\n\n${attachmentText}` : attachmentText;
-      }
-      
-      // Send via messaging service
-      await messagingService.sendMessage(recipientId, messageContent, serviceUser.name);
-      
-      // Create local message for immediate UI update
-      const newMsg: Message = {
-        id: `temp_${Date.now()}`,
-        senderId: serviceUser.id,
-        recipientId: recipientId,
-        content: messageContent,
-        timestamp: new Date().toISOString(),
-        senderName: serviceUser.name
-      };
-      
-      setMessages(prev => [...prev, newMsg]);
+      await messagingService.sendMessage(
+        activeConversation.id,
+        user.id,
+        recipientId,
+        newMessage,
+        'text'
+      );
+
       setNewMessage('');
-      setAttachments([]);
-      
-      // Reset textarea height
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
+      loadMessagesFromService(activeConversation.id);
+      loadConversationsFromService();
       
       console.log('✅ Message sent successfully');
-      
-    } catch (err) {
-      console.error('❌ Failed to send message:', err);
-      setError('Failed to send message. Please check your connection and try again.');
-    } finally {
-      setSending(false);
+    } catch (error) {
+      console.error('❌ Failed to send message:', error);
+      alert(error instanceof Error ? error.message : 'Failed to send message');
     }
   };
 
-  // Filter conversations by search
-  const filteredConversations = conversations.filter(conv =>
-    conv.projectTitle?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    conv.lastMessage?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files || !activeConversation || !user) return;
 
-  // Filter available users for new conversation
-  const filteredUsers = availableUsers.filter(user =>
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+    const recipientId = activeConversation.participants.find(p => p !== user.id);
+    if (!recipientId) return;
 
-  if (!isOpen) return null;
+    try {
+      setLoading(true);
+      console.log('📎 Uploading files:', files.length);
+      
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        // Validate file type and size
+        const allowedTypes = [
+          'text/plain',
+          'application/pdf',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'image/png',
+          'image/jpeg',
+          'image/jpg',
+          'audio/mp3',
+          'audio/wav',
+          'audio/mpeg'
+        ];
 
-  if (loading) {
+        if (!allowedTypes.includes(file.type)) {
+          alert(`File type ${file.type} is not supported. Please upload TXT, PDF, DOCX, PNG, JPG, MP3, or WAV files.`);
+          continue;
+        }
+
+        if (file.size > 50 * 1024 * 1024) {
+          alert(`File ${file.name} is too large. Maximum size is 50MB.`);
+          continue;
+        }
+        
+        await messagingService.sendFileMessage(
+          activeConversation.id,
+          user.id,
+          recipientId,
+          file
+        );
+      }
+      
+      loadMessagesFromService(activeConversation.id);
+      loadConversationsFromService();
+      setShowAttachmentMenu(false);
+      
+      console.log('✅ Files uploaded successfully');
+    } catch (error) {
+      console.error('❌ File upload failed:', error);
+      alert(error instanceof Error ? error.message : 'Upload failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleFileUpload(e.dataTransfer.files);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const formatFileSize = (bytes: number) => {
+    const mb = bytes / (1024 * 1024);
+    return `${mb.toFixed(1)} MB`;
+  };
+
+  const getFileIcon = (type: string) => {
+    if (type.startsWith('image/')) return <ImageIcon className="h-5 w-5 text-blue-400" />;
+    if (type.startsWith('audio/')) return <Music className="h-5 w-5 text-green-400" />;
+    return <FileText className="h-5 w-5 text-gray-400" />;
+  };
+
+  // Get user name for display
+  const getUserDisplayName = (userId: string): string => {
+    // Try to get from stored user data
+    try {
+      const users = JSON.parse(localStorage.getItem('users') || '[]');
+      const foundUser = users.find((u: any) => u.id === userId);
+      if (foundUser) return foundUser.name;
+    } catch (error) {
+      console.warn('⚠️ Error parsing users from localStorage:', error);
+    }
+    
+    // Fallback to user ID suffix
+    return `User ${userId.slice(-4)}`;
+  };
+
+  // SAFE: Filter conversations with error handling
+  const filteredConversations = conversations.filter(conv => {
+    try {
+      if (!searchQuery) return true;
+      
+      const otherParticipant = conv.participants.find(p => p !== user?.id);
+      const participantName = otherParticipant ? getUserDisplayName(otherParticipant) : '';
+      
+      return participantName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+             conv.projectTitle?.toLowerCase().includes(searchQuery.toLowerCase());
+    } catch (filterError) {
+      console.warn('⚠️ Error filtering conversation:', filterError);
+      return true; // Include conversation if there's an error filtering
+    }
+  });
+
+  const handleBackClick = () => {
+    if (onClose) {
+      onClose();
+    } else {
+      window.history.back();
+    }
+  };
+
+  if (!user || !isAuthenticated) {
     return (
-      <motion.div 
-        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-      >
-        <motion.div 
-          className="bg-white rounded-lg p-8 shadow-2xl"
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-        >
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading messaging system...</p>
-          </div>
-        </motion.div>
-      </motion.div>
-    );
-  }
-
-  if (error && !conversations.length) {
-    return (
-      <motion.div 
-        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-      >
-        <motion.div 
-          className="bg-white rounded-lg p-8 shadow-2xl max-w-md"
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-        >
-          <div className="text-center">
-            <div className="text-red-500 text-4xl mb-4">⚠️</div>
-            <p className="text-red-600 mb-6">{error}</p>
-            <div className="space-x-4">
-              <button 
-                onClick={() => window.location.reload()} 
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+      <div className="min-h-screen bg-slate-900 pt-24 pb-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex h-96 bg-slate-800 rounded-xl border border-gray-700 items-center justify-center">
+            <div className="text-center p-8">
+              <p className="text-gray-400 mb-4">Please sign in to access messaging</p>
+              <motion.button
+                onClick={handleBackClick}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
               >
-                Reload Page
-              </button>
-              {onClose && (
-                <button 
-                  onClick={onClose}
-                  className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition-colors"
-                >
-                  Close
-                </button>
-              )}
+                Back to Home
+              </motion.button>
             </div>
           </div>
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
     );
   }
 
   return (
-    <motion.div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      onClick={(e) => e.target === e.currentTarget && onClose?.()}
-    >
-      <motion.div 
-        className="bg-white rounded-lg shadow-2xl w-full max-w-6xl h-[80vh] flex overflow-hidden"
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.3 }}
-      >
-        {/* Conversations Sidebar */}
-        <div className="w-1/3 border-r border-gray-200 bg-gray-50 flex flex-col">
-          {/* Header */}
-          <div className="p-4 border-b border-gray-200 bg-white">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">Messages</h2>
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => setNewConversationMode(!newConversationMode)}
-                  className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition-colors"
-                  title="New Conversation"
-                >
-                  ➕
-                </button>
-                {onClose && (
-                  <button 
-                    onClick={onClose}
-                    className="text-gray-400 hover:text-gray-600 p-2 transition-colors"
-                    title="Close"
-                  >
-                    ✕
-                  </button>
-                )}
+    <div className="min-h-screen bg-slate-900 pt-24 pb-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Back Button */}
+        <motion.button
+          onClick={handleBackClick}
+          className="flex items-center space-x-2 text-white/80 hover:text-white mb-6 lg:mb-8 transition-colors"
+          whileHover={{ x: -5 }}
+          transition={{ type: "spring", stiffness: 400, damping: 10 }}
+        >
+          <ArrowLeft className="h-5 w-5" />
+          <span>Back to Dashboard</span>
+        </motion.button>
+        
+        <div className="bg-slate-800 rounded-xl p-6 border border-gray-700 mb-8">
+          <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">Messaging Center</h1>
+          <p className="text-gray-300 text-sm sm:text-base">
+            {user.type === 'client' 
+              ? 'Connect with voice talent and discuss your projects securely.' 
+              : 'Communicate with clients and discuss project details securely.'}
+          </p>
+          <div className="flex items-center gap-2 mt-2">
+            <div className={`w-2 h-2 rounded-full ${
+              socketStatus === 'connected' ? 'bg-green-500' : 
+              socketStatus === 'error' ? 'bg-red-500' : 'bg-yellow-500'
+            }`}></div>
+            <span className="text-xs text-gray-400">
+              {socketStatus === 'connected' ? 'Connected' : 
+               socketStatus === 'error' ? 'Connection Error' : 'Connecting...'}
+            </span>
+          </div>
+        </div>
+        
+        <div 
+          className="h-[500px] sm:h-[600px] bg-slate-800 rounded-xl border border-gray-700 overflow-hidden relative"
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+        >
+          {/* Loading Overlay */}
+          {loading && (
+            <div className="absolute inset-0 bg-black/50 z-40 flex items-center justify-center">
+              <div className="bg-slate-800 rounded-lg p-4 flex items-center space-x-3">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-400"></div>
+                <span className="text-white">Loading...</span>
+              </div>
+            </div>
+          )}
+
+          {/* Drag overlay */}
+          {isDragging && (
+            <div className="absolute inset-0 bg-blue-600/20 border-2 border-dashed border-blue-400 z-50 flex items-center justify-center">
+              <div className="text-center">
+                <Paperclip className="h-12 w-12 text-blue-400 mx-auto mb-2" />
+                <p className="text-blue-400 font-medium">Drop files here to upload</p>
+              </div>
+            </div>
+          )}
+
+          {/* Conversations List */}
+          <div className="w-1/3 border-r border-gray-700 h-full flex flex-col hidden sm:flex">
+            <div className="p-4 border-b border-gray-700">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold text-white">Messages</h3>
+                <span className="text-sm text-gray-400">
+                  {filteredConversations.length} conversation{filteredConversations.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+                <input
+                  type="text"
+                  placeholder="Search conversations..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400 text-sm"
+                />
               </div>
             </div>
             
-            {/* Search */}
-            <input
-              type="text"
-              placeholder={newConversationMode ? "Search users..." : "Search conversations..."}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-            />
-          </div>
-
-          {/* Conversations/Users List */}
-          <div className="flex-1 overflow-y-auto">
-            {newConversationMode ? (
-              // Available Users
-              <div className="p-2">
-                <h3 className="text-sm font-semibold text-gray-600 px-2 py-1">Start New Conversation</h3>
-                {filteredUsers.map(user => (
-                  <button
-                    key={user.id}
-                    onClick={() => {
-                      createConversationWithTalent(user.id);
-                      setNewConversationMode(false);
-                      setSearchQuery('');
-                    }}
-                    className="w-full text-left p-3 hover:bg-gray-100 rounded-lg transition-colors"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
-                        {user.name.charAt(0).toUpperCase()}
+            <div className="flex-1 overflow-y-auto">
+              {filteredConversations.length > 0 ? (
+                filteredConversations.map((conversation) => {
+                  const otherParticipant = conversation.participants.find(p => p !== user.id);
+                  const participantName = otherParticipant ? getUserDisplayName(otherParticipant) : 'Unknown User';
+                  
+                  // SAFE: Get unread count with error handling
+                  let unreadCount = 0;
+                  try {
+                    unreadCount = messagingService.getUnreadCount(user.id);
+                  } catch (unreadError) {
+                    console.warn('⚠️ Error getting unread count:', unreadError);
+                  }
+                  
+                  return (
+                    <motion.div
+                      key={conversation.id}
+                      className={`p-4 border-b border-gray-700 cursor-pointer hover:bg-slate-700 transition-colors ${
+                        activeConversation?.id === conversation.id ? 'bg-slate-700' : ''
+                      }`}
+                      onClick={() => {
+                        setActiveConversation(conversation);
+                        loadMessagesFromService(conversation.id);
+                      }}
+                      whileHover={{ backgroundColor: 'rgba(51, 65, 85, 0.8)' }}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="bg-blue-600 rounded-full p-2 relative">
+                          <User className="h-4 w-4 text-white" />
+                          {unreadCount > 0 && (
+                            <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                              {unreadCount}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-medium truncate">
+                            {participantName}
+                          </p>
+                          <p className="text-xs text-gray-400 truncate">
+                            {conversation.projectTitle || 'Direct Message'}
+                          </p>
+                          {conversation.lastMessage && (
+                            <p className="text-sm text-gray-400 truncate">
+                              {conversation.lastMessage.content}
+                            </p>
+                          )}
+                        </div>
+                        {conversation.lastMessage && (
+                          <span className="text-xs text-gray-500">
+                            {formatTime(conversation.lastMessage.timestamp)}
+                          </span>
+                        )}
                       </div>
-                      <div>
-                        <div className="font-medium text-gray-900">{user.name}</div>
-                        <div className="text-sm text-gray-500 capitalize">{user.type}</div>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              // Conversations
-              filteredConversations.length === 0 ? (
-                <motion.div 
-                  className="p-8 text-center text-gray-500"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                >
-                  <div className="text-4xl mb-4">💬</div>
-                  <p className="mb-2">No conversations yet</p>
-                  <p className="text-sm">Click ➕ to start a new conversation</p>
-                </motion.div>
+                    </motion.div>
+                  );
+                })
               ) : (
-                filteredConversations.map((conversation, index) => (
-                  <motion.button
-                    key={conversation.id}
-                    onClick={() => {
-                      setSelectedConversation(conversation);
-                      setMessages([]);
-                      setError(null);
-                    }}
-                    className={`w-full text-left p-4 border-b border-gray-200 hover:bg-gray-100 transition-colors ${
-                      selectedConversation?.id === conversation.id ? 'bg-blue-100 border-blue-200' : ''
-                    }`}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="font-semibold text-gray-900 truncate">
-                          {conversation.projectTitle || 'Conversation'}
-                        </div>
-                        <div className="text-sm text-gray-500 truncate mt-1">
-                          {conversation.lastMessage || 'No messages yet'}
-                        </div>
-                      </div>
-                      {conversation.unreadCount > 0 && (
-                        <span className="bg-blue-600 text-white text-xs rounded-full px-2 py-1 ml-2">
-                          {conversation.unreadCount}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-xs text-gray-400 mt-2">
-                      {new Date(conversation.lastMessageTime).toLocaleString()}
-                    </div>
-                  </motion.button>
-                ))
-              )
-            )}
-          </div>
-        </div>
-
-        {/* Messages Area */}
-        <div className="flex-1 flex flex-col">
-          {selectedConversation ? (
-            <>
-              {/* Chat Header */}
-              <div className="p-4 border-b border-gray-200 bg-white">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="font-bold text-gray-900">
-                      {selectedConversation.projectTitle || 'Conversation'}
-                    </h3>
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center p-6">
+                    <p className="text-gray-400 mb-2">
+                      {searchQuery ? 'No conversations found' : 'No conversations yet'}
+                    </p>
                     <p className="text-sm text-gray-500">
-                      {selectedConversation.participants.length} participants
+                      {user.type === 'client' 
+                        ? 'Start by browsing voice talent and contacting them' 
+                        : 'Conversations with clients will appear here'}
                     </p>
                   </div>
-                  <div className="flex space-x-2">
-                    <button className="text-gray-400 hover:text-gray-600 p-2" title="Call">
-                      📞
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Mobile Conversations List */}
+          <div className="sm:hidden w-full h-full flex flex-col">
+            {!activeConversation ? (
+              <>
+                <div className="p-4 border-b border-gray-700">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-semibold text-white">Messages</h3>
+                    <span className="text-sm text-gray-400">
+                      {filteredConversations.length}
+                    </span>
+                  </div>
+                  
+                  {/* Search */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+                    <input
+                      type="text"
+                      placeholder="Search conversations..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400 text-sm"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto">
+                  {filteredConversations.length > 0 ? (
+                    filteredConversations.map((conversation) => {
+                      const otherParticipant = conversation.participants.find(p => p !== user.id);
+                      const participantName = otherParticipant ? getUserDisplayName(otherParticipant) : 'Unknown User';
+                      
+                      return (
+                        <motion.div
+                          key={conversation.id}
+                          className="p-4 border-b border-gray-700 cursor-pointer hover:bg-slate-700 transition-colors"
+                          onClick={() => {
+                            setActiveConversation(conversation);
+                            loadMessagesFromService(conversation.id);
+                          }}
+                          whileHover={{ backgroundColor: 'rgba(51, 65, 85, 0.8)' }}
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className="bg-blue-600 rounded-full p-2">
+                              <User className="h-4 w-4 text-white" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white font-medium truncate">
+                                {participantName}
+                              </p>
+                              <p className="text-xs text-gray-400 truncate">
+                                {conversation.projectTitle || 'Direct Message'}
+                              </p>
+                              {conversation.lastMessage && (
+                                <p className="text-sm text-gray-400 truncate">
+                                  {conversation.lastMessage.content}
+                                </p>
+                              )}
+                            </div>
+                            {conversation.lastMessage && (
+                              <span className="text-xs text-gray-500">
+                                {formatTime(conversation.lastMessage.timestamp)}
+                              </span>
+                            )}
+                          </div>
+                        </motion.div>
+                      );
+                    })
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center p-6">
+                        <p className="text-gray-400 mb-2">No conversations found</p>
+                        <p className="text-sm text-gray-500">
+                          {user.type === 'client' 
+                            ? 'Start by browsing voice talent and contacting them' 
+                            : 'Conversations with clients will appear here'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              // Chat Area for Mobile
+              <div className="flex-1 flex flex-col h-full">
+                {/* Chat Header */}
+                <div className="p-4 border-b border-gray-700">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="bg-blue-600 rounded-full p-2">
+                        <User className="h-4 w-4 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-white font-medium">
+                          {getUserDisplayName(activeConversation.participants.find(p => p !== user.id) || '')}
+                        </p>
+                        <p className="text-sm text-gray-400">
+                          {activeConversation.projectTitle || 'Direct Message'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <button 
+                      className="text-gray-400 hover:text-white"
+                      onClick={() => setActiveConversation(null)}
+                    >
+                      <ArrowLeft className="h-5 w-5" />
                     </button>
-                    <button className="text-gray-400 hover:text-gray-600 p-2" title="Video Call">
-                      📹
-                    </button>
-                    <button className="text-gray-400 hover:text-gray-600 p-2" title="Settings">
-                      ⚙️
-                    </button>
+                  </div>
+                </div>
+
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  <AnimatePresence>
+                    {messages.map((message) => (
+                      <motion.div
+                        key={message.id}
+                        className={`flex ${message.senderId === user.id ? 'justify-end' : 'justify-start'}`}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <div
+                          className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                            message.senderId === user.id
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-slate-700 text-white'
+                          }`}
+                        >
+                          {message.filtered && (
+                            <div className="flex items-center space-x-1 mb-1">
+                              <AlertTriangle className="h-3 w-3 text-yellow-400" />
+                              <span className="text-xs text-yellow-400">Content filtered</span>
+                            </div>
+                          )}
+                          
+                          <p className="text-sm">{message.content}</p>
+                          
+                          {message.metadata?.fileId && (
+                            <div className="mt-2 p-3 bg-black/20 rounded-lg border border-white/20">
+                              <div className="flex items-center space-x-3">
+                                <div className="flex-shrink-0">
+                                  {getFileIcon(message.metadata.fileType || '')}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{message.metadata.fileName}</p>
+                                  <p className="text-xs opacity-75">
+                                    {formatFileSize(message.metadata.fileSize || 0)}
+                                  </p>
+                                </div>
+                                <button className="text-white/80 hover:text-white p-1 rounded">
+                                  <Download className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          
+                          <div className="flex items-center justify-between mt-2">
+                            <span className="text-xs opacity-75">
+                              {formatTime(message.timestamp)}
+                            </span>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Message Input */}
+                <div className="p-4 border-t border-gray-700">
+                  <div className="flex items-center space-x-3">
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
+                        className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-slate-700 transition-colors"
+                      >
+                        <Paperclip className="h-5 w-5" />
+                      </button>
+                      
+                      {showAttachmentMenu && (
+                        <div className="absolute bottom-full left-0 mb-2 bg-slate-700 rounded-lg shadow-lg border border-gray-600 p-2 min-w-48">
+                          <label className="block px-3 py-2 text-sm text-gray-300 hover:bg-slate-600 rounded cursor-pointer">
+                            📄 Document (PDF, DOC, TXT)
+                            <input
+                              type="file"
+                              accept=".pdf,.doc,.docx,.txt"
+                              onChange={(e) => handleFileUpload(e.target.files)}
+                              className="hidden"
+                            />
+                          </label>
+                          <label className="block px-3 py-2 text-sm text-gray-300 hover:bg-slate-600 rounded cursor-pointer">
+                            🖼️ Image (PNG, JPG)
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/jpg"
+                              onChange={(e) => handleFileUpload(e.target.files)}
+                              className="hidden"
+                            />
+                          </label>
+                          <label className="block px-3 py-2 text-sm text-gray-300 hover:bg-slate-600 rounded cursor-pointer">
+                            🎵 Audio (MP3, WAV)
+                            <input
+                              type="file"
+                              accept="audio/mp3,audio/wav,audio/mpeg"
+                              onChange={(e) => handleFileUpload(e.target.files)}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <input
+                      type="text"
+                      placeholder="Type a message..."
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                      className="flex-1 px-4 py-2 bg-slate-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <motion.button
+                      onClick={sendMessage}
+                      disabled={!newMessage.trim()}
+                      className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white p-2 rounded-lg transition-colors"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                    >
+                      <Send className="h-4 w-4" />
+                    </motion.button>
+                  </div>
+                  
+                  {/* Security Notice */}
+                  <p className="text-xs text-gray-500 mt-2">
+                    🔒 Messages are monitored to prevent off-platform contact sharing for your security
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop Chat Area */}
+          {activeConversation && (
+            <div className="flex-1 flex-col h-full hidden sm:flex">
+              {/* Chat Header */}
+              <div className="p-4 border-b border-gray-700">
+                <div className="flex items-center space-x-3">
+                  <div className="bg-blue-600 rounded-full p-2">
+                    <User className="h-4 w-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-white font-medium">
+                      {getUserDisplayName(activeConversation.participants.find(p => p !== user.id) || '')}
+                    </p>
+                    <p className="text-sm text-gray-400">
+                      {activeConversation.projectTitle || 'Direct Message'}
+                    </p>
                   </div>
                 </div>
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-                {messages.length === 0 ? (
-                  <motion.div 
-                    className="text-center text-gray-500 mt-16"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                  >
-                    <div className="text-6xl mb-4">💬</div>
-                    <p className="text-lg mb-2">Start the conversation!</p>
-                    <p className="text-sm">Send a message to begin chatting</p>
-                  </motion.div>
-                ) : (
-                  messages.map((message, index) => (
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <AnimatePresence>
+                  {messages.map((message) => (
                     <motion.div
                       key={message.id}
-                      className={`flex ${
-                        message.senderId === messagingService.getCurrentUser()?.id 
-                          ? 'justify-end' 
-                          : 'justify-start'
-                      }`}
+                      className={`flex ${message.senderId === user.id ? 'justify-end' : 'justify-start'}`}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
+                      transition={{ duration: 0.3 }}
                     >
                       <div
-                        className={`max-w-md px-4 py-3 rounded-2xl shadow-sm ${
-                          message.senderId === messagingService.getCurrentUser()?.id
+                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                          message.senderId === user.id
                             ? 'bg-blue-600 text-white'
-                            : 'bg-white text-gray-900 border border-gray-200'
+                            : 'bg-slate-700 text-white'
                         }`}
                       >
-                        <p className="whitespace-pre-wrap">{message.content}</p>
-                        <p className={`text-xs mt-2 ${
-                          message.senderId === messagingService.getCurrentUser()?.id 
-                            ? 'text-blue-100' 
-                            : 'text-gray-500'
-                        }`}>
-                          {new Date(message.timestamp).toLocaleTimeString()}
-                        </p>
+                        {message.filtered && (
+                          <div className="flex items-center space-x-1 mb-1">
+                            <AlertTriangle className="h-3 w-3 text-yellow-400" />
+                            <span className="text-xs text-yellow-400">Content filtered</span>
+                          </div>
+                        )}
+                        
+                        <p className="text-sm">{message.content}</p>
+                        
+                        {message.metadata?.fileId && (
+                          <div className="mt-2 p-3 bg-black/20 rounded-lg border border-white/20">
+                            <div className="flex items-center space-x-3">
+                              <div className="flex-shrink-0">
+                                {getFileIcon(message.metadata.fileType || '')}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{message.metadata.fileName}</p>
+                                <p className="text-xs opacity-75">
+                                  {formatFileSize(message.metadata.fileSize || 0)}
+                                </p>
+                              </div>
+                              <button className="text-white/80 hover:text-white p-1 rounded">
+                                <Download className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-xs opacity-75">
+                            {formatTime(message.timestamp)}
+                          </span>
+                        </div>
                       </div>
                     </motion.div>
-                  ))
-                )}
+                  ))}
+                </AnimatePresence>
                 <div ref={messagesEndRef} />
               </div>
 
               {/* Message Input */}
-              <div className="p-4 bg-white border-t border-gray-200">
-                {/* Error Display */}
-                {error && (
-                  <motion.div 
-                    className="mb-3 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg border border-red-200"
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                  >
-                    {error}
-                  </motion.div>
-                )}
-
-                {/* Attachments Preview */}
-                {attachments.length > 0 && (
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    {attachments.map(attachment => (
-                      <div key={attachment.id} className="flex items-center bg-gray-100 rounded-lg p-2">
-                        <span className="text-sm truncate max-w-32">
-                          📎 {attachment.name}
-                        </span>
-                        <button
-                          onClick={() => removeAttachment(attachment.id)}
-                          className="ml-2 text-red-500 hover:text-red-700"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Input Form */}
-                <form onSubmit={handleSendMessage} className="flex items-end space-x-2">
-                  {/* Emoji Button */}
+              <div className="p-4 border-t border-gray-700">
+                <div className="flex items-center space-x-3">
                   <div className="relative">
                     <button
-                      type="button"
-                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                      className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                      onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
+                      className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-slate-700 transition-colors"
                     >
-                      😀
+                      <Paperclip className="h-5 w-5" />
                     </button>
                     
-                    {/* Emoji Picker */}
-                    {showEmojiPicker && (
-                      <motion.div 
-                        className="absolute bottom-12 left-0 bg-white border border-gray-200 rounded-lg shadow-lg p-2 grid grid-cols-6 gap-1"
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                      >
-                        {commonEmojis.map(emoji => (
-                          <button
-                            key={emoji}
-                            type="button"
-                            onClick={() => addEmoji(emoji)}
-                            className="p-1 hover:bg-gray-100 rounded text-lg"
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                      </motion.div>
+                    {showAttachmentMenu && (
+                      <div className="absolute bottom-full left-0 mb-2 bg-slate-700 rounded-lg shadow-lg border border-gray-600 p-2 min-w-48">
+                        <label className="block px-3 py-2 text-sm text-gray-300 hover:bg-slate-600 rounded cursor-pointer">
+                          📄 Document (PDF, DOC, TXT)
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx,.txt"
+                            onChange={(e) => handleFileUpload(e.target.files)}
+                            className="hidden"
+                          />
+                        </label>
+                        <label className="block px-3 py-2 text-sm text-gray-300 hover:bg-slate-600 rounded cursor-pointer">
+                          🖼️ Image (PNG, JPG)
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/jpg"
+                            onChange={(e) => handleFileUpload(e.target.files)}
+                            className="hidden"
+                          />
+                        </label>
+                        <label className="block px-3 py-2 text-sm text-gray-300 hover:bg-slate-600 rounded cursor-pointer">
+                          🎵 Audio (MP3, WAV)
+                          <input
+                            type="file"
+                            accept="audio/mp3,audio/wav,audio/mpeg"
+                            onChange={(e) => handleFileUpload(e.target.files)}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
                     )}
                   </div>
-
-                  {/* File Upload Button */}
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                    title="Attach File"
-                  >
-                    📎
-                  </button>
-
-                  {/* Hidden File Input */}
+                  
                   <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    className="hidden"
-                    onChange={handleFileSelect}
-                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
-                  />
-
-                  {/* Message Textarea */}
-                  <textarea
-                    ref={textareaRef}
+                    type="text"
+                    placeholder="Type a message..."
                     value={newMessage}
-                    onChange={handleTextareaChange}
-                    placeholder="Type your message..."
-                    disabled={sending}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none min-h-[44px] max-h-[120px]"
-                    rows={1}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage(e);
-                      }
-                    }}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                    className="flex-1 px-4 py-2 bg-slate-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-
-                  {/* Send Button */}
                   <motion.button
-                    type="submit"
-                    disabled={(!newMessage.trim() && attachments.length === 0) || sending}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    whileHover={{ scale: sending ? 1 : 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                    onClick={sendMessage}
+                    disabled={!newMessage.trim()}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white p-2 rounded-lg transition-colors"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
                   >
-                    {sending ? (
-                      <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                    ) : (
-                      '➤'
-                    )}
+                    <Send className="h-4 w-4" />
                   </motion.button>
-                </form>
-
-                <p className="text-xs text-gray-400 mt-2">
-                  Press Enter to send, Shift+Enter for new line
+                </div>
+                
+                {/* Security Notice */}
+                <p className="text-xs text-gray-500 mt-2">
+                  🔒 Messages are monitored to prevent off-platform contact sharing for your security
                 </p>
               </div>
-            </>
-          ) : (
-            <motion.div 
-              className="flex-1 flex items-center justify-center text-gray-500 bg-gray-50"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
-              <div className="text-center">
-                <div className="text-6xl mb-6">💬</div>
-                <h3 className="text-xl font-semibold mb-2">Welcome to Messages</h3>
-                <p className="mb-4">Select a conversation to start messaging</p>
-                <button
-                  onClick={() => setNewConversationMode(true)}
-                  className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Start New Conversation
-                </button>
-              </div>
-            </motion.div>
+            </div>
           )}
+
+          {/* No conversation selected (Desktop) */}
+          {!activeConversation && (
+            <div className="flex-1 flex items-center justify-center hidden sm:flex">
+              <div className="text-center">
+                <User className="h-12 w-12 text-gray-500 mx-auto mb-4" />
+                <p className="text-gray-400 mb-2">Select a conversation to start messaging</p>
+                <p className="text-sm text-gray-500">
+                  {user.type === 'client' 
+                    ? 'Or browse voice talent to start a new conversation' 
+                    : 'Conversations with clients will appear here'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Hidden file input for drag & drop */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".txt,.pdf,.doc,.docx,.png,.jpg,.jpeg,.mp3,.wav"
+            onChange={(e) => handleFileUpload(e.target.files)}
+            className="hidden"
+          />
         </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 };
 
