@@ -1,17 +1,17 @@
-// messagingService.ts - TypeScript Version with Fixed Exports
+// messagingService.ts - Complete TypeScript Version for PostgreSQL Backend
 // Fixes all console errors and provides type safety
 
 import { Socket, io } from 'socket.io-client';
 
 // Type definitions
-export interface User {
+interface User {
   id: string;
   name: string;
   type: 'client' | 'talent' | 'admin';
   email?: string;
 }
 
-export interface Message {
+interface Message {
   id: string;
   senderId: string;
   recipientId: string;
@@ -25,7 +25,7 @@ export interface Message {
   conversationId?: string;
 }
 
-export interface Conversation {
+interface Conversation {
   id: string;
   participants: string[];
   participantNames?: string[];
@@ -36,7 +36,7 @@ export interface Conversation {
   messageCount?: number;
 }
 
-export interface MessageData {
+interface MessageData {
   toId: string;
   toName?: string;
   fromName?: string;
@@ -47,21 +47,21 @@ export interface MessageData {
   deadline?: string;
 }
 
-export interface ApiResponse<T = any> {
+interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
   error?: string;
   message?: string;
 }
 
-export interface ConversationsResponse {
+interface ConversationsResponse {
   success: boolean;
   conversations: Conversation[];
   count: number;
   error?: string;
 }
 
-export interface MessageSendResponse {
+interface MessageSendResponse {
   success: boolean;
   messageId: string;
   conversationId: string;
@@ -70,7 +70,7 @@ export interface MessageSendResponse {
   message?: Message;
 }
 
-export interface ServiceStatus {
+interface ServiceStatus {
   isConnected: boolean;
   hasUser: boolean;
   hasToken: boolean;
@@ -989,6 +989,7 @@ if (typeof window !== 'undefined') {
   (window as any).messagingService = messagingService;
 }
 
-// EXPLICIT EXPORTS - This will fix the build error
-export { messagingService };
+// Export both default and named exports for compatibility
 export default messagingService;
+export { messagingService }; // Named export for existing imports
+export type { User, Message, Conversation, MessageData, ServiceStatus };
