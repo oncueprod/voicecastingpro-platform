@@ -1,4 +1,4 @@
-// server.js - Complete Backend Server for VoiceCasting Pro Messaging with Resend
+// server.js - Complete Backend Server for VoiceCasting Pro with Resend Email
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -133,31 +133,14 @@ function filterContent(content) {
 // Helper function to get user email - implement based on your user system
 async function getUserEmail(userId) {
   try {
-    // Option 1: Demo users from environment variable
-    if (process.env.DEMO_USERS) {
-      const demoUsers = JSON.parse(process.env.DEMO_USERS);
-      if (demoUsers[userId]) {
-        return demoUsers[userId];
-      }
-    }
-    
-    // Option 2: Database lookup (implement this for production)
-    // const user = await db.users.findById(userId);
-    // return user?.email;
-    
-    // Option 3: API endpoint lookup
-    // const response = await fetch(`${process.env.USER_API_URL}/users/${userId}`);
-    // const user = await response.json();
-    // return user.email;
-    
-    // Option 4: Hardcoded for testing (replace with real implementation)
-    const testEmails = {
+    // For demo/testing - replace with your actual user lookup
+    const demoUsers = {
+      'user_1752164361991_e4ogp44sg': 'test@example.com', // Your user ID
       'client_123': 'client@example.com',
-      'talent_456': 'talent@example.com',
-      'user_1752164361991_e4ogp44sg': 'test@example.com' // Your current user
+      'talent_456': 'talent@example.com'
     };
     
-    return testEmails[userId];
+    return demoUsers[userId] || null;
     
   } catch (error) {
     console.warn('⚠️ Error looking up user email:', error);
@@ -211,8 +194,7 @@ async function sendEmailNotification(recipientId, senderName, messageContent, co
             </div>
             
             <p style="color: #6b7280; font-size: 14px; text-align: center; margin-top: 20px;">
-              This is an automated notification from VoiceCasting Pro. 
-              <a href="${process.env.FRONTEND_URL || 'https://voicecastingpro.com'}/settings" style="color: #3b82f6;">Manage your notification preferences</a>
+              This is an automated notification from VoiceCasting Pro.
             </p>
           </div>
           
