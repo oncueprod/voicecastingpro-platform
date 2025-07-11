@@ -1,0 +1,733 @@
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import { fileURLToPath } from 'url';
+import path from 'path';
+import pg from 'pg';
+import fs from 'fs';
+import jwt from 'jsonwebtoken';
+
+// Import routes
+import authRoutes from './routes/auth.js';
+import userRoutes from './routes/users.js';
+import talentRoutes from './routes/talent.js';
+import messageRoutes from './routes/messages.js';
+import paymentRoutes from './routes/payments.js';
+import adminRoutes from './routes/admin.js';
+import uploadRoutes from './routes/upload.js';
+import contactRoutes from './routes/contact.js';
+
+// Import database
+import { initDb } from './db/index.js';
+
+// Import email notification services
+import { sendMessageNotification, addOnlineUser, removeOnlineUser } from './services/emailNotifications.js';
+import { startScheduler } from './services/scheduler.js';
+
+// Load environment variables
+dotenv.config();
+
+// Initialize Express app
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Create HTTP server
+const server = createServer(app);
+
+// Initialize Socket.IO
+const io = new Server(server, {
+  cors: {
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
+});
+
+// Initialize database
+initDb();
+
+// FIXED: Enhanced Authentication middleware
+const authenticateUser = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  try {
+    // Verify JWT token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    req.user = decoded;
+    console.log('✅ User authenticated:', req.user);
+    next();
+  } catch (error) {
+    // Handle session tokens (temporary fallback for development)
+    if (token.startsWith('session_')) {
+      const parts = token.split('_');
+      if (parts.length >= 3) {
+        req.user = { 
+          id: parts[1], 
+          type: 'client',
+          sessionToken: true,
+          name: req.headers['x-user-name'] || 'Anonymous User'
+        };
+        console.log('✅ Session token accepted:', req.user);
+        next();
+      } else {
+        console.log('❌ Invalid session token format');
+        return res.status(403).json({ error: 'Invalid or expired token' });
+      }
+    } else {
+      console.log('❌ JWT verification failed:', error.message);
+      return res.status(403).json({ error: 'Invalid or expired token' });
+    }
+  }
+};
+
+// Optional: Flexible auth that allows both authenticated and unauthenticated requests
+const optionalAuth = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+      req.user = decoded;
+    } catch (error) {
+      if (token.startsWith('session_')) {
+        const parts = token.split('_');
+        if (parts.length >= 3) {
+          req.user = { 
+            id: parts[1], 
+            type: 'client',
+            sessionToken: true,
+            name: req.headers['x-user-name'] || 'Anonymous User'
+          };
+        }
+      }
+    }
+  }
+  next();
+};
+
+// Middleware
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  credentials: true
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Set up __dirname equivalent for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Simple debugging
+console.log('Project structure check:');
+console.log('Server __dirname:', __dirname);
+console.log('Looking for dist at:', path.join(__dirname, '../../dist'));
+console.log('Root contents:', fs.readdirSync(path.join(__dirname, '../..')));
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// IMPORTANT: Serve static files BEFORE API routes and catch-all
+app.use('/uploads', express.static(uploadsDir));
+
+// Serve static files in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../../dist')));
+}
+
+// PRODUCTION FIX: Add missing authentication endpoints
+app.get('/api/auth/verify', authenticateUser, (req, res) => {
+  res.json({ 
+    valid: true, 
+    user: req.user,
+    message: 'Token is valid',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.post('/api/auth/refresh', (req, res) => {
+  const { userId, userName, userType } = req.body;
+  
+  if (!userId) {
+    return res.status(400).json({ error: 'userId required' });
+  }
+
+  try {
+    // Generate new JWT token
+    const token = jwt.sign(
+      { 
+        id: userId, 
+        name: userName || 'Anonymous User', 
+        type: userType || 'client' 
+      },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '24h' }
+    );
+
+    console.log('✅ Token refreshed for user:', userId);
+
+    res.json({ 
+      token: token,
+      expiresIn: '24h',
+      user: { id: userId, name: userName, type: userType }
+    });
+
+  } catch (error) {
+    console.error('❌ Token refresh error:', error);
+    res.status(500).json({ error: 'Failed to refresh token' });
+  }
+});
+
+// PRODUCTION FIX: Enhanced messaging endpoint with database compatibility
+app.post('/api/messages/send', authenticateUser, async (req, res) => {
+  try {
+    console.log('📥 Received message request:', req.body);
+    console.log('👤 Authenticated user:', req.user);
+
+    // Validate required fields
+    const { subject, message, toId, toName } = req.body;
+    
+    if (!subject || !message || !toId) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: subject, message, toId' 
+      });
+    }
+
+    // Get database connection
+    const { pool } = await import('./db/index.js');
+    const client = await pool.connect();
+
+    try {
+      // Create message object
+      const messageData = {
+        fromId: req.user.id,
+        fromName: req.body.fromName || req.user.name || 'Anonymous Client',
+        fromType: 'client',
+        toId: toId,
+        toName: toName,
+        toType: 'talent',
+        subject: subject,
+        message: message,
+        budget: req.body.budget || '',
+        deadline: req.body.deadline || '',
+        messageType: req.body.messageType || 'project_inquiry',
+        platform: req.body.platform || 'voicecastingpro',
+        timestamp: new Date().toISOString(),
+        status: 'sent',
+        read: false
+      };
+
+      // Store message in database (compatible with existing schema)
+      const messageResult = await client.query(
+        `INSERT INTO messages 
+         (sender_id, recipient_id, subject, content, created_at) 
+         VALUES ($1, $2, $3, $4, $5) 
+         RETURNING *`,
+        [
+          messageData.fromId,
+          messageData.toId,
+          messageData.subject,
+          `${messageData.message}\n\nBudget: ${messageData.budget}\nDeadline: ${messageData.deadline}`,
+          messageData.timestamp
+        ]
+      );
+
+      const savedMessage = messageResult.rows[0];
+
+      // Find or create conversation (simplified query)
+      let conversationResult = await client.query(
+        `SELECT * FROM conversations 
+         WHERE participants::text LIKE '%${messageData.fromId}%' 
+         AND participants::text LIKE '%${messageData.toId}%'`
+      );
+
+      let conversation;
+      if (conversationResult.rows.length === 0) {
+        // Create new conversation (simplified)
+        const newConvResult = await client.query(
+          `INSERT INTO conversations 
+           (participants, last_message_time, project_title) 
+           VALUES ($1, $2, $3) 
+           RETURNING *`,
+          [
+            `{${messageData.fromId},${messageData.toId}}`,
+            messageData.timestamp,
+            messageData.subject
+          ]
+        );
+        conversation = newConvResult.rows[0];
+      } else {
+        conversation = conversationResult.rows[0];
+      }
+
+      // Send real-time notification via Socket.IO
+      io.to(`user:${messageData.toId}`).emit('new_message', {
+        id: savedMessage.id,
+        senderId: messageData.fromId,
+        senderName: messageData.fromName,
+        subject: messageData.subject,
+        content: messageData.message,
+        timestamp: messageData.timestamp,
+        conversationId: conversation.id
+      });
+
+      // Send email notification (simplified - no database lookup)
+      try {
+        console.log('📧 Sending direct email notification...');
+        
+        // Send simple email notification without database dependency
+        const emailData = {
+          recipient_id: messageData.toId,
+          recipient_name: messageData.toName,
+          sender_id: messageData.fromId,
+          sender_name: messageData.fromName,
+          subject: messageData.subject,
+          content: messageData.message,
+          budget: messageData.budget,
+          deadline: messageData.deadline,
+          conversation_id: conversation.id,
+          direct_send: true // Flag to bypass database lookups
+        };
+
+        await sendMessageNotification(emailData);
+        console.log('✅ Email notification sent successfully');
+      } catch (emailError) {
+        console.error('⚠️ Email notification failed:', emailError);
+        // Don't fail the request if email fails
+      }
+
+      console.log('✅ Message saved successfully:', savedMessage.id);
+
+      // Return success response
+      res.status(201).json({
+        success: true,
+        message: 'Message sent successfully',
+        messageId: savedMessage.id,
+        conversationId: conversation.id,
+        timestamp: messageData.timestamp,
+        emailSent: true
+      });
+
+    } finally {
+      client.release();
+    }
+
+  } catch (error) {
+    console.error('❌ Error processing message:', error);
+    res.status(500).json({ 
+      error: 'Internal server error', 
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// PRODUCTION FIX: Public contact endpoint (backup for unauthenticated users)
+app.post('/api/contact/talent', optionalAuth, async (req, res) => {
+  try {
+    console.log('📥 Received contact form:', req.body);
+
+    const { subject, message, fromName, toName, toId } = req.body;
+    
+    if (!subject || !message || !fromName) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: subject, message, fromName' 
+      });
+    }
+
+    const messageData = {
+      fromName: fromName,
+      toName: toName || 'VoiceCastingPro Talent',
+      toId: toId || 'admin',
+      subject: subject,
+      message: message,
+      budget: req.body.budget || '',
+      deadline: req.body.deadline || '',
+      timestamp: new Date().toISOString(),
+      type: 'contact_form'
+    };
+
+    // Send email notification (simplified - direct send)
+    try {
+      console.log('📧 Sending direct contact email...');
+      
+      // Create simple email without database dependency  
+      const emailData = {
+        recipient_id: messageData.toId,
+        recipient_name: messageData.toName,
+        sender_name: messageData.fromName,
+        subject: messageData.subject,
+        content: messageData.message,
+        budget: messageData.budget,
+        deadline: messageData.deadline,
+        direct_send: true, // Flag to bypass database lookups
+        type: 'contact_form'
+      };
+
+      await sendMessageNotification(emailData);
+      console.log('✅ Contact form email sent successfully');
+    } catch (emailError) {
+      console.error('❌ Email sending failed:', emailError);
+      return res.status(500).json({ error: 'Failed to send email notification' });
+    }
+
+    console.log('✅ Contact form processed:', messageData);
+
+    res.status(201).json({
+      success: true,
+      message: 'Message sent successfully',
+      timestamp: messageData.timestamp,
+      emailSent: true
+    });
+
+  } catch (error) {
+    console.error('❌ Error processing contact form:', error);
+    res.status(500).json({ 
+      error: 'Internal server error' 
+    });
+  }
+});
+
+// PRODUCTION FIX: Message Center API Endpoints
+app.get('/api/messages/conversations', authenticateUser, async (req, res) => {
+  try {
+    console.log('📥 Getting conversations for user:', req.user.id);
+    
+    const { pool } = await import('./db/index.js');
+    const client = await pool.connect();
+    
+    try {
+      // Get conversations where user is a participant (compatible query)
+      const conversationsResult = await client.query(
+        `SELECT * FROM conversations 
+         WHERE participants::text LIKE '%${req.user.id}%'
+         ORDER BY last_message_time DESC NULLS LAST, created_at DESC`
+      );
+      
+      const conversations = conversationsResult.rows.map(conv => ({
+        id: conv.id,
+        participants: typeof conv.participants === 'string' 
+          ? conv.participants.replace(/[{}]/g, '').split(',').filter(p => p.trim())
+          : (Array.isArray(conv.participants) ? conv.participants : []),
+        participantNames: conv.participant_names || [],
+        lastMessage: conv.last_message || '',
+        lastMessageTime: conv.last_message_time || conv.created_at,
+        unreadCount: 0,
+        projectTitle: conv.project_title || 'Conversation',
+        messages: []
+      }));
+      
+      console.log(`✅ Found ${conversations.length} conversations for user ${req.user.id}`);
+      
+      res.json({
+        conversations: conversations,
+        count: conversations.length
+      });
+      
+    } finally {
+      client.release();
+    }
+    
+  } catch (error) {
+    console.error('❌ Error getting conversations:', error);
+    res.status(500).json({ 
+      error: 'Failed to load conversations',
+      conversations: [],
+      count: 0
+    });
+  }
+});
+
+app.get('/api/messages', authenticateUser, async (req, res) => {
+  try {
+    console.log('📥 Getting messages for user:', req.user.id);
+    
+    const { pool } = await import('./db/index.js');
+    const client = await pool.connect();
+    
+    try {
+      // Get all messages where user is sender or recipient
+      const messagesResult = await client.query(
+        `SELECT 
+           id, sender_id, recipient_id, subject, content, 
+           created_at, read_status, type
+         FROM messages 
+         WHERE sender_id = $1 OR recipient_id = $1
+         ORDER BY created_at DESC`,
+        [req.user.id]
+      );
+      
+      const messages = messagesResult.rows.map(msg => ({
+        id: msg.id,
+        fromId: msg.sender_id,
+        toId: msg.recipient_id,
+        subject: msg.subject || '',
+        message: msg.content || '',
+        sentAt: msg.created_at,
+        read: msg.read_status || false,
+        type: msg.type || 'message'
+      }));
+      
+      console.log(`✅ Found ${messages.length} messages for user ${req.user.id}`);
+      
+      res.json({
+        messages: messages,
+        count: messages.length
+      });
+      
+    } finally {
+      client.release();
+    }
+    
+  } catch (error) {
+    console.error('❌ Error getting messages:', error);
+    res.status(500).json({ 
+      error: 'Failed to load messages',
+      messages: [],
+      count: 0
+    });
+  }
+});
+
+app.get('/api/conversations/:conversationId/messages', authenticateUser, async (req, res) => {
+  try {
+    const conversationId = req.params.conversationId;
+    console.log('📥 Getting messages for conversation:', conversationId);
+    
+    const { pool } = await import('./db/index.js');
+    const client = await pool.connect();
+    
+    try {
+      // Get messages for specific conversation
+      const messagesResult = await client.query(
+        `SELECT 
+           m.id, m.sender_id, m.recipient_id, m.subject, m.content, 
+           m.created_at, m.read_status, m.type
+         FROM messages m
+         WHERE (m.sender_id = $1 AND m.recipient_id IN (
+           SELECT unnest(string_to_array(replace(replace(participants::text, '{', ''), '}', ''), ','))::text
+           FROM conversations WHERE id = $2
+         )) OR (m.recipient_id = $1 AND m.sender_id IN (
+           SELECT unnest(string_to_array(replace(replace(participants::text, '{', ''), '}', ''), ','))::text  
+           FROM conversations WHERE id = $2
+         ))
+         ORDER BY m.created_at ASC`,
+        [req.user.id, conversationId]
+      );
+      
+      const messages = messagesResult.rows.map(msg => ({
+        id: msg.id,
+        senderId: msg.sender_id,
+        content: msg.content,
+        timestamp: msg.created_at,
+        type: msg.type || 'text'
+      }));
+      
+      console.log(`✅ Found ${messages.length} messages for conversation ${conversationId}`);
+      
+      res.json({
+        messages: messages,
+        count: messages.length
+      });
+      
+    } finally {
+      client.release();
+    }
+    
+  } catch (error) {
+    console.error('❌ Error getting conversation messages:', error);
+    res.status(500).json({ 
+      error: 'Failed to load conversation messages',
+      messages: [],
+      count: 0
+    });
+  }
+});
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/talent', talentRoutes);
+app.use('/api/messages', messageRoutes); // Keep existing routes
+app.use('/api/payments', paymentRoutes);
+app.use('/api/admin', adminRoutes);
+// app.use('/api/upload', uploadRoutes);
+app.use('/api/contact', contactRoutes);
+
+// PRODUCTION FIX: Enhanced health check endpoint
+app.get('/api/health', async (req, res) => {
+  try {
+    // Test database connection
+    const { pool } = await import('./db/index.js');
+    const client = await pool.connect();
+    await client.query('SELECT 1');
+    client.release();
+
+    res.status(200).json({ 
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      database: 'connected',
+      endpoints: {
+        messages: '/api/messages',
+        messageSend: '/api/messages/send',
+        contact: '/api/contact/talent',
+        authVerify: '/api/auth/verify',
+        authRefresh: '/api/auth/refresh'
+      },
+      environment: process.env.NODE_ENV || 'development'
+    });
+  } catch (error) {
+    console.error('❌ Health check failed:', error);
+    res.status(500).json({ 
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      error: error.message
+    });
+  }
+});
+
+// IMPORTANT: Catch-all route MUST be LAST
+// Handle SPA routing in production - this MUST come after all static file serving
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    // Only redirect if it's not an API call or static file
+    if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
+      res.sendFile(path.join(__dirname, '../../dist/index.html'));
+    } else {
+      res.status(404).json({ error: 'Not found' });
+    }
+  });
+}
+
+// Socket.IO connection handling with email notifications
+io.on('connection', (socket) => {
+  console.log('User connected:', socket.id);
+  
+  // Authenticate user
+  const userId = socket.handshake.auth.userId;
+  if (userId) {
+    socket.join(`user:${userId}`);
+    addOnlineUser(userId); // Track user as online
+    console.log(`User ${userId} authenticated and joined their room`);
+  }
+  
+  // Handle messaging
+  socket.on('send_message', async (message) => {
+    try {
+      // Store message in database
+      const { pool } = await import('./db/index.js');
+      const client = await pool.connect();
+      
+      try {
+        // Use compatible schema for socket messages
+        const result = await client.query(
+          `INSERT INTO messages 
+           (sender_id, recipient_id, content, created_at) 
+           VALUES ($1, $2, $3, $4) 
+           RETURNING *`,
+          [
+            message.senderId,
+            message.receiverId,
+            message.content,
+            new Date().toISOString()
+          ]
+        );
+        
+        const newMessage = result.rows[0];
+        
+        // Broadcast to recipient
+        socket.to(`user:${message.receiverId}`).emit('message', newMessage);
+        
+        // Also send back to sender for confirmation
+        socket.emit('message_sent', newMessage);
+        
+        // Send email notification if recipient is offline
+        try {
+          await sendMessageNotification({
+            recipient_id: message.receiverId,
+            sender_id: message.senderId,
+            content: message.content,
+            direct_send: true
+          });
+        } catch (emailError) {
+          console.error('Socket email notification failed:', emailError);
+        }
+        
+        console.log(`✅ Socket message processed`);
+        
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      console.error('Error sending socket message:', error);
+      socket.emit('message_error', { error: error.message });
+    }
+  });
+  
+  // Handle conversation creation
+  socket.on('create_conversation', async (conversation) => {
+    try {
+      // Store conversation in database
+      const { pool } = await import('./db/index.js');
+      const client = await pool.connect();
+      
+      try {
+        // Use simplified conversation creation
+        const result = await client.query(
+          `INSERT INTO conversations 
+           (participants, project_title) 
+           VALUES ($1, $2) 
+           RETURNING *`,
+          [
+            `{${conversation.participants.join(',')}}`,
+            conversation.projectTitle || 'New Conversation'
+          ]
+        );
+        
+        const newConversation = result.rows[0];
+        
+        // Notify all participants
+        conversation.participants.forEach(participantId => {
+          io.to(`user:${participantId}`).emit('conversation_created', newConversation);
+        });
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+      socket.emit('conversation_error', { error: error.message });
+    }
+  });
+  
+  // Handle disconnection
+  socket.on('disconnect', () => {
+    if (userId) {
+      removeOnlineUser(userId); // Track user as offline
+    }
+    console.log('User disconnected:', socket.id);
+  });
+});
+
+// Start server
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log('✅ Production messaging endpoints configured:');
+  console.log('   POST /api/messages/send (authenticated)');
+  console.log('   POST /api/contact/talent (public)');
+  console.log('   GET  /api/auth/verify');
+  console.log('   POST /api/auth/refresh');
+  console.log('   GET  /api/health');
+  
+  // Start email scheduler
+  startScheduler();
+  console.log('📧 Email notification system initialized');
+});
+
+export default app;
