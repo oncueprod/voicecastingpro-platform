@@ -1,4 +1,4 @@
-// server.js - Complete Backend Server for VoiceCasting Pro Messaging
+// server.js - Complete Backend Server for VoiceCasting Pro Messaging with Resend
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -6,7 +6,7 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 require('dotenv').config();
 
 const app = express();
@@ -83,28 +83,13 @@ const upload = multer({
   }
 });
 
-// Configure email transporter
-let emailTransporter = null;
-if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-  emailTransporter = nodemailer.createTransporter({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    }
-  });
-
-  // Verify email configuration
-  emailTransporter.verify((error, success) => {
-    if (error) {
-      console.warn('⚠️ Email service not configured properly:', error.message);
-      emailTransporter = null;
-    } else {
-      console.log('✅ Email service ready');
-    }
-  });
+// Configure Resend email service
+let resend = null;
+if (process.env.RESEND_API_KEY) {
+  resend = new Resend(process.env.RESEND_API_KEY);
+  console.log('✅ Resend email service configured');
 } else {
-  console.warn('⚠️ Email service not configured (missing EMAIL_USER or EMAIL_PASS)');
+  console.warn('⚠️ Resend email service not configured (missing RESEND_API_KEY)');
 }
 
 // In-memory storage (replace with database in production)
@@ -145,19 +130,59 @@ function filterContent(content) {
   };
 }
 
+// Helper function to get user email - implement based on your user system
+async function getUserEmail(userId) {
+  try {
+    // Option 1: Demo users from environment variable
+    if (process.env.DEMO_USERS) {
+      const demoUsers = JSON.parse(process.env.DEMO_USERS);
+      if (demoUsers[userId]) {
+        return demoUsers[userId];
+      }
+    }
+    
+    // Option 2: Database lookup (implement this for production)
+    // const user = await db.users.findById(userId);
+    // return user?.email;
+    
+    // Option 3: API endpoint lookup
+    // const response = await fetch(`${process.env.USER_API_URL}/users/${userId}`);
+    // const user = await response.json();
+    // return user.email;
+    
+    // Option 4: Hardcoded for testing (replace with real implementation)
+    const testEmails = {
+      'client_123': 'client@example.com',
+      'talent_456': 'talent@example.com',
+      'user_1752164361991_e4ogp44sg': 'test@example.com' // Your current user
+    };
+    
+    return testEmails[userId];
+    
+  } catch (error) {
+    console.warn('⚠️ Error looking up user email:', error);
+    return null;
+  }
+}
+
 async function sendEmailNotification(recipientId, senderName, messageContent, conversationTitle) {
-  if (!emailTransporter) {
-    console.log('📧 Email notification skipped (service not configured)');
+  if (!resend) {
+    console.log('📧 Email notification skipped (Resend not configured)');
     return;
   }
 
   try {
-    // In a real app, you'd look up the user's email from your database
-    const recipientEmail = `${recipientId}@example.com`; // Replace with actual email lookup
+    // Get recipient email
+    const recipientEmail = await getUserEmail(recipientId);
     
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: recipientEmail,
+    if (!recipientEmail) {
+      console.log(`📧 Email notification skipped (no email found for user: ${recipientId})`);
+      return;
+    }
+    
+    const { data, error } = await resend.emails.send({
+      from: process.env.FROM_EMAIL || 'VoiceCasting Pro <noreply@resend.dev>',
+      to: [recipientEmail],
       subject: `New Message from ${senderName} - VoiceCasting Pro`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -196,10 +221,13 @@ async function sendEmailNotification(recipientId, senderName, messageContent, co
           </div>
         </div>
       `
-    };
+    });
 
-    await emailTransporter.sendMail(mailOptions);
-    console.log('✅ Email notification sent to:', recipientId);
+    if (error) {
+      console.error('❌ Resend email error:', error);
+    } else {
+      console.log(`✅ Email notification sent via Resend to ${recipientEmail} (ID: ${data.id})`);
+    }
   } catch (error) {
     console.error('❌ Failed to send email notification:', error);
   }
@@ -214,7 +242,8 @@ app.get('/health', (req, res) => {
     version: '1.0.0',
     uptime: process.uptime(),
     memory: process.memoryUsage(),
-    connectedClients: connectedSockets.size
+    connectedClients: connectedSockets.size,
+    emailService: resend ? 'resend-configured' : 'not-configured'
   });
 });
 
@@ -233,7 +262,8 @@ app.get('/status', (req, res) => {
     connectedClients: connectedSockets.size,
     conversations: conversations.size,
     totalMessages: Array.from(messages.values()).reduce((total, msgs) => total + msgs.length, 0),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    emailService: resend ? 'enabled' : 'disabled'
   });
 });
 
@@ -815,7 +845,7 @@ server.listen(PORT, () => {
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`📡 WebSocket ready for connections`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📧 Email service: ${emailTransporter ? 'Enabled' : 'Disabled'}`);
+  console.log(`📧 Email service: ${resend ? 'Resend enabled' : 'Disabled'}`);
 });
 
 module.exports = { app, server, io };
