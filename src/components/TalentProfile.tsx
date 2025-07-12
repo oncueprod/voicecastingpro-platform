@@ -88,10 +88,27 @@ const TalentProfile: React.FC = () => {
         id = talentId;
         setDataSource('URL Search Parameter');
       } else {
-        console.log('❌ No talent ID found - this should not happen for talent profiles');
-        setError('No talent ID provided. Cannot load talent profile.');
-        setLoading(false);
-        return;
+        // If no ID provided, check if this is a request for "my talent profile"
+        console.log('🔍 No ID in URL - checking if this should be current user\'s talent profile...');
+        
+        if (currentUser) {
+          const userId = currentUser.id || currentUser._id || currentUser.userId;
+          if (userId) {
+            console.log('✅ No ID provided, using current user ID for talent profile:', userId);
+            id = userId;
+            setDataSource('Current User (No ID Provided)');
+          } else {
+            console.log('❌ Current user found but no ID available');
+            setError('Could not determine your user ID. Please make sure you are logged in.');
+            setLoading(false);
+            return;
+          }
+        } else {
+          console.log('❌ No ID provided and no current user found');
+          setError('No talent ID provided and you are not logged in. Please provide a talent ID or log in to view your profile.');
+          setLoading(false);
+          return;
+        }
       }
     }
 
@@ -472,12 +489,12 @@ const TalentProfile: React.FC = () => {
     <div className="min-h-screen bg-slate-900 text-white">
       {/* Debug Info Banner */}
       <div className={`text-white p-2 text-center text-sm ${
-        dataSource.includes('Your Talent Profile') ? 'bg-purple-600' : 
+        dataSource.includes('Your Talent Profile') || dataSource.includes('Current User (No ID Provided)') ? 'bg-purple-600' : 
         dataSource.includes('API') ? 'bg-green-600' :
         dataSource.includes('Template') || dataSource.includes('Generated') ? 'bg-orange-600' : 
         'bg-blue-600'
       }`}>
-        {dataSource.includes('Your Talent Profile') ? '🎭 YOUR TALENT PROFILE: ' : 
+        {dataSource.includes('Your Talent Profile') || dataSource.includes('Current User (No ID Provided)') ? '🎭 YOUR TALENT PROFILE: ' : 
          dataSource.includes('API') ? '✅ TALENT PROFILE (API): ' :
          dataSource.includes('Template') || dataSource.includes('Generated') ? '⚠️ TEMPLATE TALENT: ' : 
          '👤 PROFILE: '} 
@@ -742,15 +759,21 @@ const TalentProfile: React.FC = () => {
         <div>Name: {talent?.name}</div>
         <div>Email: {talent?.email || 'Not found'}</div>
         
-        {dataSource.includes('Your Talent Profile') && (
+        {(dataSource.includes('Your Talent Profile') || dataSource.includes('Current User (No ID Provided)')) && (
           <div className="mt-2 p-2 bg-purple-800 rounded text-xs">
-            🎭 YOUR talent profile (converted from client data due to database issue)
+            🎭 YOUR talent profile {!params.id && '(ID auto-detected)'}
           </div>
         )}
         
         {dataSource.includes('API') && (
           <div className="mt-2 p-2 bg-green-800 rounded text-xs">
             ✅ Real talent data from API
+          </div>
+        )}
+        
+        {!params.id && (
+          <div className="mt-2 p-2 bg-yellow-800 rounded text-xs">
+            ⚠️ No ID in URL - using your current user ID
           </div>
         )}
         
