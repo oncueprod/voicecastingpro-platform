@@ -1,17 +1,26 @@
 // TalentDirectory.tsx - REAL TALENTS ONLY - NO MOCK DATA - FIXED NAVIGATION
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Filter, MapPin, Star, MessageCircle, Award, Users, Sliders } from 'lucide-react';
 import { talentService, TalentProfile } from '../services/talentService';
 
-const TalentDirectory: React.FC = () => {
+interface TalentDirectoryProps {
+  searchQuery?: string;
+  onTalentSelect: (talentId: string) => void;
+  onBack: () => void;
+  onJoinAsTalent: () => void;  // ADD THIS PROP
+}
+
+const TalentDirectory: React.FC<TalentDirectoryProps> = ({ 
+  searchQuery: initialSearchQuery = '', 
+  onTalentSelect, 
+  onBack,
+  onJoinAsTalent  // ADD THIS PROP
+}) => {
   const [allTalents, setAllTalents] = useState<TalentProfile[]>([]);
   const [filteredTalents, setFilteredTalents] = useState<TalentProfile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [showFilters, setShowFilters] = useState(false);
-  const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
 
   // Filter states
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
@@ -46,13 +55,119 @@ const TalentDirectory: React.FC = () => {
     }
   };
 
-  // Handle join as talent navigation
+  // Handle join as talent navigation - FIXED FOR CUSTOM ROUTING
   const handleJoinAsTalent = () => {
-    console.log('🚀 Navigating to signup page as talent...');
-    navigate('/signup', { state: { userType: 'talent' } });
+    console.log('🚀 Join as Talent button clicked!');
+    console.log('✅ Using custom navigation system');
+    onJoinAsTalent(); // Use the prop function instead of navigate
+  };
+
+  const handleViewProfile = (talentId: string) => {
+    console.log(`🔗 Navigating to REAL talent profile: ${talentId}`);
+    onTalentSelect(talentId); // Use the prop function
+  };
+
+  const handleContactTalent = (talentId: string) => {
+    console.log(`💬 Opening contact for REAL talent: ${talentId}`);
+    // For now, we'll need to add a prop for this or handle it differently
+    // You might want to add onContactTalent prop to handle messaging
+    alert(`Contact feature - Talent ID: ${talentId}`);
   };
 
   const applyFiltersAndSearch = () => {
+    let filtered = [...allTalents];
+
+    // Apply search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(talent =>
+        talent.name.toLowerCase().includes(query) ||
+        talent.title.toLowerCase().includes(query) ||
+        talent.bio.toLowerCase().includes(query) ||
+        talent.skills.some(skill => skill.toLowerCase().includes(query)) ||
+        talent.location.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply skill filter
+    if (selectedSkills.length > 0) {
+      filtered = filtered.filter(talent =>
+        selectedSkills.some(skill =>
+          talent.skills.some(talentSkill =>
+            talentSkill.toLowerCase().includes(skill.toLowerCase())
+          )
+        )
+      );
+    }
+
+    // Apply location filter
+    if (selectedLocation) {
+      filtered = filtered.filter(talent =>
+        talent.location.toLowerCase().includes(selectedLocation.toLowerCase())
+      );
+    }
+
+    // Apply rating filter
+    if (minRating > 0) {
+      filtered = filtered.filter(talent => (talent.rating || 0) >= minRating);
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'rating':
+          return (b.rating || 0) - (a.rating || 0);
+        case 'reviews':
+          return (b.reviewCount || 0) - (a.reviewCount || 0);
+        case 'recent':
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        case 'name':
+        default:
+          return a.name.localeCompare(b.name);
+      }
+    });
+
+    setFilteredTalents(filtered);
+  };
+
+  // Get available skills from all talents
+  const availableSkills = useMemo(() => {
+    const skills = new Set<string>();
+    allTalents.forEach(talent => {
+      talent.skills.forEach(skill => skills.add(skill));
+    });
+    return Array.from(skills).sort();
+  }, [allTalents]);
+
+  // Get available locations from all talents
+  const availableLocations = useMemo(() => {
+    const locations = new Set<string>();
+    allTalents.forEach(talent => {
+      if (talent.location) {
+        locations.add(talent.location);
+      }
+    });
+    return Array.from(locations).sort();
+  }, [allTalents]);
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setSelectedSkills([]);
+    setSelectedLocation('');
+    setMinRating(0);
+    setSortBy('name');
+  };
+
+  const renderStars = (rating: number) => {
+    return Array.from({ length: 5 }, (_, i) => (
+      <Star
+        key={i}
+        className={`w-4 h-4 ${
+          i < Math.floor(rating) ? 'text-yellow-400 fill-current' : 'text-gray-300'
+        }`}
+      />
+    ));
+  };
     let filtered = [...allTalents];
 
     // Apply search query
@@ -159,7 +274,7 @@ const TalentDirectory: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 py-12">
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Voice Talent Directory</h1>
@@ -188,7 +303,7 @@ const TalentDirectory: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
+          <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-8">
