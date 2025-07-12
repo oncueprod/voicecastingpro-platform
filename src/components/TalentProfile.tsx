@@ -67,6 +67,11 @@ const TalentProfile: React.FC = () => {
     setLoading(true);
     setError(null);
 
+    // Get current user info to check if this is their own profile
+    const currentUser = getCurrentUserData();
+    const currentUserId = currentUser?.id || currentUser?._id;
+    console.log('👤 Current logged-in user ID:', currentUserId);
+
     // Try to find talent data
     if (id) {
       console.log('✅ Using talent ID from URL:', id);
@@ -83,25 +88,15 @@ const TalentProfile: React.FC = () => {
         id = talentId;
         setDataSource('URL Search Parameter');
       } else {
-        // Check current user as fallback
-        const currentUser = getCurrentUserData();
-        if (currentUser) {
-          const userId = currentUser.id || currentUser._id || currentUser.userId;
-          if (userId) {
-            console.log('✅ Using current user as fallback:', userId);
-            id = userId;
-            setDataSource('Current User Fallback');
-          }
-        }
+        console.log('❌ No talent ID found - this should not happen for talent profiles');
+        setError('No talent ID provided. Cannot load talent profile.');
+        setLoading(false);
+        return;
       }
     }
 
-    if (!id) {
-      console.log('❌ No talent data found anywhere');
-      setError('No talent profile data found.');
-      setLoading(false);
-      return;
-    }
+    console.log('🆔 Talent ID to load:', id);
+    console.log('🤔 Is this the current user\'s profile?', id === currentUserId);
 
     // Try API endpoints (but expect them to fail due to database issue)
     console.log('📡 Trying API endpoints...');
@@ -136,26 +131,24 @@ const TalentProfile: React.FC = () => {
     }
 
     if (!foundApiData) {
-      console.log('🔄 API calls failed (likely database issue), creating talent profile from available data...');
+      console.log('🔄 API calls failed (likely database issue)...');
       
-      // Get current user data
-      const currentUser = getCurrentUserData();
-      
-      if (currentUser && (currentUser.id === id || currentUser._id === id)) {
-        console.log('✅ Converting client profile to talent profile...');
+      // ONLY convert to talent profile if this is the current user's own profile
+      if (currentUser && id === currentUserId) {
+        console.log('✅ This is YOUR talent profile - converting client data to talent format...');
         
-        // Create a TALENT profile from the client data
         const talentProfile = createTalentFromClientData(currentUser, id);
         setTalent(talentProfile);
-        setDataSource('Converted Client to Talent Profile');
+        setDataSource('Your Talent Profile (Converted from Client Data)');
         setLoading(false);
         return;
       } else {
-        console.log('🔄 Creating template talent profile...');
-        const templateData = createProfileTemplate(id);
-        setTalent(templateData);
-        setDataSource('Generated Talent Template');
+        console.log('❌ This is someone else\'s talent profile, but their data is not available due to database issues');
+        
+        // Show error for other talents since we can't load their real data
+        setError(`Talent profile for ID "${id}" is currently unavailable due to a database issue. Please try again later or contact support.`);
         setLoading(false);
+        return;
       }
     }
   };
@@ -407,9 +400,30 @@ const TalentProfile: React.FC = () => {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center text-white max-w-lg">
-          <div className="text-blue-400 text-6xl mb-4">🔧</div>
-          <h2 className="text-2xl font-bold text-gray-100 mb-4">Talent Profile Issue</h2>
+          <div className="text-red-400 text-6xl mb-4">🔧</div>
+          <h2 className="text-2xl font-bold text-gray-100 mb-4">Talent Profile Unavailable</h2>
           <p className="text-gray-300 mb-4">{error}</p>
+          
+          <div className="bg-slate-800 p-4 rounded-lg mb-4 text-left">
+            <h3 className="font-bold mb-2">🔍 What's happening:</h3>
+            <ul className="text-sm text-gray-300 space-y-1">
+              <li>• The talent database is experiencing issues</li>
+              <li>• Other talent profiles cannot be loaded right now</li>
+              <li>• Your own talent profile still works</li>
+              <li>• This is a temporary database problem</li>
+            </ul>
+          </div>
+          
+          <div className="bg-blue-900 p-3 rounded-lg mb-4 text-sm">
+            <div className="font-bold mb-1">💡 Try instead:</div>
+            <div className="text-blue-200">
+              • Go back to the talent directory
+              <br />
+              • View your own talent profile (should work)
+              <br />
+              • Contact support about the database issue
+            </div>
+          </div>
           
           <div className="flex gap-3">
             <button
@@ -430,7 +444,7 @@ const TalentProfile: React.FC = () => {
               }}
               className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
             >
-              My Profile
+              View My Profile
             </button>
           </div>
         </div>
@@ -458,12 +472,12 @@ const TalentProfile: React.FC = () => {
     <div className="min-h-screen bg-slate-900 text-white">
       {/* Debug Info Banner */}
       <div className={`text-white p-2 text-center text-sm ${
-        dataSource.includes('Converted Client to Talent') ? 'bg-purple-600' : 
+        dataSource.includes('Your Talent Profile') ? 'bg-purple-600' : 
         dataSource.includes('API') ? 'bg-green-600' :
         dataSource.includes('Template') || dataSource.includes('Generated') ? 'bg-orange-600' : 
         'bg-blue-600'
       }`}>
-        {dataSource.includes('Converted Client to Talent') ? '🎭 TALENT PROFILE (Converted): ' : 
+        {dataSource.includes('Your Talent Profile') ? '🎭 YOUR TALENT PROFILE: ' : 
          dataSource.includes('API') ? '✅ TALENT PROFILE (API): ' :
          dataSource.includes('Template') || dataSource.includes('Generated') ? '⚠️ TEMPLATE TALENT: ' : 
          '👤 PROFILE: '} 
@@ -728,9 +742,9 @@ const TalentProfile: React.FC = () => {
         <div>Name: {talent?.name}</div>
         <div>Email: {talent?.email || 'Not found'}</div>
         
-        {dataSource.includes('Converted Client to Talent') && (
+        {dataSource.includes('Your Talent Profile') && (
           <div className="mt-2 p-2 bg-purple-800 rounded text-xs">
-            🎭 Client profile converted to TALENT profile (fixes database issue)
+            🎭 YOUR talent profile (converted from client data due to database issue)
           </div>
         )}
         
@@ -740,14 +754,8 @@ const TalentProfile: React.FC = () => {
           </div>
         )}
         
-        {params.id && (
-          <div className="mt-2 p-2 bg-blue-800 rounded text-xs">
-            🔗 Talent ID from URL: {params.id}
-          </div>
-        )}
-        
         <div className="mt-2 text-gray-400 text-xs">
-          Check console for API call details
+          Check console for detailed logs
         </div>
       </div>
     </div>
