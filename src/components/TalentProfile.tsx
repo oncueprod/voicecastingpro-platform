@@ -33,7 +33,6 @@ interface TalentData {
   responseTime: string;
   completionRate: string;
   totalJobs: number;
-  // Additional fields for real user data
   email?: string;
   phone?: string;
   firstName?: string;
@@ -64,295 +63,118 @@ const TalentProfile: React.FC = () => {
     
     console.log('🎯 TalentProfile started with ID:', id);
     console.log('🔍 Current URL:', window.location.href);
-    console.log('🔍 Search params:', window.location.search);
     
     setLoading(true);
     setError(null);
 
-    // Try multiple approaches to get talent data
-    try {
-      // Approach 1: If we have an ID in the URL, use it
-      if (id) {
-        console.log('✅ Using talent ID from URL:', id);
-        setDataSource('URL Parameter');
-        // Continue with API calls using this ID
-      } 
-      // Approach 2: Check if talent data is passed via URL params or state
-      else {
-        console.log('🔍 No ID in URL, checking for talent data in other ways...');
-        
-        // Check URL search parameters
-        const urlParams = new URLSearchParams(window.location.search);
-        const talentId = urlParams.get('id') || urlParams.get('talentId') || urlParams.get('talent');
-        
-        if (talentId) {
-          console.log('✅ Found talent ID in URL params:', talentId);
-          id = talentId;
-          setDataSource('URL Search Parameter');
-        } else {
-          // Check if there's talent data in the current state/session
-          console.log('🔍 Checking for talent data in session storage...');
-          
-          // Check sessionStorage for passed talent data
-          const sessionTalent = sessionStorage.getItem('currentTalent') || 
-                               sessionStorage.getItem('selectedTalent') ||
-                               sessionStorage.getItem('viewingTalent');
-          
-          if (sessionTalent) {
-            try {
-              const talentData = JSON.parse(sessionTalent);
-              console.log('✅ Found talent data in session storage:', talentData);
-              
-              // Use the session talent data directly
-              const normalizedTalent = normalizeUserData(talentData, talentData.id || talentData._id || 'session');
-              setTalent(normalizedTalent);
-              setDataSource('Session Storage');
-              setLoading(false);
-              return;
-            } catch (e) {
-              console.log('❌ Error parsing session talent data:', e);
-            }
-          }
-          
-          // Check localStorage for talent lists or data
-          console.log('🔍 Checking localStorage for talent data...');
-          const talentList = localStorage.getItem('talents') || 
-                           localStorage.getItem('talentProfiles') ||
-                           localStorage.getItem('allTalents');
-          
-          if (talentList) {
-            try {
-              const talents = JSON.parse(talentList);
-              console.log('📋 Found talent list in localStorage:', talents);
-              
-              // If it's an array, maybe we can use the first one or find a specific one
-              if (Array.isArray(talents) && talents.length > 0) {
-                // For now, let's check if there's a specific talent being viewed
-                const viewingTalentId = localStorage.getItem('viewingTalentId');
-                let selectedTalent = null;
-                
-                if (viewingTalentId) {
-                  selectedTalent = talents.find(t => (t.id || t._id) === viewingTalentId);
-                }
-                
-                if (!selectedTalent) {
-                  selectedTalent = talents[0]; // Fallback to first talent
-                }
-                
-                console.log('✅ Using talent from list:', selectedTalent);
-                const normalizedTalent = normalizeUserData(selectedTalent, selectedTalent.id || selectedTalent._id || 'list');
-                setTalent(normalizedTalent);
-                setDataSource('Talent List');
-                setLoading(false);
-                return;
-              }
-            } catch (e) {
-              console.log('❌ Error parsing talent list:', e);
-            }
-          }
-          
-          // Last resort: Check if this should be current user's profile
-          console.log('🔍 Checking if this should be current user profile...');
-          const currentUser = getCurrentUserData();
-          
-          if (currentUser) {
-            const userId = currentUser.id || currentUser._id || currentUser.userId;
-            if (userId) {
-              console.log('✅ Using current user as fallback:', userId);
-              id = userId;
-              setDataSource('Current User Fallback');
-            }
-          }
-          
-          if (!id) {
-            console.log('❌ No talent data found anywhere');
-            setError('No talent profile data found. The talent profile may not be properly linked.');
-            setLoading(false);
-            return;
-          }
-        }
-      }
-
-    console.log('🎯 Fetching real data for talent ID:', id);
-    console.log('🔍 DEBUGGING: Let\'s see what data we can find...');
-    
-    // First, let's check what's in localStorage right now
-    console.log('📦 CURRENT LOCALSTORAGE CONTENTS:');
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key) {
-        try {
-          const value = localStorage.getItem(key);
-          console.log(`  ${key}:`, value);
-        } catch (e) {
-          console.log(`  ${key}: (error reading)`);
-        }
-      }
-    }
-    
-    console.log('🪟 CURRENT WINDOW OBJECT USER DATA:');
-    const windowKeys = ['currentUser', 'user', 'userData', 'auth'];
-    windowKeys.forEach(key => {
-      if ((window as any)[key]) {
-        console.log(`  window.${key}:`, (window as any)[key]);
-      } else {
-        console.log(`  window.${key}: undefined`);
-      }
-    });
-    
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Step 1: Try API endpoints
-      const apiEndpoints = [
-        `/api/talent/${id}`,
-        `/api/talents/${id}`,
-        `/api/users/${id}`,
-        `/api/user/${id}`,
-        `/api/profile/${id}`
-      ];
-
-      let apiData = null;
-      for (const endpoint of apiEndpoints) {
-        try {
-          console.log(`🔗 Trying API endpoint: ${endpoint}`);
-          const response = await fetch(endpoint, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-              // Add auth headers if needed
-              'Authorization': localStorage.getItem('token') ? `Bearer ${localStorage.getItem('token')}` : '',
-            }
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            console.log(`✅ API Success from ${endpoint}:`, data);
-            apiData = data;
-            setDataSource(`API: ${endpoint}`);
-            break;
-          } else {
-            console.log(`❌ API ${endpoint} failed:`, response.status, response.statusText);
-          }
-        } catch (err) {
-          console.log(`❌ API ${endpoint} error:`, err);
-        }
-      }
-
-      if (apiData) {
-        const normalizedData = normalizeApiData(apiData, id);
-        setTalent(normalizedData);
-        setLoading(false);
-        return;
-      }
-
-      // Step 2: Try localStorage
-      console.log('🔍 No API data found, checking localStorage...');
-      const storageKeys = [
-        'currentUser',
-        'user',
-        'userData',
-        'profile',
-        'talentProfile',
-        'authUser'
-      ];
-
-      let localData = null;
-      for (const key of storageKeys) {
-        try {
-          const stored = localStorage.getItem(key);
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            console.log(`📦 Found data in localStorage.${key}:`, parsed);
-            
-            // Check if this user matches the requested ID
-            if (parsed.id === id || parsed._id === id || 
-                (key === 'currentUser' && (parsed.id || parsed._id))) {
-              localData = parsed;
-              setDataSource(`localStorage: ${key}`);
-              break;
-            }
-          }
-        } catch (err) {
-          console.log(`❌ Error reading localStorage.${key}:`, err);
-        }
-      }
-
-      if (localData) {
-        const normalizedData = normalizeUserData(localData, id);
-        setTalent(normalizedData);
-        setLoading(false);
-        return;
-      }
-
-      // Step 3: Check window object
-      console.log('🔍 Checking window object for user data...');
-      const windowKeys = ['currentUser', 'user', 'userData', 'auth'];
+    // Try to find talent data
+    if (id) {
+      console.log('✅ Using talent ID from URL:', id);
+      setDataSource('URL Parameter');
+    } else {
+      console.log('🔍 No ID in URL, checking other sources...');
       
-      for (const key of windowKeys) {
-        if ((window as any)[key]) {
-          const windowData = (window as any)[key];
-          console.log(`🪟 Found data in window.${key}:`, windowData);
-          
-          if (windowData.id === id || windowData._id === id) {
-            const normalizedData = normalizeUserData(windowData, id);
-            setTalent(normalizedData);
-            setDataSource(`window: ${key}`);
-            setLoading(false);
-            return;
+      // Check URL search parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      const talentId = urlParams.get('id') || urlParams.get('talentId');
+      
+      if (talentId) {
+        console.log('✅ Found talent ID in URL params:', talentId);
+        id = talentId;
+        setDataSource('URL Search Parameter');
+      } else {
+        // Check current user as fallback
+        const currentUser = getCurrentUserData();
+        if (currentUser) {
+          const userId = currentUser.id || currentUser._id || currentUser.userId;
+          if (userId) {
+            console.log('✅ Using current user as fallback:', userId);
+            id = userId;
+            setDataSource('Current User Fallback');
           }
         }
       }
-
-      // Step 4: If this is the current user, try to get their data
-      console.log('🔍 Checking if this is the current user...');
-      const currentUserData = getCurrentUserData();
-      if (currentUserData && (currentUserData.id === id || currentUserData._id === id)) {
-        const normalizedData = normalizeUserData(currentUserData, id);
-        setTalent(normalizedData);
-        setDataSource('Current User Session');
-        setLoading(false);
-        return;
-      }
-
-      // Step 5: Last resort - generate profile based on current user template
-      console.log('🔄 Creating profile template...');
-      const templateData = createProfileTemplate(id);
-      setTalent(templateData);
-      setDataSource('Generated Template');
-      setLoading(false);
-
-    } catch (err) {
-      console.error('❌ Error in fetchRealTalentData:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load profile');
-      setLoading(false);
     }
+
+    if (!id) {
+      console.log('❌ No talent data found anywhere');
+      setError('No talent profile data found.');
+      setLoading(false);
+      return;
+    }
+
+    // Try API endpoints
+    console.log('📡 Trying API endpoints...');
+    const apiEndpoints = [
+      `/api/talent/${id}`,
+      `/api/talents/${id}`,
+      `/api/users/${id}`,
+      `/api/user/${id}`
+    ];
+
+    for (const endpoint of apiEndpoints) {
+      try {
+        console.log(`🔗 Trying: ${endpoint}`);
+        const response = await fetch(endpoint);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`✅ API Success:`, data);
+          const normalizedData = normalizeApiData(data, id);
+          setTalent(normalizedData);
+          setDataSource(`API: ${endpoint}`);
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.log(`❌ API ${endpoint} error:`, err);
+      }
+    }
+
+    // Fallback to current user data
+    console.log('🔄 No API data found, using fallback...');
+    const currentUser = getCurrentUserData();
+    
+    if (currentUser && (currentUser.id === id || currentUser._id === id)) {
+      const normalizedData = normalizeUserData(currentUser, id);
+      setTalent(normalizedData);
+      setDataSource('Current User Data');
+      setLoading(false);
+      return;
+    }
+
+    // Create template
+    console.log('🔄 Creating template...');
+    const templateData = createProfileTemplate(id);
+    setTalent(templateData);
+    setDataSource('Generated Template');
+    setLoading(false);
   };
 
   const normalizeApiData = (apiData: any, id: string): TalentData => {
-    // Handle different API response formats
     const userData = apiData.user || apiData.talent || apiData.data || apiData;
     
     return {
       id: userData.id || userData._id || id,
       name: userData.name || `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Professional Talent',
       title: userData.title || userData.profession || 'Voice Over Artist',
-      location: userData.location || userData.city || userData.address || 'Remote',
+      location: userData.location || userData.city || 'Remote',
       rating: userData.rating || 4.8,
-      reviewCount: userData.reviewCount || userData.totalReviews || 0,
-      hourlyRate: userData.hourlyRate || userData.rate || '$75-150',
-      avatar: userData.avatar || userData.profileImage || userData.photo || generateAvatar(userData.name || 'User'),
-      coverImage: userData.coverImage || userData.banner || `https://picsum.photos/800/300?random=${id}`,
-      bio: userData.bio || userData.description || userData.about || 'Professional voice talent available for your projects.',
-      skills: userData.skills || userData.specialties || ['Voice Over', 'Narration'],
+      reviewCount: userData.reviewCount || 0,
+      hourlyRate: userData.hourlyRate || '$75-150',
+      avatar: userData.avatar || generateAvatar(userData.name || 'User'),
+      coverImage: userData.coverImage || `https://picsum.photos/800/300?random=${id}`,
+      bio: userData.bio || 'Professional voice talent available for your projects.',
+      skills: userData.skills || ['Voice Over', 'Narration'],
       languages: userData.languages || ['English'],
-      experience: userData.experience || userData.yearsExperience || '5+ years',
-      samples: userData.samples || userData.portfolio || [],
+      experience: userData.experience || '5+ years',
+      samples: userData.samples || [
+        { id: '1', title: 'Demo Reel', duration: '1:30', url: '#', category: 'Demo' }
+      ],
       reviews: userData.reviews || [],
       responseTime: userData.responseTime || '< 24 hours',
       completionRate: userData.completionRate || '95%',
-      totalJobs: userData.totalJobs || userData.completedProjects || 0,
+      totalJobs: userData.totalJobs || 0,
       email: userData.email,
       phone: userData.phone
     };
@@ -362,67 +184,49 @@ const TalentProfile: React.FC = () => {
     return {
       id: userData.id || userData._id || id,
       name: userData.name || `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Professional Talent',
-      title: userData.title || userData.profession || userData.role || 'Voice Over Artist',
-      location: userData.location || userData.city || userData.address || 'Remote',
+      title: userData.title || 'Voice Over Artist',
+      location: userData.location || 'Remote',
       rating: userData.rating || 4.8,
-      reviewCount: userData.reviewCount || userData.totalReviews || 0,
-      hourlyRate: userData.hourlyRate || userData.rate || '$75-150',
-      avatar: userData.avatar || userData.profileImage || userData.photo || generateAvatar(userData.name || userData.email || 'User'),
-      coverImage: userData.coverImage || userData.banner || `https://picsum.photos/800/300?random=${id}`,
-      bio: userData.bio || userData.description || userData.about || 'Professional voice talent with expertise in various voice-over projects.',
-      skills: userData.skills || userData.specialties || ['Voice Over', 'Narration', 'Commercial'],
+      reviewCount: userData.reviewCount || 0,
+      hourlyRate: userData.hourlyRate || '$75-150',
+      avatar: userData.avatar || generateAvatar(userData.name || userData.email || 'User'),
+      coverImage: userData.coverImage || `https://picsum.photos/800/300?random=${id}`,
+      bio: userData.bio || 'Professional voice talent with expertise in voice-over projects.',
+      skills: userData.skills || ['Voice Over', 'Narration', 'Commercial'],
       languages: userData.languages || ['English'],
-      experience: userData.experience || userData.yearsExperience || '5+ years',
-      samples: userData.samples || userData.portfolio || [
+      experience: userData.experience || '5+ years',
+      samples: userData.samples || [
         { id: '1', title: 'Demo Reel', duration: '1:30', url: '#', category: 'Demo' }
       ],
-      reviews: userData.reviews || [
-        {
-          id: '1',
-          clientName: 'Previous Client',
-          rating: 5,
-          comment: 'Excellent voice work and professional service.',
-          date: '2024-01-15'
-        }
-      ],
+      reviews: userData.reviews || [],
       responseTime: userData.responseTime || '< 2 hours',
       completionRate: userData.completionRate || '98%',
-      totalJobs: userData.totalJobs || userData.completedProjects || 25,
+      totalJobs: userData.totalJobs || 25,
       email: userData.email,
       phone: userData.phone
     };
   };
 
   const getCurrentUserData = () => {
-    console.log('🔍 getCurrentUserData: Checking all sources...');
+    console.log('🔍 getCurrentUserData: Checking sources...');
     
-    // Try to get current user from various sources
-    try {
-      const sources = [
-        { name: 'localStorage.currentUser', getter: () => localStorage.getItem('currentUser') },
-        { name: 'localStorage.user', getter: () => localStorage.getItem('user') },
-        { name: 'localStorage.userData', getter: () => localStorage.getItem('userData') },
-        { name: 'localStorage.authUser', getter: () => localStorage.getItem('authUser') },
-        { name: 'window.currentUser', getter: () => (window as any).currentUser },
-        { name: 'window.user', getter: () => (window as any).user }
-      ];
+    const sources = [
+      { name: 'localStorage.currentUser', getter: () => localStorage.getItem('currentUser') },
+      { name: 'localStorage.user', getter: () => localStorage.getItem('user') },
+      { name: 'window.currentUser', getter: () => (window as any).currentUser }
+    ];
 
-      for (const source of sources) {
-        console.log(`🔍 Checking ${source.name}...`);
-        const data = source.getter();
-        if (data) {
-          const parsed = typeof data === 'string' ? JSON.parse(data) : data;
-          console.log(`✅ Found data in ${source.name}:`, parsed);
-          return parsed;
-        } else {
-          console.log(`❌ No data in ${source.name}`);
-        }
+    for (const source of sources) {
+      console.log(`🔍 Checking ${source.name}...`);
+      const data = source.getter();
+      if (data) {
+        const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+        console.log(`✅ Found data in ${source.name}:`, parsed);
+        return parsed;
       }
-      
-      console.log('❌ No user data found in any source');
-    } catch (err) {
-      console.log('❌ Error getting current user data:', err);
     }
+    
+    console.log('❌ No user data found');
     return null;
   };
 
@@ -430,8 +234,6 @@ const TalentProfile: React.FC = () => {
     console.log('🔄 Creating profile template for ID:', id);
     
     const currentUser = getCurrentUserData();
-    console.log('👤 Current user data found:', currentUser);
-    
     let name = 'Professional Talent';
     let email = undefined;
     let phone = undefined;
@@ -443,12 +245,7 @@ const TalentProfile: React.FC = () => {
              'Professional Talent';
       email = currentUser.email;
       phone = currentUser.phone;
-      console.log('✅ Using current user data for template');
-    } else {
-      console.log('❌ No current user data found, using generic template');
     }
-    
-    console.log('📝 Template will use name:', name);
     
     return {
       id,
@@ -460,13 +257,12 @@ const TalentProfile: React.FC = () => {
       hourlyRate: '$75-150',
       avatar: generateAvatar(name),
       coverImage: `https://picsum.photos/800/300?random=${id}`,
-      bio: 'Professional voice talent ready to bring your projects to life with engaging and high-quality voice work.',
+      bio: 'Professional voice talent ready to bring your projects to life.',
       skills: ['Voice Over', 'Narration', 'Commercial', 'Corporate'],
       languages: ['English'],
       experience: '5+ years',
       samples: [
-        { id: '1', title: 'Demo Reel', duration: '1:30', url: '#', category: 'Demo' },
-        { id: '2', title: 'Commercial Sample', duration: '0:45', url: '#', category: 'Commercial' }
+        { id: '1', title: 'Demo Reel', duration: '1:30', url: '#', category: 'Demo' }
       ],
       reviews: [],
       responseTime: '< 2 hours',
@@ -483,16 +279,9 @@ const TalentProfile: React.FC = () => {
 
   const handleGoBack = () => {
     console.log('🔙 Back button clicked');
-    try {
-      if (window.history.length > 1) {
-        console.log('📖 Using browser history');
-        window.history.back();
-      } else {
-        console.log('🏠 Redirecting to home');
-        window.location.href = '/';
-      }
-    } catch (error) {
-      console.error('❌ Navigation error:', error);
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
       window.location.href = '/';
     }
   };
@@ -539,9 +328,6 @@ const TalentProfile: React.FC = () => {
           <div className="text-sm text-gray-400 mb-2">
             {params.id ? `ID: ${params.id}` : 'Searching for talent data...'}
           </div>
-          <div className="text-xs text-gray-500">
-            Checking multiple data sources to restore your working system...
-          </div>
         </div>
       </div>
     );
@@ -552,26 +338,8 @@ const TalentProfile: React.FC = () => {
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center text-white max-w-lg">
           <div className="text-blue-400 text-6xl mb-4">🔧</div>
-          <h2 className="text-2xl font-bold text-gray-100 mb-4">Restoring Your Talent System</h2>
+          <h2 className="text-2xl font-bold text-gray-100 mb-4">Talent Profile Issue</h2>
           <p className="text-gray-300 mb-4">{error}</p>
-          
-          <div className="bg-slate-800 p-4 rounded-lg mb-4 text-left">
-            <h3 className="font-bold mb-2">🔍 Let's find your talent data:</h3>
-            <div className="text-sm text-gray-300 space-y-2">
-              <div>• Check console logs for debugging info</div>
-              <div>• Your talent system was working before our changes</div>
-              <div>• We need to adapt to your existing setup</div>
-            </div>
-          </div>
-          
-          <div className="bg-blue-900 p-3 rounded-lg mb-4 text-sm">
-            <div className="font-bold mb-1">📋 Debug Info:</div>
-            <div className="text-blue-200 text-left">
-              <div>URL: {window.location.href}</div>
-              <div>Path: {window.location.pathname}</div>
-              <div>Search: {window.location.search || 'none'}</div>
-            </div>
-          </div>
           
           <div className="flex gap-3">
             <button
@@ -582,37 +350,15 @@ const TalentProfile: React.FC = () => {
             </button>
             <button
               onClick={() => {
-                console.log('🔍 Manual debug - checking all data sources...');
-                console.log('localStorage keys:', Object.keys(localStorage));
-                console.log('sessionStorage keys:', Object.keys(sessionStorage));
-                console.log('window object keys:', Object.keys(window).filter(k => k.includes('talent') || k.includes('user')));
-                
-                // Try to find any talent-related data
-                for (let i = 0; i < localStorage.length; i++) {
-                  const key = localStorage.key(i);
-                  if (key && (key.includes('talent') || key.includes('user'))) {
-                    console.log(`Found ${key}:`, localStorage.getItem(key));
-                  }
-                }
-                
-                alert('Check console for detailed data analysis');
-              }}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-            >
-              Debug Data
-            </button>
-            <button
-              onClick={() => {
-                // Navigate to current user's profile as emergency fallback
                 const currentUser = getCurrentUserData();
                 if (currentUser) {
-                  const userId = currentUser.id || currentUser._id || currentUser.userId;
+                  const userId = currentUser.id || currentUser._id;
                   if (userId) {
                     window.location.href = `/talent/${userId}`;
                   }
                 }
               }}
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
             >
               My Profile
             </button>
@@ -725,9 +471,6 @@ const TalentProfile: React.FC = () => {
                     📞 {talent.phone}
                   </div>
                 )}
-                <div className="text-xs text-gray-500 mb-4">
-                  ID: {talent.id} | Source: {dataSource}
-                </div>
               </div>
 
               <button
@@ -904,6 +647,27 @@ const TalentProfile: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Debug Info Panel */}
+      <div className="fixed bottom-4 right-4 bg-black bg-opacity-90 text-white p-4 rounded-lg text-xs max-w-sm border border-gray-600">
+        <div className="font-bold mb-2">🔍 Debug Info:</div>
+        <div>Profile ID: {params.id || 'Auto-detected'}</div>
+        <div>Data Source: {dataSource}</div>
+        <div>Name: {talent?.name}</div>
+        <div>Email: {talent?.email || 'Not found'}</div>
+        
+        {dataSource.includes('Current User') && (
+          <div className="mt-2 p-2 bg-blue-800 rounded text-xs">
+            👤 This is YOUR profile
+          </div>
+        )}
+        
+        {params.id && (
+          <div className="mt-2 p-2 bg-green-800 rounded text-xs">
+            ✅ Specific talent ID from URL
+          </div>
+        )}
+      </div>
     </div>
   );
 };
