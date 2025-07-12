@@ -171,24 +171,24 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 py-12">
+      <div className="min-h-screen bg-slate-900 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Voice Talent Directory</h1>
-            <p className="text-gray-600 mt-2">Loading real talent profiles...</p>
+            <h1 className="text-3xl font-bold text-white">Voice Talent Directory</h1>
+            <p className="text-gray-300 mt-2">Loading real talent profiles...</p>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="bg-white rounded-lg shadow-md overflow-hidden animate-pulse">
-                <div className="h-32 bg-gray-200"></div>
+              <div key={i} className="bg-slate-800 rounded-lg shadow-md overflow-hidden animate-pulse">
+                <div className="h-32 bg-slate-700"></div>
                 <div className="p-4">
-                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                  <div className="h-3 bg-gray-200 rounded w-1/2 mb-3"></div>
-                  <div className="h-12 bg-gray-200 rounded mb-3"></div>
+                  <div className="h-4 bg-slate-700 rounded w-3/4 mb-2"></div>
+                  <div className="h-3 bg-slate-700 rounded w-1/2 mb-3"></div>
+                  <div className="h-12 bg-slate-700 rounded mb-3"></div>
                   <div className="flex space-x-2">
-                    <div className="h-8 bg-gray-200 rounded flex-1"></div>
-                    <div className="h-8 bg-gray-200 rounded flex-1"></div>
+                    <div className="h-8 bg-slate-700 rounded flex-1"></div>
+                    <div className="h-8 bg-slate-700 rounded flex-1"></div>
                   </div>
                 </div>
               </div>
@@ -200,15 +200,15 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 py-12">
+    <div className="min-h-screen bg-slate-900 py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Voice Talent Directory</h1>
-          <p className="text-gray-600 mb-4">
+          <h1 className="text-3xl font-bold text-white mb-2">Voice Talent Directory</h1>
+          <p className="text-gray-300 mb-4">
             Find the perfect voice talent for your project
           </p>
-          <div className="flex items-center justify-center space-x-2 text-green-600">
+          <div className="flex items-center justify-center space-x-2 text-green-400">
             <Award className="w-5 h-5" />
             <span className="font-semibold">
               {allTalents.length} Verified Real Talent{allTalents.length !== 1 ? 's' : ''} Available
@@ -217,7 +217,7 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
         </div>
 
         {/* Search and Filter Bar */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+        <div className="bg-slate-800 rounded-lg shadow-md p-6 mb-8 border border-slate-700">
           <div className="flex flex-col lg:flex-row gap-4">
             {/* Search */}
             <div className="flex-1 relative">
@@ -227,19 +227,19 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
                 placeholder="Search by name, skills, location..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 bg-slate-700 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
               />
             </div>
 
             {/* Filter Toggle */}
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="flex items-center space-x-2 px-4 py-2 border border-slate-600 rounded-lg hover:bg-slate-700 text-white"
             >
               <Sliders className="w-5 h-5" />
               <span>Filters</span>
               {(selectedSkills.length > 0 || selectedLocation || minRating > 0) && (
-                <span className="bg-purple-600 text-white text-xs px-2 py-1 rounded-full">
+                <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full">
                   {selectedSkills.length + (selectedLocation ? 1 : 0) + (minRating > 0 ? 1 : 0)}
                 </span>
               )}
@@ -249,7 +249,7 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+              className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 text-white"
             >
               <option value="name">Sort by Name</option>
               <option value="rating">Sort by Rating</option>
@@ -260,10 +260,10 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
 
           {/* Expanded Filters */}
           {showFilters && (
-            <div className="mt-6 pt-6 border-t border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="mt-6 pt-6 border-t border-slate-600 grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Skills Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Skills</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Skills</label>
                 <div className="max-h-32 overflow-y-auto space-y-1">
                   {availableSkills.map((skill) => (
                     <label key={skill} className="flex items-center">
@@ -277,9 +277,9 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
                             setSelectedSkills(selectedSkills.filter(s => s !== skill));
                           }
                         }}
-                        className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                        className="rounded border-slate-600 text-blue-600 focus:ring-blue-500 bg-slate-700"
                       />
-                      <span className="ml-2 text-sm text-gray-600">{skill}</span>
+                      <span className="ml-2 text-sm text-gray-300">{skill}</span>
                     </label>
                   ))}
                 </div>
@@ -287,11 +287,11 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
 
               {/* Location Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Location</label>
                 <select
                   value={selectedLocation}
                   onChange={(e) => setSelectedLocation(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white"
                 >
                   <option value="">All Locations</option>
                   {availableLocations.map((location) => (
@@ -302,11 +302,11 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
 
               {/* Rating Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Minimum Rating</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Minimum Rating</label>
                 <select
                   value={minRating}
                   onChange={(e) => setMinRating(Number(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white"
                 >
                   <option value={0}>Any Rating</option>
                   <option value={4}>4+ Stars</option>
@@ -319,7 +319,7 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
               <div className="md:col-span-3 flex justify-end">
                 <button
                   onClick={clearFilters}
-                  className="text-purple-600 hover:text-purple-700 text-sm font-medium"
+                  className="text-blue-400 hover:text-blue-300 text-sm font-medium"
                 >
                   Clear All Filters
                 </button>
@@ -330,7 +330,7 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
 
         {/* Results Count */}
         <div className="mb-6 text-center">
-          <p className="text-gray-600">
+          <p className="text-gray-300">
             Showing {filteredTalents.length} of {allTalents.length} real talents
             {searchQuery && ` for "${searchQuery}"`}
           </p>
@@ -339,26 +339,26 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
         {/* No Results */}
         {allTalents.length === 0 ? (
           <div className="text-center py-16">
-            <Users className="w-24 h-24 text-gray-300 mx-auto mb-6" />
-            <h3 className="text-2xl font-bold text-gray-800 mb-4">No Real Talents Yet</h3>
-            <p className="text-gray-600 mb-8 max-w-md mx-auto">
+            <Users className="w-24 h-24 text-gray-500 mx-auto mb-6" />
+            <h3 className="text-2xl font-bold text-white mb-4">No Real Talents Yet</h3>
+            <p className="text-gray-300 mb-8 max-w-md mx-auto">
               Be the first to join our platform as a voice talent and start getting hired for projects!
             </p>
             <button
               onClick={handleJoinAsTalent}
-              className="bg-purple-600 text-white px-8 py-3 rounded-lg hover:bg-purple-700 transition-colors font-semibold"
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-3 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all font-semibold"
             >
               Join as Talent
             </button>
           </div>
         ) : filteredTalents.length === 0 ? (
           <div className="text-center py-16">
-            <Filter className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-gray-800 mb-2">No Talents Match Your Filters</h3>
-            <p className="text-gray-600 mb-6">Try adjusting your search criteria</p>
+            <Filter className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-white mb-2">No Talents Match Your Filters</h3>
+            <p className="text-gray-300 mb-6">Try adjusting your search criteria</p>
             <button
               onClick={clearFilters}
-              className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-2 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all"
             >
               Clear Filters
             </button>
@@ -367,9 +367,9 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
           /* Talent Grid */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredTalents.map((talent) => (
-              <div key={talent.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+              <div key={talent.id} className="bg-slate-800 rounded-lg shadow-md overflow-hidden hover:shadow-xl border border-slate-700 transition-all duration-300 hover:border-slate-600">
                 {/* Header */}
-                <div className="relative h-32 bg-gradient-to-br from-purple-600 to-blue-600">
+                <div className="relative h-32 bg-gradient-to-br from-blue-600 to-indigo-600">
                   {talent.coverImage ? (
                     <img
                       src={talent.coverImage}
@@ -377,15 +377,15 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-purple-600 to-blue-600"></div>
+                    <div className="w-full h-full bg-gradient-to-br from-blue-600 to-indigo-600"></div>
                   )}
                   
                   {/* Avatar */}
                   <div className="absolute -bottom-6 left-4">
                     <img
-                      src={talent.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(talent.name)}&size=60&background=7c3aed&color=fff`}
+                      src={talent.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(talent.name)}&size=60&background=3b82f6&color=fff`}
                       alt={talent.name}
-                      className="w-12 h-12 rounded-full border-4 border-white shadow-lg"
+                      className="w-12 h-12 rounded-full border-4 border-slate-800 shadow-lg"
                     />
                   </div>
 
@@ -401,11 +401,11 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
                 {/* Content */}
                 <div className="p-4 pt-8">
                   <div className="mb-3">
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">{talent.name}</h3>
-                    <p className="text-gray-600 text-sm mb-2">{talent.title}</p>
+                    <h3 className="text-lg font-bold text-white mb-1">{talent.name}</h3>
+                    <p className="text-gray-300 text-sm mb-2">{talent.title}</p>
                     
                     {talent.location && (
-                      <div className="flex items-center text-gray-500 text-sm mb-2">
+                      <div className="flex items-center text-gray-400 text-sm mb-2">
                         <MapPin className="w-4 h-4 mr-1" />
                         {talent.location}
                       </div>
@@ -417,7 +417,7 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
                         <div className="flex items-center mr-2">
                           {renderStars(talent.rating)}
                         </div>
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-gray-400">
                           {talent.rating.toFixed(1)} ({talent.reviewCount || 0})
                         </span>
                       </div>
@@ -425,7 +425,7 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
                   </div>
 
                   {/* Bio */}
-                  <p className="text-gray-600 text-sm line-clamp-3 mb-3">
+                  <p className="text-gray-300 text-sm line-clamp-3 mb-3">
                     {talent.bio}
                   </p>
 
@@ -435,13 +435,13 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
                       {talent.skills.slice(0, 2).map((skill, index) => (
                         <span
                           key={index}
-                          className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs"
+                          className="bg-blue-900/50 text-blue-300 px-2 py-1 rounded text-xs border border-blue-800"
                         >
                           {skill}
                         </span>
                       ))}
                       {talent.skills.length > 2 && (
-                        <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">
+                        <span className="bg-slate-700 text-gray-300 px-2 py-1 rounded text-xs border border-slate-600">
                           +{talent.skills.length - 2}
                         </span>
                       )}
@@ -452,13 +452,13 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
                   <div className="flex space-x-2">
                     <button
                       onClick={() => handleViewProfile(talent.id)}
-                      className="flex-1 bg-purple-600 text-white py-2 px-3 rounded-lg hover:bg-purple-700 transition-colors text-sm font-semibold"
+                      className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-2 px-3 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all text-sm font-semibold"
                     >
                       View Profile
                     </button>
                     <button
                       onClick={() => handleContactTalent(talent.id)}
-                      className="flex-1 bg-gray-200 text-gray-800 py-2 px-3 rounded-lg hover:bg-gray-300 transition-colors text-sm font-semibold flex items-center justify-center"
+                      className="flex-1 bg-slate-700 text-gray-300 py-2 px-3 rounded-lg hover:bg-slate-600 transition-colors text-sm font-semibold flex items-center justify-center border border-slate-600"
                     >
                       <MessageCircle className="w-4 h-4 mr-1" />
                       Contact
@@ -472,7 +472,7 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
 
         {/* Bottom Notice */}
         <div className="mt-12 text-center">
-          <div className="inline-flex items-center space-x-2 bg-green-50 text-green-700 px-6 py-3 rounded-full">
+          <div className="inline-flex items-center space-x-2 bg-green-900/30 text-green-400 px-6 py-3 rounded-full border border-green-800">
             <Award className="w-5 h-5" />
             <span className="font-semibold">All talent profiles are verified real users</span>
           </div>
