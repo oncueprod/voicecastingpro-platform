@@ -54,31 +54,33 @@ const TalentProfile: React.FC = () => {
   }, [params.id]);
 
   const loadTalentProfile = async (id: string) => {
-    console.log('🔍 Searching for talent profile data for ID:', id);
+    console.log('🔍 Searching for REAL talent profile data for ID:', id);
     
     try {
-      // Step 1: Try API endpoints
-      console.log('📡 Trying API endpoints...');
+      // Step 1: Try API endpoints for REAL talent data
+      console.log('📡 Trying API endpoints for real talent data...');
       const apiSuccess = await tryApiEndpoints(id);
       if (apiSuccess) return;
 
-      // Step 2: Try localStorage
-      console.log('📦 Checking localStorage...');
+      // Step 2: Try localStorage for REAL talent profiles
+      console.log('📦 Checking localStorage for real talent profiles...');
       const localSuccess = tryLocalStorage(id);
       if (localSuccess) return;
 
-      // Step 3: Try current user
-      console.log('👤 Checking current user...');
+      // Step 3: Check if this is current user's talent profile
+      console.log('👤 Checking if this is current user\'s talent profile...');
       const userSuccess = tryCurrentUser(id);
       if (userSuccess) return;
 
-      // Step 4: Generate mock data
-      console.log('🎭 Generating mock talent data...');
-      generateMockTalent(id);
+      // NO MOCK DATA - If no real talent profile found, show error
+      console.log('❌ No REAL talent profile found for ID:', id);
+      setTalent(null);
+      setDataSource('No Real Profile Found');
 
     } catch (error) {
       console.error('❌ Error loading talent profile:', error);
-      generateMockTalent(id);
+      setTalent(null);
+      setDataSource('Error Loading Profile');
     }
   };
 
@@ -271,72 +273,6 @@ const TalentProfile: React.FC = () => {
     };
   };
 
-  const generateMockTalent = (id: string) => {
-    const names = [
-      'Sarah Johnson', 'Michael Chen', 'Emma Rodriguez', 'David Thompson', 'Lisa Parker',
-      'James Wilson', 'Maria Garcia', 'Robert Taylor', 'Ashley Brown', 'Christopher Lee'
-    ];
-    
-    const titles = [
-      'Professional Voice Over Artist', 'Commercial Voice Talent', 'Narration Specialist',
-      'Character Voice Actor', 'Corporate Voice Talent', 'Animation Voice Artist'
-    ];
-
-    const locations = [
-      'Los Angeles, CA', 'New York, NY', 'Nashville, TN', 'Atlanta, GA', 'Chicago, IL',
-      'Austin, TX', 'Seattle, WA', 'Miami, FL', 'Denver, CO', 'Portland, OR'
-    ];
-
-    const skillOptions = [
-      ['Commercial VO', 'Narration', 'Character Voices'],
-      ['Corporate Training', 'E-Learning', 'Commercials'],
-      ['Audiobooks', 'Documentary', 'Podcast Intro'],
-      ['Animation', 'Video Games', 'Character Voices']
-    ];
-
-    const idNum = parseInt(id) || 1;
-    const nameIndex = (idNum - 1) % names.length;
-    const titleIndex = (idNum - 1) % titles.length;
-    const locationIndex = (idNum - 1) % locations.length;
-    const skillIndex = (idNum - 1) % skillOptions.length;
-
-    const mockTalent: TalentData = {
-      id: id,
-      name: names[nameIndex],
-      title: titles[titleIndex],
-      location: locations[locationIndex],
-      rating: 4.2 + (idNum % 8) * 0.1,
-      reviewCount: 15 + (idNum * 7) % 100,
-      hourlyRate: `$${50 + (idNum * 5) % 100}-${100 + (idNum * 10) % 200}`,
-      avatar: generateAvatar(names[nameIndex]),
-      coverImage: `https://picsum.photos/800/300?random=${idNum}`,
-      bio: `Professional voice over artist with ${3 + (idNum % 8)}+ years of experience. Known for engaging delivery style.`,
-      skills: skillOptions[skillIndex],
-      languages: ['English (Native)'],
-      experience: `${3 + (idNum % 8)}+ years`,
-      samples: [
-        { id: '1', title: 'Commercial Demo', duration: '0:45', url: '#', category: 'Commercial' },
-        { id: '2', title: 'Narration Sample', duration: '1:20', url: '#', category: 'Narration' }
-      ],
-      reviews: [
-        {
-          id: '1',
-          clientName: 'Production Company',
-          rating: 5,
-          comment: `Excellent work! ${names[nameIndex]} delivered exactly what we needed.`,
-          date: '2024-01-15'
-        }
-      ],
-      responseTime: '< 2 hours',
-      completionRate: `${92 + (idNum % 8)}%`,
-      totalJobs: 10 + (idNum * 8) % 200
-    };
-
-    console.log('✅ Generated mock talent:', mockTalent.name);
-    setTalent(mockTalent);
-    setDataSource('Mock Data (no real profile found)');
-  };
-
   const generateAvatar = (name: string) => {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=200&background=7c3aed&color=fff`;
   };
@@ -379,13 +315,72 @@ const TalentProfile: React.FC = () => {
     ));
   };
 
-  if (!talent) {
+  if (!talent && dataSource === 'Loading...') {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center text-white">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
           <div className="text-xl mb-4">Loading talent profile...</div>
           <div className="text-sm text-gray-400 mb-2">Talent ID: {params.id || 'undefined'}</div>
+          <div className="text-xs text-gray-500">Searching for real talent profile data...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!talent) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-center text-white max-w-lg">
+          <div className="text-red-400 text-6xl mb-4">🚫</div>
+          <h2 className="text-3xl font-bold text-gray-100 mb-4">Talent Profile Not Found</h2>
+          <p className="text-gray-300 mb-6">
+            No talent profile exists for ID: <span className="font-mono text-blue-400">{params.id}</span>
+          </p>
+          
+          <div className="bg-slate-800 p-6 rounded-lg mb-6 text-left">
+            <h3 className="font-bold mb-3 text-yellow-400">🎯 Real Talents Only</h3>
+            <ul className="text-sm text-gray-300 space-y-2">
+              <li>• This platform only shows REAL talent profiles</li>
+              <li>• No mock or generated profiles are displayed</li>
+              <li>• Only users who have created talent profiles appear here</li>
+              <li>• This ensures authentic, verified talent connections</li>
+            </ul>
+          </div>
+          
+          <div className="bg-blue-900 p-4 rounded-lg mb-6 text-sm">
+            <div className="font-bold mb-2">💡 What this means:</div>
+            <div className="text-blue-200">
+              The talent ID "{params.id}" does not correspond to any real user who has created a talent profile on this platform.
+            </div>
+          </div>
+          
+          <div className="flex gap-3">
+            <button
+              onClick={handleGoBack}
+              className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg transition-colors font-semibold"
+            >
+              ← Browse Real Talents
+            </button>
+            <button
+              onClick={() => {
+                const currentUser = getCurrentUserData();
+                if (currentUser) {
+                  const userId = currentUser.id || currentUser._id;
+                  if (userId) {
+                    window.location.href = `/talent/${userId}`;
+                  } else {
+                    alert('Please create your talent profile first.');
+                  }
+                } else {
+                  alert('Please log in to create your talent profile.');
+                }
+              }}
+              className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg transition-colors font-semibold"
+            >
+              Create Your Profile
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -394,13 +389,8 @@ const TalentProfile: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       {/* Debug Info Banner */}
-      <div className={`text-white p-2 text-center text-sm ${
-        dataSource.includes('Real Data') || dataSource.includes('Your Real') ? 'bg-green-600' : 'bg-orange-600'
-      }`}>
-        {dataSource.includes('Real Data') || dataSource.includes('Your Real') ? 
-          '✅ REAL TALENT PROFILE: ' : 
-          '⚠️ MOCK TALENT PROFILE: '} 
-        {talent.name} (ID: {talent.id}) | {dataSource}
+      <div className="bg-green-600 text-white p-2 text-center text-sm">
+        ✅ REAL TALENT PROFILE: {talent.name} (ID: {talent.id}) | {dataSource} | NO MOCK DATA EVER
       </div>
 
       {/* Header */}
@@ -638,20 +628,22 @@ const TalentProfile: React.FC = () => {
 
       {/* Debug Info Panel */}
       <div className="fixed bottom-4 right-4 bg-black bg-opacity-90 text-white p-4 rounded-lg text-xs max-w-sm border border-gray-600">
-        <div className="font-bold mb-2">🔍 Data Source:</div>
+        <div className="font-bold mb-2">✅ REAL TALENTS ONLY:</div>
         <div>Talent ID: {talent.id}</div>
         <div>Name: {talent.name}</div>
         <div>Source: {dataSource}</div>
         
-        {(dataSource.includes('Real Data') || dataSource.includes('Your Real')) ? (
-          <div className="mt-2 p-2 bg-green-800 rounded text-xs">
-            ✅ REAL TALENT PROFILE
-          </div>
-        ) : (
-          <div className="mt-2 p-2 bg-orange-800 rounded text-xs">
-            ⚠️ MOCK PROFILE
-          </div>
-        )}
+        <div className="mt-2 p-2 bg-green-800 rounded text-xs">
+          ✅ VERIFIED REAL TALENT PROFILE
+        </div>
+        
+        <div className="mt-2 p-2 bg-blue-800 rounded text-xs">
+          🚫 NO MOCK DATA - Real users only!
+        </div>
+        
+        <div className="mt-2 text-gray-400 text-xs">
+          System only shows actual talent profiles from real users who created profiles
+        </div>
       </div>
     </div>
   );
