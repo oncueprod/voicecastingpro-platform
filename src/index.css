@@ -1,0 +1,256 @@
+/* Import better fonts for crisp rendering - MUST BE FIRST */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #0066ff;
+  --secondary: #6600ff;
+  --dark-blue: #1e3a8a;
+  --dark-navy: #1e40af;
+  --dark-deeper: #1d4ed8;
+}
+
+body {
+  @apply bg-slate-900 text-white;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-weight: 400;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern" 1;
+  font-kerning: normal;
+}
+
+/* Improved text rendering for crisp fonts */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  text-rendering: optimizeLegibility;
+}
+
+p {
+  line-height: 1.7;
+  font-weight: 400;
+  text-rendering: optimizeLegibility;
+}
+
+.text-lg {
+  font-size: 1.125rem;
+  line-height: 1.75;
+  font-weight: 400;
+}
+
+.text-xl {
+  font-size: 1.25rem;
+  line-height: 1.75;
+  font-weight: 500;
+}
+
+/* Ensure buttons have crisp text */
+button {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Input fields with better text rendering */
+input, textarea, select {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.bg-grid-pattern {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.text-gradient {
+  background: linear-gradient(to right, #3b82f6, #6366f1);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.btn-gradient {
+  background: linear-gradient(to right, #3b82f6, #6366f1);
+}
+
+.card-hover {
+  transition: all 0.3s;
+}
+.card-hover:hover {
+  box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.1);
+  transform: translateY(-4px);
+}
+
+.waveform-bar {
+  border-radius: 9999px;
+  transition: all 0.3s;
+  animation: waveform 1.5s ease-in-out infinite;
+  animation-play-state: paused;
+}
+
+.playing .waveform-bar {
+  animation-play-state: running;
+}
+
+@keyframes waveform {
+  0%, 100% {
+    height: 8px;
+  }
+  50% {
+    height: 24px;
+  }
+}
+
+.particles-container {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  z-index: 0;
+}
+
+.glow {
+  box-shadow: 0 0 20px rgba(37, 99, 235, 0.3);
+}
+
+.glow-purple {
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+}
+
+.glow-text {
+  text-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
+}
+
+/* Better text contrast and readability with crisp rendering */
+.text-readable {
+  color: #f1f5f9;
+  font-weight: 500;
+  text-rendering: optimizeLegibility;
+}
+
+.text-readable-light {
+  color: #e2e8f0;
+  font-weight: 400;
+  text-rendering: optimizeLegibility;
+}
+
+.text-readable-muted {
+  color: #cbd5e1;
+  font-weight: 400;
+  text-rendering: optimizeLegibility;
+}
+
+/* Ensure all text is crisp and clear */
+.crisp-text {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern" 1;
+}
+
+/* Audio wave animation */
+@keyframes wave {
+  0%, 100% {
+    transform: scaleY(0.5);
+  }
+  50% {
+    transform: scaleY(1.5);
+  }
+}
+
+.audio-wave-bar {
+  animation: wave 1.5s ease-in-out infinite;
+  transform-origin: bottom;
+}
+
+/* Sound ripple animation */
+@keyframes ripple {
+  0% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+.sound-ripple {
+  animation: ripple 4s ease-out infinite;
+}
+
+/* Gradient morphing animation */
+@keyframes gradient-morph {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.gradient-morph {
+  background-size: 200% 200%;
+  animation: gradient-morph 15s ease infinite;
+}
+
+/* Responsive design improvements */
+@media (max-width: 768px) {
+  h1 {
+    font-size: 2rem !important;
+  }
+  
+  h2 {
+    font-size: 1.75rem !important;
+  }
+  
+  .text-xl {
+    font-size: 1.125rem !important;
+  }
+  
+  .text-lg {
+    font-size: 1rem !important;
+  }
+}
+
+/* Mobile-specific adjustments */
+@media (max-width: 640px) {
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  .py-20 {
+    padding-top: 3rem;
+    padding-bottom: 3rem;
+  }
+  
+  .py-16 {
+    padding-top: 2.5rem;
+    padding-bottom: 2.5rem;
+  }
+  
+  .py-12 {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+  }
+}
