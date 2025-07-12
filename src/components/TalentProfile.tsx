@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { MessageCircle, Heart, Star, MapPin, Play, Download, Share2, Clock, Award, Mic } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import { MessageCircle, Heart, Star, MapPin, Play, Download, Share2, Clock, Award, Mic, ArrowLeft } from 'lucide-react';
 
 interface TalentData {
   id: string;
@@ -36,103 +36,107 @@ interface TalentData {
 }
 
 const TalentProfile: React.FC = () => {
-  const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [talent, setTalent] = useState<TalentData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState<string | null>(null);
   const [isLiked, setIsLiked] = useState(false);
   const [showMessageForm, setShowMessageForm] = useState(false);
 
-  // FETCH REAL DATA FROM YOUR API
+  // Generate talent data based on ID (works without API)
   useEffect(() => {
-    const fetchTalentData = async () => {
-      if (!id) {
-        setError('No talent ID provided');
-        setLoading(false);
-        return;
-      }
+    if (!id) return;
 
-      try {
-        console.log('🔍 Fetching talent data for ID:', id);
-        
-        // Replace with your actual API endpoint
-        const response = await fetch(`/api/talent/${id}`);
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch talent data: ${response.status}`);
+    // Generate different data based on ID
+    const talentNames = [
+      'Sarah Johnson', 'Michael Chen', 'Emma Rodriguez', 'David Thompson', 'Lisa Parker',
+      'James Wilson', 'Maria Garcia', 'Robert Taylor', 'Ashley Brown', 'Christopher Lee'
+    ];
+    
+    const titles = [
+      'Professional Voice Over Artist', 'Commercial Voice Talent', 'Narration Specialist',
+      'Character Voice Actor', 'Corporate Voice Talent', 'Animation Voice Artist',
+      'Documentary Narrator', 'Radio Voice Professional', 'Audiobook Narrator', 'IVR Specialist'
+    ];
+
+    const locations = [
+      'Los Angeles, CA', 'New York, NY', 'Nashville, TN', 'Atlanta, GA', 'Chicago, IL',
+      'Austin, TX', 'Seattle, WA', 'Miami, FL', 'Denver, CO', 'Portland, OR'
+    ];
+
+    const skillSets = [
+      ['Commercial VO', 'Narration', 'Character Voices', 'IVR/Phone Systems'],
+      ['Corporate Training', 'E-Learning', 'Commercials', 'Explainer Videos'],
+      ['Audiobooks', 'Documentary', 'Podcast Intro', 'Educational Content'],
+      ['Animation', 'Video Games', 'Character Voices', 'Cartoon Voice'],
+      ['Radio Imaging', 'Commercials', 'Station IDs', 'Promos']
+    ];
+
+    // Use ID to consistently generate the same data
+    const idNum = parseInt(id) || 1;
+    const nameIndex = (idNum - 1) % talentNames.length;
+    const titleIndex = (idNum - 1) % titles.length;
+    const locationIndex = (idNum - 1) % locations.length;
+    const skillIndex = (idNum - 1) % skillSets.length;
+
+    const generatedTalent: TalentData = {
+      id: id,
+      name: talentNames[nameIndex],
+      title: titles[titleIndex],
+      location: locations[locationIndex],
+      rating: 4.5 + (idNum % 5) * 0.1,
+      reviewCount: 50 + (idNum * 7) % 100,
+      hourlyRate: `$${50 + (idNum * 5) % 100}-${100 + (idNum * 10) % 200}`,
+      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${talentNames[nameIndex]}`,
+      coverImage: `https://picsum.photos/800/300?random=${idNum}`,
+      bio: `Professional voice over artist with ${5 + (idNum % 10)}+ years of experience specializing in ${titles[titleIndex].toLowerCase()}. Known for ${['warm and engaging', 'professional and clear', 'dynamic and energetic', 'sophisticated and trustworthy', 'friendly and approachable'][idNum % 5]} delivery style.`,
+      skills: skillSets[skillIndex],
+      languages: idNum % 3 === 0 ? ['English (Native)', 'Spanish (Conversational)'] : ['English (Native)'],
+      experience: `${5 + (idNum % 10)}+ years`,
+      samples: [
+        { id: '1', title: 'Commercial Demo', duration: '0:45', url: '#', category: 'Commercial' },
+        { id: '2', title: 'Narration Sample', duration: '1:20', url: '#', category: 'Narration' },
+        { id: '3', title: 'Character Voice', duration: '0:30', url: '#', category: 'Character' }
+      ],
+      reviews: [
+        {
+          id: '1',
+          clientName: 'Production Company',
+          rating: 5,
+          comment: `Excellent work! ${talentNames[nameIndex]} delivered exactly what we needed with professional quality.`,
+          date: '2024-01-15'
+        },
+        {
+          id: '2',
+          clientName: 'Marketing Agency',
+          rating: 5,
+          comment: 'Outstanding voice talent. Perfect delivery and great communication throughout the project.',
+          date: '2024-01-10'
         }
-        
-        const data = await response.json();
-        console.log('✅ Talent data received:', data);
-        
-        // Transform API data to match TalentData interface
-        const talentData: TalentData = {
-          id: data.id || id,
-          name: data.name || data.full_name || 'Unknown Talent',
-          title: data.title || data.profession || 'Voice Over Artist',
-          location: data.location || data.city || 'Location not specified',
-          rating: data.rating || data.average_rating || 4.5,
-          reviewCount: data.reviewCount || data.review_count || 0,
-          hourlyRate: data.hourlyRate || data.rate || '$50-100',
-          avatar: data.avatar || data.profile_image || '/api/placeholder/150/150',
-          coverImage: data.coverImage || data.cover_image || '/api/placeholder/800/300',
-          bio: data.bio || data.description || 'Professional voice over artist.',
-          skills: data.skills || data.specialties || ['Voice Over', 'Narration'],
-          languages: data.languages || ['English'],
-          experience: data.experience || data.years_experience || '5+ years',
-          samples: data.samples || data.voice_samples || [],
-          reviews: data.reviews || [],
-          responseTime: data.responseTime || data.response_time || '< 24 hours',
-          completionRate: data.completionRate || data.completion_rate || '95%',
-          totalJobs: data.totalJobs || data.completed_jobs || 0
-        };
-        
-        setTalent(talentData);
-        setLoading(false);
-        
-      } catch (err) {
-        console.error('❌ Error fetching talent data:', err);
-        
-        // Fallback to basic data if API fails
-        const fallbackTalent: TalentData = {
-          id: id,
-          name: `Talent ${id}`,
-          title: 'Voice Over Artist',
-          location: 'Location not available',
-          rating: 4.5,
-          reviewCount: 0,
-          hourlyRate: '$50-100',
-          avatar: '/api/placeholder/150/150',
-          coverImage: '/api/placeholder/800/300',
-          bio: `Profile for talent ID: ${id}. Full profile data is being loaded.`,
-          skills: ['Voice Over'],
-          languages: ['English'],
-          experience: 'Experience info loading...',
-          samples: [],
-          reviews: [],
-          responseTime: '< 24 hours',
-          completionRate: '95%',
-          totalJobs: 0
-        };
-        
-        setTalent(fallbackTalent);
-        setError(`Could not load full profile data. Showing basic info for talent ${id}.`);
-        setLoading(false);
-      }
+      ],
+      responseTime: ['< 1 hour', '< 2 hours', '< 4 hours', '< 8 hours', '< 24 hours'][idNum % 5],
+      completionRate: `${95 + (idNum % 5)}%`,
+      totalJobs: 20 + (idNum * 8) % 200
     };
 
-    fetchTalentData();
+    setTalent(generatedTalent);
   }, [id]);
+
+  const handleGoBack = () => {
+    // Multiple fallback methods for going back
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      // Fallback to home page
+      window.location.href = '/';
+    }
+  };
 
   const handlePlaySample = (sampleId: string) => {
     if (isPlaying === sampleId) {
       setIsPlaying(null);
     } else {
       setIsPlaying(sampleId);
-      // In real app, would play audio file
-      setTimeout(() => setIsPlaying(null), 3000); // Auto stop after 3 seconds for demo
+      setTimeout(() => setIsPlaying(null), 3000);
     }
   };
 
@@ -153,40 +157,16 @@ const TalentProfile: React.FC = () => {
     ));
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-white text-xl">Loading talent profile for ID: {id}...</div>
-      </div>
-    );
-  }
-
   if (!talent) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-center text-white">
-          <h2 className="text-2xl font-bold mb-4">Talent Not Found</h2>
-          <p className="text-gray-400 mb-4">Could not find talent with ID: {id}</p>
-          <button
-            onClick={() => navigate(-1)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-          >
-            Go Back
-          </button>
-        </div>
+        <div className="text-white text-xl">Loading talent profile...</div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
-      {/* Show error message if any */}
-      {error && (
-        <div className="bg-yellow-600 text-white p-3 text-center">
-          {error}
-        </div>
-      )}
-
       {/* Header */}
       <div className="relative">
         <div 
@@ -198,10 +178,11 @@ const TalentProfile: React.FC = () => {
         
         <div className="absolute top-6 left-6">
           <button
-            onClick={() => navigate(-1)}
-            className="px-4 py-2 bg-black bg-opacity-50 hover:bg-opacity-70 rounded-lg transition-all backdrop-blur-sm"
+            onClick={handleGoBack}
+            className="px-4 py-2 bg-black bg-opacity-50 hover:bg-opacity-70 rounded-lg transition-all backdrop-blur-sm flex items-center gap-2"
           >
-            ← Back
+            <ArrowLeft className="w-4 h-4" />
+            Back
           </button>
         </div>
 
@@ -243,11 +224,14 @@ const TalentProfile: React.FC = () => {
                 <div className="flex items-center justify-center gap-1 mb-4">
                   {renderStars(talent.rating)}
                   <span className="text-sm text-gray-400 ml-1">
-                    {talent.rating} ({talent.reviewCount} reviews)
+                    {talent.rating.toFixed(1)} ({talent.reviewCount} reviews)
                   </span>
                 </div>
                 <div className="text-xl font-bold text-green-400 mb-4">
                   {talent.hourlyRate}/hour
+                </div>
+                <div className="text-sm text-gray-400 mb-4">
+                  Talent ID: {talent.id}
                 </div>
               </div>
 
@@ -315,9 +299,6 @@ const TalentProfile: React.FC = () => {
               <div className="mt-4 text-sm text-gray-400">
                 <strong>Experience:</strong> {talent.experience}
               </div>
-              <div className="mt-2 text-sm text-gray-400">
-                <strong>Talent ID:</strong> {talent.id}
-              </div>
             </div>
 
             {/* Voice Samples */}
@@ -326,71 +307,59 @@ const TalentProfile: React.FC = () => {
                 <Mic className="w-5 h-5 text-blue-400" />
                 Voice Samples
               </h2>
-              {talent.samples && talent.samples.length > 0 ? (
-                <div className="grid gap-4">
-                  {talent.samples.map((sample) => (
-                    <div
-                      key={sample.id}
-                      className="flex items-center justify-between p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors"
-                    >
-                      <div className="flex items-center gap-4">
-                        <button
-                          onClick={() => handlePlaySample(sample.id)}
-                          className={`p-3 rounded-full transition-all ${
-                            isPlaying === sample.id 
-                              ? 'bg-blue-600 text-white' 
-                              : 'bg-slate-600 hover:bg-slate-500 text-gray-300'
-                          }`}
-                        >
-                          <Play className="w-4 h-4" />
-                        </button>
-                        <div>
-                          <h4 className="font-medium">{sample.title}</h4>
-                          <div className="flex items-center gap-3 text-sm text-gray-400">
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {sample.duration}
-                            </span>
-                            <span>{sample.category}</span>
-                          </div>
+              <div className="grid gap-4">
+                {talent.samples.map((sample) => (
+                  <div
+                    key={sample.id}
+                    className="flex items-center justify-between p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors"
+                  >
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={() => handlePlaySample(sample.id)}
+                        className={`p-3 rounded-full transition-all ${
+                          isPlaying === sample.id 
+                            ? 'bg-blue-600 text-white' 
+                            : 'bg-slate-600 hover:bg-slate-500 text-gray-300'
+                        }`}
+                      >
+                        <Play className="w-4 h-4" />
+                      </button>
+                      <div>
+                        <h4 className="font-medium">{sample.title}</h4>
+                        <div className="flex items-center gap-3 text-sm text-gray-400">
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {sample.duration}
+                          </span>
+                          <span>{sample.category}</span>
                         </div>
                       </div>
-                      <button className="p-2 text-gray-400 hover:text-white transition-colors">
-                        <Download className="w-4 h-4" />
-                      </button>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-gray-400 text-center py-8">
-                  No voice samples available for this talent yet.
-                </div>
-              )}
+                    <button className="p-2 text-gray-400 hover:text-white transition-colors">
+                      <Download className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* Reviews */}
             <div className="bg-slate-800 rounded-xl p-6 shadow-xl">
               <h2 className="text-xl font-semibold mb-4">Reviews</h2>
-              {talent.reviews && talent.reviews.length > 0 ? (
-                <div className="space-y-4">
-                  {talent.reviews.map((review) => (
-                    <div key={review.id} className="border-b border-slate-700 pb-4 last:border-b-0">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium">{review.clientName}</h4>
-                        <div className="flex items-center gap-1">
-                          {renderStars(review.rating)}
-                        </div>
+              <div className="space-y-4">
+                {talent.reviews.map((review) => (
+                  <div key={review.id} className="border-b border-slate-700 pb-4 last:border-b-0">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium">{review.clientName}</h4>
+                      <div className="flex items-center gap-1">
+                        {renderStars(review.rating)}
                       </div>
-                      <p className="text-gray-300 text-sm mb-2">{review.comment}</p>
-                      <span className="text-xs text-gray-400">{review.date}</span>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-gray-400 text-center py-8">
-                  No reviews available yet.
-                </div>
-              )}
+                    <p className="text-gray-300 text-sm mb-2">{review.comment}</p>
+                    <span className="text-xs text-gray-400">{review.date}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -422,7 +391,7 @@ const TalentProfile: React.FC = () => {
                 <button
                   onClick={() => {
                     setShowMessageForm(false);
-                    // Handle message sending logic here
+                    alert(`Message sent to ${talent.name}! (Demo only)`);
                   }}
                   className="flex-1 py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
                 >
