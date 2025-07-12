@@ -125,6 +125,16 @@ function App() {
     }, 100);
   };
 
+  // Handle Join as Talent navigation
+  const handleJoinAsTalent = () => {
+    console.log('🚀 Navigating to signup page as talent...');
+    // Scroll to top before navigation
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => {
+      setCurrentPage('signup');
+    }, 100);
+  };
+
   // Render the background
   const renderBackground = () => {
     if (currentPage !== 'home') return null;
@@ -155,6 +165,7 @@ function App() {
             searchQuery={searchQuery} 
             onTalentSelect={handleTalentSelect}
             onBack={() => setCurrentPage('home')}
+            onJoinAsTalent={handleJoinAsTalent}
           />
         );
       case 'talent-profile':
@@ -201,11 +212,11 @@ function App() {
             }
           }}
         />;
-   case 'subscription-plans-public':
-  return <PublicSubscriptionPlans 
-    onAuthClick={handleAuthClick} 
-    onPageChange={handlePageChange} 
-  />;
+      case 'subscription-plans-public':
+        return <PublicSubscriptionPlans 
+          onAuthClick={handleAuthClick} 
+          onPageChange={handlePageChange} 
+        />;
       case 'profile':
         return <UserProfile onBack={() => setCurrentPage('home')} />;
       case 'talent-setup':
