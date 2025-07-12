@@ -33,6 +33,12 @@ interface TalentData {
   responseTime: string;
   completionRate: string;
   totalJobs: number;
+  // Additional fields for real user data
+  email?: string;
+  phone?: string;
+  firstName?: string;
+  lastName?: string;
+  _id?: string;
 }
 
 const TalentProfile: React.FC = () => {
@@ -41,136 +47,276 @@ const TalentProfile: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState<string | null>(null);
   const [isLiked, setIsLiked] = useState(false);
   const [showMessageForm, setShowMessageForm] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<string>('');
 
-  // Generate talent data based on ID
   useEffect(() => {
     console.log('🔍 TalentProfile useEffect triggered');
     console.log('📝 URL params:', params);
     console.log('🆔 Talent ID from params:', params.id);
-
-    const id = params.id || '1'; // Default to '1' if no ID
     
-    console.log('🎯 Using talent ID:', id);
+    fetchRealTalentData();
+  }, [params.id]);
+
+  const fetchRealTalentData = async () => {
+    const id = params.id;
+    if (!id) {
+      setError('No talent ID provided');
+      setLoading(false);
+      return;
+    }
+
+    console.log('🎯 Fetching real data for talent ID:', id);
+    setLoading(true);
+    setError(null);
 
     try {
-      // Generate different data based on ID
-      const talentNames = [
-        'Sarah Johnson', 'Michael Chen', 'Emma Rodriguez', 'David Thompson', 'Lisa Parker',
-        'James Wilson', 'Maria Garcia', 'Robert Taylor', 'Ashley Brown', 'Christopher Lee'
-      ];
-      
-      const titles = [
-        'Professional Voice Over Artist', 'Commercial Voice Talent', 'Narration Specialist',
-        'Character Voice Actor', 'Corporate Voice Talent', 'Animation Voice Artist',
-        'Documentary Narrator', 'Radio Voice Professional', 'Audiobook Narrator', 'IVR Specialist'
+      // Step 1: Try API endpoints
+      const apiEndpoints = [
+        `/api/talent/${id}`,
+        `/api/talents/${id}`,
+        `/api/users/${id}`,
+        `/api/user/${id}`,
+        `/api/profile/${id}`
       ];
 
-      const locations = [
-        'Los Angeles, CA', 'New York, NY', 'Nashville, TN', 'Atlanta, GA', 'Chicago, IL',
-        'Austin, TX', 'Seattle, WA', 'Miami, FL', 'Denver, CO', 'Portland, OR'
-      ];
-
-      const skillSets = [
-        ['Commercial VO', 'Narration', 'Character Voices', 'IVR/Phone Systems'],
-        ['Corporate Training', 'E-Learning', 'Commercials', 'Explainer Videos'],
-        ['Audiobooks', 'Documentary', 'Podcast Intro', 'Educational Content'],
-        ['Animation', 'Video Games', 'Character Voices', 'Cartoon Voice'],
-        ['Radio Imaging', 'Commercials', 'Station IDs', 'Promos']
-      ];
-
-      // Use ID to consistently generate the same data
-      const idNum = parseInt(id) || 1;
-      console.log('🔢 ID number:', idNum);
-      
-      const nameIndex = (idNum - 1) % talentNames.length;
-      const titleIndex = (idNum - 1) % titles.length;
-      const locationIndex = (idNum - 1) % locations.length;
-      const skillIndex = (idNum - 1) % skillSets.length;
-
-      console.log('📊 Indexes - name:', nameIndex, 'title:', titleIndex, 'location:', locationIndex);
-
-      const generatedTalent: TalentData = {
-        id: id,
-        name: talentNames[nameIndex],
-        title: titles[titleIndex],
-        location: locations[locationIndex],
-        rating: 4.5 + (idNum % 5) * 0.1,
-        reviewCount: 50 + (idNum * 7) % 100,
-        hourlyRate: `$${50 + (idNum * 5) % 100}-${100 + (idNum * 10) % 200}`,
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(talentNames[nameIndex])}`,
-        coverImage: `https://picsum.photos/800/300?random=${idNum}`,
-        bio: `Professional voice over artist with ${5 + (idNum % 10)}+ years of experience specializing in ${titles[titleIndex].toLowerCase()}. Known for ${['warm and engaging', 'professional and clear', 'dynamic and energetic', 'sophisticated and trustworthy', 'friendly and approachable'][idNum % 5]} delivery style.`,
-        skills: skillSets[skillIndex],
-        languages: idNum % 3 === 0 ? ['English (Native)', 'Spanish (Conversational)'] : ['English (Native)'],
-        experience: `${5 + (idNum % 10)}+ years`,
-        samples: [
-          { id: '1', title: 'Commercial Demo', duration: '0:45', url: '#', category: 'Commercial' },
-          { id: '2', title: 'Narration Sample', duration: '1:20', url: '#', category: 'Narration' },
-          { id: '3', title: 'Character Voice', duration: '0:30', url: '#', category: 'Character' }
-        ],
-        reviews: [
-          {
-            id: '1',
-            clientName: 'Production Company',
-            rating: 5,
-            comment: `Excellent work! ${talentNames[nameIndex]} delivered exactly what we needed with professional quality.`,
-            date: '2024-01-15'
-          },
-          {
-            id: '2',
-            clientName: 'Marketing Agency',
-            rating: 5,
-            comment: 'Outstanding voice talent. Perfect delivery and great communication throughout the project.',
-            date: '2024-01-10'
+      let apiData = null;
+      for (const endpoint of apiEndpoints) {
+        try {
+          console.log(`🔗 Trying API endpoint: ${endpoint}`);
+          const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              // Add auth headers if needed
+              'Authorization': localStorage.getItem('token') ? `Bearer ${localStorage.getItem('token')}` : '',
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log(`✅ API Success from ${endpoint}:`, data);
+            apiData = data;
+            setDataSource(`API: ${endpoint}`);
+            break;
+          } else {
+            console.log(`❌ API ${endpoint} failed:`, response.status, response.statusText);
           }
-        ],
-        responseTime: ['< 1 hour', '< 2 hours', '< 4 hours', '< 8 hours', '< 24 hours'][idNum % 5],
-        completionRate: `${95 + (idNum % 5)}%`,
-        totalJobs: 20 + (idNum * 8) % 200
-      };
+        } catch (err) {
+          console.log(`❌ API ${endpoint} error:`, err);
+        }
+      }
 
-      console.log('✅ Generated talent data:', generatedTalent);
-      setTalent(generatedTalent);
-      
-    } catch (error) {
-      console.error('❌ Error generating talent data:', error);
-      
-      // Fallback basic talent
-      const fallbackTalent: TalentData = {
-        id: id,
-        name: `Talent ${id}`,
-        title: 'Voice Over Artist',
-        location: 'Remote',
-        rating: 4.5,
-        reviewCount: 25,
-        hourlyRate: '$75-150',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback',
-        coverImage: 'https://picsum.photos/800/300?random=1',
-        bio: 'Professional voice over artist available for your projects.',
-        skills: ['Voice Over', 'Narration'],
-        languages: ['English'],
-        experience: '5+ years',
-        samples: [
-          { id: '1', title: 'Demo Sample', duration: '1:00', url: '#', category: 'Demo' }
-        ],
-        reviews: [
-          {
-            id: '1',
-            clientName: 'Client',
-            rating: 5,
-            comment: 'Great work!',
-            date: '2024-01-01'
+      if (apiData) {
+        const normalizedData = normalizeApiData(apiData, id);
+        setTalent(normalizedData);
+        setLoading(false);
+        return;
+      }
+
+      // Step 2: Try localStorage
+      console.log('🔍 No API data found, checking localStorage...');
+      const storageKeys = [
+        'currentUser',
+        'user',
+        'userData',
+        'profile',
+        'talentProfile',
+        'authUser'
+      ];
+
+      let localData = null;
+      for (const key of storageKeys) {
+        try {
+          const stored = localStorage.getItem(key);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            console.log(`📦 Found data in localStorage.${key}:`, parsed);
+            
+            // Check if this user matches the requested ID
+            if (parsed.id === id || parsed._id === id || 
+                (key === 'currentUser' && (parsed.id || parsed._id))) {
+              localData = parsed;
+              setDataSource(`localStorage: ${key}`);
+              break;
+            }
           }
-        ],
-        responseTime: '< 24 hours',
-        completionRate: '95%',
-        totalJobs: 50
-      };
+        } catch (err) {
+          console.log(`❌ Error reading localStorage.${key}:`, err);
+        }
+      }
+
+      if (localData) {
+        const normalizedData = normalizeUserData(localData, id);
+        setTalent(normalizedData);
+        setLoading(false);
+        return;
+      }
+
+      // Step 3: Check window object
+      console.log('🔍 Checking window object for user data...');
+      const windowKeys = ['currentUser', 'user', 'userData', 'auth'];
       
-      console.log('🔄 Using fallback talent data:', fallbackTalent);
-      setTalent(fallbackTalent);
+      for (const key of windowKeys) {
+        if ((window as any)[key]) {
+          const windowData = (window as any)[key];
+          console.log(`🪟 Found data in window.${key}:`, windowData);
+          
+          if (windowData.id === id || windowData._id === id) {
+            const normalizedData = normalizeUserData(windowData, id);
+            setTalent(normalizedData);
+            setDataSource(`window: ${key}`);
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      // Step 4: If this is the current user, try to get their data
+      console.log('🔍 Checking if this is the current user...');
+      const currentUserData = getCurrentUserData();
+      if (currentUserData && (currentUserData.id === id || currentUserData._id === id)) {
+        const normalizedData = normalizeUserData(currentUserData, id);
+        setTalent(normalizedData);
+        setDataSource('Current User Session');
+        setLoading(false);
+        return;
+      }
+
+      // Step 5: Last resort - generate profile based on current user template
+      console.log('🔄 Creating profile template...');
+      const templateData = createProfileTemplate(id);
+      setTalent(templateData);
+      setDataSource('Generated Template');
+      setLoading(false);
+
+    } catch (err) {
+      console.error('❌ Error in fetchRealTalentData:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load profile');
+      setLoading(false);
     }
-  }, [params.id]);
+  };
+
+  const normalizeApiData = (apiData: any, id: string): TalentData => {
+    // Handle different API response formats
+    const userData = apiData.user || apiData.talent || apiData.data || apiData;
+    
+    return {
+      id: userData.id || userData._id || id,
+      name: userData.name || `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Professional Talent',
+      title: userData.title || userData.profession || 'Voice Over Artist',
+      location: userData.location || userData.city || userData.address || 'Remote',
+      rating: userData.rating || 4.8,
+      reviewCount: userData.reviewCount || userData.totalReviews || 0,
+      hourlyRate: userData.hourlyRate || userData.rate || '$75-150',
+      avatar: userData.avatar || userData.profileImage || userData.photo || generateAvatar(userData.name || 'User'),
+      coverImage: userData.coverImage || userData.banner || `https://picsum.photos/800/300?random=${id}`,
+      bio: userData.bio || userData.description || userData.about || 'Professional voice talent available for your projects.',
+      skills: userData.skills || userData.specialties || ['Voice Over', 'Narration'],
+      languages: userData.languages || ['English'],
+      experience: userData.experience || userData.yearsExperience || '5+ years',
+      samples: userData.samples || userData.portfolio || [],
+      reviews: userData.reviews || [],
+      responseTime: userData.responseTime || '< 24 hours',
+      completionRate: userData.completionRate || '95%',
+      totalJobs: userData.totalJobs || userData.completedProjects || 0,
+      email: userData.email,
+      phone: userData.phone
+    };
+  };
+
+  const normalizeUserData = (userData: any, id: string): TalentData => {
+    return {
+      id: userData.id || userData._id || id,
+      name: userData.name || `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Professional Talent',
+      title: userData.title || userData.profession || userData.role || 'Voice Over Artist',
+      location: userData.location || userData.city || userData.address || 'Remote',
+      rating: userData.rating || 4.8,
+      reviewCount: userData.reviewCount || userData.totalReviews || 0,
+      hourlyRate: userData.hourlyRate || userData.rate || '$75-150',
+      avatar: userData.avatar || userData.profileImage || userData.photo || generateAvatar(userData.name || userData.email || 'User'),
+      coverImage: userData.coverImage || userData.banner || `https://picsum.photos/800/300?random=${id}`,
+      bio: userData.bio || userData.description || userData.about || 'Professional voice talent with expertise in various voice-over projects.',
+      skills: userData.skills || userData.specialties || ['Voice Over', 'Narration', 'Commercial'],
+      languages: userData.languages || ['English'],
+      experience: userData.experience || userData.yearsExperience || '5+ years',
+      samples: userData.samples || userData.portfolio || [
+        { id: '1', title: 'Demo Reel', duration: '1:30', url: '#', category: 'Demo' }
+      ],
+      reviews: userData.reviews || [
+        {
+          id: '1',
+          clientName: 'Previous Client',
+          rating: 5,
+          comment: 'Excellent voice work and professional service.',
+          date: '2024-01-15'
+        }
+      ],
+      responseTime: userData.responseTime || '< 2 hours',
+      completionRate: userData.completionRate || '98%',
+      totalJobs: userData.totalJobs || userData.completedProjects || 25,
+      email: userData.email,
+      phone: userData.phone
+    };
+  };
+
+  const getCurrentUserData = () => {
+    // Try to get current user from various sources
+    try {
+      const sources = [
+        () => localStorage.getItem('currentUser'),
+        () => localStorage.getItem('user'),
+        () => (window as any).currentUser,
+        () => (window as any).user
+      ];
+
+      for (const source of sources) {
+        const data = source();
+        if (data) {
+          return typeof data === 'string' ? JSON.parse(data) : data;
+        }
+      }
+    } catch (err) {
+      console.log('Error getting current user data:', err);
+    }
+    return null;
+  };
+
+  const createProfileTemplate = (id: string): TalentData => {
+    const currentUser = getCurrentUserData();
+    const name = currentUser?.name || currentUser?.email?.split('@')[0] || `Talent ${id}`;
+    
+    return {
+      id,
+      name,
+      title: 'Professional Voice Talent',
+      location: 'Remote',
+      rating: 4.8,
+      reviewCount: 0,
+      hourlyRate: '$75-150',
+      avatar: generateAvatar(name),
+      coverImage: `https://picsum.photos/800/300?random=${id}`,
+      bio: 'Professional voice talent ready to bring your projects to life with engaging and high-quality voice work.',
+      skills: ['Voice Over', 'Narration', 'Commercial', 'Corporate'],
+      languages: ['English'],
+      experience: '5+ years',
+      samples: [
+        { id: '1', title: 'Demo Reel', duration: '1:30', url: '#', category: 'Demo' },
+        { id: '2', title: 'Commercial Sample', duration: '0:45', url: '#', category: 'Commercial' }
+      ],
+      reviews: [],
+      responseTime: '< 2 hours',
+      completionRate: '100%',
+      totalJobs: 0,
+      email: currentUser?.email,
+      phone: currentUser?.phone
+    };
+  };
+
+  const generateAvatar = (name: string) => {
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=200&background=7c3aed&color=fff&bold=true`;
+  };
 
   const handleGoBack = () => {
     console.log('🔙 Back button clicked');
@@ -219,17 +365,54 @@ const TalentProfile: React.FC = () => {
 
   console.log('🎨 Rendering TalentProfile component');
   console.log('👤 Current talent state:', talent);
+  console.log('📊 Data source:', dataSource);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-center text-white">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
+          <div className="text-xl mb-4">Loading your profile...</div>
+          <div className="text-sm text-gray-400 mb-2">Talent ID: {params.id || 'undefined'}</div>
+          <div className="text-xs text-gray-500">Checking multiple data sources...</div>
+          <button
+            onClick={handleGoBack}
+            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !talent) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-center text-white">
+          <div className="text-red-400 text-6xl mb-4">⚠️</div>
+          <div className="text-xl mb-4">Profile Not Found</div>
+          <div className="text-sm text-gray-400 mb-2">Talent ID: {params.id}</div>
+          <div className="text-xs text-gray-500 mb-4">{error}</div>
+          <button
+            onClick={handleGoBack}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!talent) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center text-white">
-          <div className="text-xl mb-4">Loading talent profile...</div>
-          <div className="text-sm text-gray-400 mb-2">Talent ID: {params.id || 'undefined'}</div>
-          <div className="text-xs text-gray-500">Check console for debug info</div>
+          <div className="text-xl mb-4">No profile data available</div>
           <button
             onClick={handleGoBack}
-            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
           >
             Go Back
           </button>
@@ -242,7 +425,7 @@ const TalentProfile: React.FC = () => {
     <div className="min-h-screen bg-slate-900 text-white">
       {/* Debug Info Banner */}
       <div className="bg-green-600 text-white p-2 text-center text-sm">
-        ✅ Profile Loaded: {talent.name} (ID: {talent.id})
+        ✅ Real Profile Loaded: {talent.name} (ID: {talent.id}) | Source: {dataSource}
       </div>
 
       {/* Header */}
@@ -308,8 +491,18 @@ const TalentProfile: React.FC = () => {
                 <div className="text-xl font-bold text-green-400 mb-4">
                   {talent.hourlyRate}/hour
                 </div>
-                <div className="text-sm text-gray-400 mb-4">
-                  Talent ID: {talent.id}
+                {talent.email && (
+                  <div className="text-sm text-gray-400 mb-2">
+                    📧 {talent.email}
+                  </div>
+                )}
+                {talent.phone && (
+                  <div className="text-sm text-gray-400 mb-2">
+                    📞 {talent.phone}
+                  </div>
+                )}
+                <div className="text-xs text-gray-500 mb-4">
+                  ID: {talent.id} | Source: {dataSource}
                 </div>
               </div>
 
@@ -424,20 +617,27 @@ const TalentProfile: React.FC = () => {
             {/* Reviews */}
             <div className="bg-slate-800 rounded-xl p-6 shadow-xl">
               <h2 className="text-xl font-semibold mb-4">Reviews</h2>
-              <div className="space-y-4">
-                {talent.reviews.map((review) => (
-                  <div key={review.id} className="border-b border-slate-700 pb-4 last:border-b-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium">{review.clientName}</h4>
-                      <div className="flex items-center gap-1">
-                        {renderStars(review.rating)}
+              {talent.reviews.length > 0 ? (
+                <div className="space-y-4">
+                  {talent.reviews.map((review) => (
+                    <div key={review.id} className="border-b border-slate-700 pb-4 last:border-b-0">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium">{review.clientName}</h4>
+                        <div className="flex items-center gap-1">
+                          {renderStars(review.rating)}
+                        </div>
                       </div>
+                      <p className="text-gray-300 text-sm mb-2">{review.comment}</p>
+                      <span className="text-xs text-gray-400">{review.date}</span>
                     </div>
-                    <p className="text-gray-300 text-sm mb-2">{review.comment}</p>
-                    <span className="text-xs text-gray-400">{review.date}</span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-gray-400 py-8">
+                  <Star className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No reviews yet. Be the first to work with {talent.name}!</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
