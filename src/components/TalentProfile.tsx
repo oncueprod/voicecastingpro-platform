@@ -535,21 +535,13 @@ const TalentProfile: React.FC = () => {
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center text-white">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
-          <div className="text-xl mb-4">
-            {params.id ? `Loading talent profile...` : `Finding your profile...`}
-          </div>
+          <div className="text-xl mb-4">Loading talent profile...</div>
           <div className="text-sm text-gray-400 mb-2">
-            {params.id ? `Talent ID: ${params.id}` : 'No ID in URL - searching for current user'}
+            {params.id ? `ID: ${params.id}` : 'Searching for talent data...'}
           </div>
           <div className="text-xs text-gray-500">
-            {params.id ? 'Checking multiple data sources...' : 'Redirecting to correct profile URL...'}
+            Checking multiple data sources to restore your working system...
           </div>
-          <button
-            onClick={handleGoBack}
-            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-          >
-            Go Back
-          </button>
         </div>
       </div>
     );
