@@ -62,87 +62,116 @@ const TalentProfile: React.FC = () => {
   const fetchRealTalentData = async () => {
     let id = params.id;
     
-    // If no ID in URL, check if this is meant to be "my profile" or someone else's
-    if (!id) {
-      console.log('❌ No ID in URL params');
-      console.log('🔍 Current URL:', window.location.href);
-      console.log('🔍 Current pathname:', window.location.pathname);
-      
-      // Only auto-detect current user ID if explicitly going to "my profile"
-      // Check if URL suggests this should be current user's profile
-      const isMyProfile = window.location.pathname.includes('/my-profile') || 
-                         window.location.pathname === '/talent' ||
-                         window.location.search.includes('me=true') ||
-                         window.location.search.includes('current=true');
-      
-      console.log('🤔 Is this meant to be my profile?', isMyProfile);
-      
-      if (isMyProfile) {
-        console.log('✅ This appears to be "my profile" - auto-detecting user ID...');
+    console.log('🎯 TalentProfile started with ID:', id);
+    console.log('🔍 Current URL:', window.location.href);
+    console.log('🔍 Search params:', window.location.search);
+    
+    setLoading(true);
+    setError(null);
+
+    // Try multiple approaches to get talent data
+    try {
+      // Approach 1: If we have an ID in the URL, use it
+      if (id) {
+        console.log('✅ Using talent ID from URL:', id);
+        setDataSource('URL Parameter');
+        // Continue with API calls using this ID
+      } 
+      // Approach 2: Check if talent data is passed via URL params or state
+      else {
+        console.log('🔍 No ID in URL, checking for talent data in other ways...');
         
-        // Try to get current user ID from various sources
-        let currentUserId = null;
-        let foundInSource = '';
+        // Check URL search parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const talentId = urlParams.get('id') || urlParams.get('talentId') || urlParams.get('talent');
         
-        // Check localStorage with detailed logging
-        const storageKeys = ['currentUser', 'user', 'userData', 'authUser'];
-        for (const key of storageKeys) {
-          try {
-            const stored = localStorage.getItem(key);
-            console.log(`🔍 Checking localStorage.${key}:`, stored);
-            
-            if (stored) {
-              const parsed = JSON.parse(stored);
-              console.log(`📦 Parsed ${key}:`, parsed);
+        if (talentId) {
+          console.log('✅ Found talent ID in URL params:', talentId);
+          id = talentId;
+          setDataSource('URL Search Parameter');
+        } else {
+          // Check if there's talent data in the current state/session
+          console.log('🔍 Checking for talent data in session storage...');
+          
+          // Check sessionStorage for passed talent data
+          const sessionTalent = sessionStorage.getItem('currentTalent') || 
+                               sessionStorage.getItem('selectedTalent') ||
+                               sessionStorage.getItem('viewingTalent');
+          
+          if (sessionTalent) {
+            try {
+              const talentData = JSON.parse(sessionTalent);
+              console.log('✅ Found talent data in session storage:', talentData);
               
-              // Try different possible ID field names
-              const possibleIds = [
-                parsed.id,
-                parsed._id, 
-                parsed.userId,
-                parsed.user_id,
-                parsed.uid,
-                // Handle nested user objects
-                parsed.user?.id,
-                parsed.user?._id,
-                parsed.data?.id,
-                parsed.data?._id
-              ].filter(Boolean);
-              
-              console.log(`🔑 Possible IDs from ${key}:`, possibleIds);
-              
-              if (possibleIds.length > 0) {
-                currentUserId = possibleIds[0];
-                foundInSource = `localStorage.${key}`;
-                console.log(`✅ Found user ID in ${foundInSource}:`, currentUserId);
-                break;
-              }
+              // Use the session talent data directly
+              const normalizedTalent = normalizeUserData(talentData, talentData.id || talentData._id || 'session');
+              setTalent(normalizedTalent);
+              setDataSource('Session Storage');
+              setLoading(false);
+              return;
+            } catch (e) {
+              console.log('❌ Error parsing session talent data:', e);
             }
-          } catch (e) {
-            console.log(`❌ Error reading localStorage.${key}:`, e);
+          }
+          
+          // Check localStorage for talent lists or data
+          console.log('🔍 Checking localStorage for talent data...');
+          const talentList = localStorage.getItem('talents') || 
+                           localStorage.getItem('talentProfiles') ||
+                           localStorage.getItem('allTalents');
+          
+          if (talentList) {
+            try {
+              const talents = JSON.parse(talentList);
+              console.log('📋 Found talent list in localStorage:', talents);
+              
+              // If it's an array, maybe we can use the first one or find a specific one
+              if (Array.isArray(talents) && talents.length > 0) {
+                // For now, let's check if there's a specific talent being viewed
+                const viewingTalentId = localStorage.getItem('viewingTalentId');
+                let selectedTalent = null;
+                
+                if (viewingTalentId) {
+                  selectedTalent = talents.find(t => (t.id || t._id) === viewingTalentId);
+                }
+                
+                if (!selectedTalent) {
+                  selectedTalent = talents[0]; // Fallback to first talent
+                }
+                
+                console.log('✅ Using talent from list:', selectedTalent);
+                const normalizedTalent = normalizeUserData(selectedTalent, selectedTalent.id || selectedTalent._id || 'list');
+                setTalent(normalizedTalent);
+                setDataSource('Talent List');
+                setLoading(false);
+                return;
+              }
+            } catch (e) {
+              console.log('❌ Error parsing talent list:', e);
+            }
+          }
+          
+          // Last resort: Check if this should be current user's profile
+          console.log('🔍 Checking if this should be current user profile...');
+          const currentUser = getCurrentUserData();
+          
+          if (currentUser) {
+            const userId = currentUser.id || currentUser._id || currentUser.userId;
+            if (userId) {
+              console.log('✅ Using current user as fallback:', userId);
+              id = userId;
+              setDataSource('Current User Fallback');
+            }
+          }
+          
+          if (!id) {
+            console.log('❌ No talent data found anywhere');
+            setError('No talent profile data found. The talent profile may not be properly linked.');
+            setLoading(false);
+            return;
           }
         }
-        
-        if (currentUserId) {
-          console.log(`✅ Using current user ID: ${currentUserId} from ${foundInSource}`);
-          id = currentUserId;
-          setDataSource(`My Profile (auto-detected from ${foundInSource})`);
-        } else {
-          console.log('❌ No current user ID found');
-          setError('Could not find your user profile. Please make sure you are logged in.');
-          setLoading(false);
-          return;
-        }
-      } else {
-        console.log('❌ This appears to be someone else\'s profile but no talent ID provided');
-        setError('No talent ID provided. The talent profile link may be broken.');
-        setLoading(false);
-        return;
       }
-    } else {
-      console.log('✅ Talent ID provided in URL:', id);
-      setDataSource('URL Parameter');
-    }
 
     console.log('🎯 Fetching real data for talent ID:', id);
     console.log('🔍 DEBUGGING: Let\'s see what data we can find...');
@@ -529,26 +558,26 @@ const TalentProfile: React.FC = () => {
   if (error && !talent) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-center text-white max-w-md">
-          <div className="text-yellow-400 text-6xl mb-4">🔗</div>
-          <h2 className="text-2xl font-bold text-gray-100 mb-4">Profile Link Issue</h2>
+        <div className="text-center text-white max-w-lg">
+          <div className="text-blue-400 text-6xl mb-4">🔧</div>
+          <h2 className="text-2xl font-bold text-gray-100 mb-4">Restoring Your Talent System</h2>
           <p className="text-gray-300 mb-4">{error}</p>
           
           <div className="bg-slate-800 p-4 rounded-lg mb-4 text-left">
-            <h3 className="font-bold mb-2">💡 This usually means:</h3>
-            <ul className="text-sm text-gray-300 space-y-1">
-              <li>• The talent profile link is missing the talent's ID</li>
-              <li>• The link should be: <code className="bg-slate-700 px-1 rounded">/talent/talent-id-here</code></li>
-              <li>• Check how the "View Profile" button is configured</li>
-            </ul>
+            <h3 className="font-bold mb-2">🔍 Let's find your talent data:</h3>
+            <div className="text-sm text-gray-300 space-y-2">
+              <div>• Check console logs for debugging info</div>
+              <div>• Your talent system was working before our changes</div>
+              <div>• We need to adapt to your existing setup</div>
+            </div>
           </div>
           
           <div className="bg-blue-900 p-3 rounded-lg mb-4 text-sm">
-            <div className="font-bold mb-1">🔧 For developers:</div>
-            <div className="text-blue-200">
-              Make sure talent profile links include the talent's ID:
-              <br />
-              <code className="bg-blue-800 px-1 rounded">&lt;Link to={`/talent/${'{talent.id}'}`}&gt;</code>
+            <div className="font-bold mb-1">📋 Debug Info:</div>
+            <div className="text-blue-200 text-left">
+              <div>URL: {window.location.href}</div>
+              <div>Path: {window.location.pathname}</div>
+              <div>Search: {window.location.search || 'none'}</div>
             </div>
           </div>
           
@@ -561,24 +590,39 @@ const TalentProfile: React.FC = () => {
             </button>
             <button
               onClick={() => {
-                // Navigate to current user's profile instead
-                const currentUser = getCurrentUserData();
-                console.log('🔍 Fallback to my profile:', currentUser);
+                console.log('🔍 Manual debug - checking all data sources...');
+                console.log('localStorage keys:', Object.keys(localStorage));
+                console.log('sessionStorage keys:', Object.keys(sessionStorage));
+                console.log('window object keys:', Object.keys(window).filter(k => k.includes('talent') || k.includes('user')));
                 
+                // Try to find any talent-related data
+                for (let i = 0; i < localStorage.length; i++) {
+                  const key = localStorage.key(i);
+                  if (key && (key.includes('talent') || key.includes('user'))) {
+                    console.log(`Found ${key}:`, localStorage.getItem(key));
+                  }
+                }
+                
+                alert('Check console for detailed data analysis');
+              }}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              Debug Data
+            </button>
+            <button
+              onClick={() => {
+                // Navigate to current user's profile as emergency fallback
+                const currentUser = getCurrentUserData();
                 if (currentUser) {
                   const userId = currentUser.id || currentUser._id || currentUser.userId;
                   if (userId) {
                     window.location.href = `/talent/${userId}`;
-                  } else {
-                    alert('User found but no ID available. Check console for details.');
                   }
-                } else {
-                  alert('No user data found. Please log in first.');
                 }
               }}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
             >
-              View My Profile
+              My Profile
             </button>
           </div>
         </div>
