@@ -1,4 +1,4 @@
-// TalentDirectory.tsx - REAL TALENTS ONLY - NO MOCK DATA
+// TalentDirectory.tsx - REAL TALENTS ONLY - NO MOCK DATA - FIXED NAVIGATION
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Filter, MapPin, Star, MessageCircle, Award, Users, Sliders } from 'lucide-react';
@@ -44,6 +44,12 @@ const TalentDirectory: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handle join as talent navigation
+  const handleJoinAsTalent = () => {
+    console.log('🚀 Navigating to signup page as talent...');
+    navigate('/signup', { state: { userType: 'talent' } });
   };
 
   const applyFiltersAndSearch = () => {
@@ -327,7 +333,7 @@ const TalentDirectory: React.FC = () => {
               Be the first to join our platform as a voice talent and start getting hired for projects!
             </p>
             <button
-              onClick={() => navigate('/signup')}
+              onClick={handleJoinAsTalent}
               className="bg-purple-600 text-white px-8 py-3 rounded-lg hover:bg-purple-700 transition-colors font-semibold"
             >
               Join as Talent
