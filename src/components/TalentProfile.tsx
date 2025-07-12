@@ -62,121 +62,86 @@ const TalentProfile: React.FC = () => {
   const fetchRealTalentData = async () => {
     let id = params.id;
     
-    // If no ID in URL, try to get current user ID
+    // If no ID in URL, check if this is meant to be "my profile" or someone else's
     if (!id) {
-      console.log('❌ No ID in URL params, trying to find current user ID...');
+      console.log('❌ No ID in URL params');
+      console.log('🔍 Current URL:', window.location.href);
+      console.log('🔍 Current pathname:', window.location.pathname);
       
-      // Try to get current user ID from various sources
-      let currentUserId = null;
-      let foundInSource = '';
+      // Only auto-detect current user ID if explicitly going to "my profile"
+      // Check if URL suggests this should be current user's profile
+      const isMyProfile = window.location.pathname.includes('/my-profile') || 
+                         window.location.pathname === '/talent' ||
+                         window.location.search.includes('me=true') ||
+                         window.location.search.includes('current=true');
       
-      // Check localStorage with detailed logging
-      const storageKeys = ['currentUser', 'user', 'userData', 'authUser'];
-      for (const key of storageKeys) {
-        try {
-          const stored = localStorage.getItem(key);
-          console.log(`🔍 Checking localStorage.${key}:`, stored);
-          
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            console.log(`📦 Parsed ${key}:`, parsed);
+      console.log('🤔 Is this meant to be my profile?', isMyProfile);
+      
+      if (isMyProfile) {
+        console.log('✅ This appears to be "my profile" - auto-detecting user ID...');
+        
+        // Try to get current user ID from various sources
+        let currentUserId = null;
+        let foundInSource = '';
+        
+        // Check localStorage with detailed logging
+        const storageKeys = ['currentUser', 'user', 'userData', 'authUser'];
+        for (const key of storageKeys) {
+          try {
+            const stored = localStorage.getItem(key);
+            console.log(`🔍 Checking localStorage.${key}:`, stored);
             
-            // Try different possible ID field names
-            const possibleIds = [
-              parsed.id,
-              parsed._id, 
-              parsed.userId,
-              parsed.user_id,
-              parsed.uid,
-              // Handle nested user objects
-              parsed.user?.id,
-              parsed.user?._id,
-              parsed.data?.id,
-              parsed.data?._id
-            ].filter(Boolean);
-            
-            console.log(`🔑 Possible IDs from ${key}:`, possibleIds);
-            
-            if (possibleIds.length > 0) {
-              currentUserId = possibleIds[0];
-              foundInSource = `localStorage.${key}`;
-              console.log(`✅ Found user ID in ${foundInSource}:`, currentUserId);
-              break;
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              console.log(`📦 Parsed ${key}:`, parsed);
+              
+              // Try different possible ID field names
+              const possibleIds = [
+                parsed.id,
+                parsed._id, 
+                parsed.userId,
+                parsed.user_id,
+                parsed.uid,
+                // Handle nested user objects
+                parsed.user?.id,
+                parsed.user?._id,
+                parsed.data?.id,
+                parsed.data?._id
+              ].filter(Boolean);
+              
+              console.log(`🔑 Possible IDs from ${key}:`, possibleIds);
+              
+              if (possibleIds.length > 0) {
+                currentUserId = possibleIds[0];
+                foundInSource = `localStorage.${key}`;
+                console.log(`✅ Found user ID in ${foundInSource}:`, currentUserId);
+                break;
+              }
             }
-          }
-        } catch (e) {
-          console.log(`❌ Error reading localStorage.${key}:`, e);
-        }
-      }
-      
-      // Check window object with detailed logging
-      if (!currentUserId) {
-        const windowKeys = ['currentUser', 'user', 'userData', 'auth'];
-        for (const key of windowKeys) {
-          if ((window as any)[key]) {
-            const userData = (window as any)[key];
-            console.log(`🪟 Checking window.${key}:`, userData);
-            
-            const possibleIds = [
-              userData.id,
-              userData._id,
-              userData.userId,
-              userData.user_id,
-              userData.uid,
-              userData.user?.id,
-              userData.user?._id
-            ].filter(Boolean);
-            
-            console.log(`🔑 Possible IDs from window.${key}:`, possibleIds);
-            
-            if (possibleIds.length > 0) {
-              currentUserId = possibleIds[0];
-              foundInSource = `window.${key}`;
-              console.log(`✅ Found user ID in ${foundInSource}:`, currentUserId);
-              break;
-            }
+          } catch (e) {
+            console.log(`❌ Error reading localStorage.${key}:`, e);
           }
         }
-      }
-      
-      // Try to extract from the authentication logs we saw
-      if (!currentUserId) {
-        console.log('🔍 Checking for user ID patterns in logs/authentication...');
-        // The console showed: "👤 Authenticating user: user_1752164361991_e4ogp44sg"
-        // Let's see if we can find this in any global variables
         
-        if ((window as any).socketUser) {
-          console.log('🔌 Found socketUser:', (window as any).socketUser);
-          currentUserId = (window as any).socketUser;
-          foundInSource = 'window.socketUser';
+        if (currentUserId) {
+          console.log(`✅ Using current user ID: ${currentUserId} from ${foundInSource}`);
+          id = currentUserId;
+          setDataSource(`My Profile (auto-detected from ${foundInSource})`);
+        } else {
+          console.log('❌ No current user ID found');
+          setError('Could not find your user profile. Please make sure you are logged in.');
+          setLoading(false);
+          return;
         }
-        
-        if (!currentUserId && (window as any).authenticatedUser) {
-          console.log('🔐 Found authenticatedUser:', (window as any).authenticatedUser);
-          currentUserId = (window as any).authenticatedUser;
-          foundInSource = 'window.authenticatedUser';
-        }
-      }
-      
-      console.log(`🎯 Final user ID search result:`, {
-        found: !!currentUserId,
-        userId: currentUserId,
-        source: foundInSource
-      });
-      
-      // If we found a user ID, use it instead of redirecting
-      if (currentUserId) {
-        console.log(`✅ Using found user ID: ${currentUserId} from ${foundInSource}`);
-        id = currentUserId;
-        setDataSource(`Auto-detected from ${foundInSource}`);
-        // Don't redirect, just use the ID we found
       } else {
-        // If still no ID, set a helpful error but don't redirect away
-        console.log('❌ No user ID found anywhere - showing helpful error');
-        setError('No user ID found. Please make sure you are logged in.');
+        console.log('❌ This appears to be someone else\'s profile but no talent ID provided');
+        setError('No talent ID provided. The talent profile link may be broken.');
         setLoading(false);
         return;
       }
+    } else {
+      console.log('✅ Talent ID provided in URL:', id);
+      setDataSource('URL Parameter');
     }
 
     console.log('🎯 Fetching real data for talent ID:', id);
@@ -564,17 +529,58 @@ const TalentProfile: React.FC = () => {
   if (error && !talent) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-center text-white">
-          <div className="text-red-400 text-6xl mb-4">⚠️</div>
-          <div className="text-xl mb-4">Profile Not Found</div>
-          <div className="text-sm text-gray-400 mb-2">Talent ID: {params.id}</div>
-          <div className="text-xs text-gray-500 mb-4">{error}</div>
-          <button
-            onClick={handleGoBack}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-          >
-            Go Back
-          </button>
+        <div className="text-center text-white max-w-md">
+          <div className="text-yellow-400 text-6xl mb-4">🔗</div>
+          <h2 className="text-2xl font-bold text-gray-100 mb-4">Profile Link Issue</h2>
+          <p className="text-gray-300 mb-4">{error}</p>
+          
+          <div className="bg-slate-800 p-4 rounded-lg mb-4 text-left">
+            <h3 className="font-bold mb-2">💡 This usually means:</h3>
+            <ul className="text-sm text-gray-300 space-y-1">
+              <li>• The talent profile link is missing the talent's ID</li>
+              <li>• The link should be: <code className="bg-slate-700 px-1 rounded">/talent/talent-id-here</code></li>
+              <li>• Check how the "View Profile" button is configured</li>
+            </ul>
+          </div>
+          
+          <div className="bg-blue-900 p-3 rounded-lg mb-4 text-sm">
+            <div className="font-bold mb-1">🔧 For developers:</div>
+            <div className="text-blue-200">
+              Make sure talent profile links include the talent's ID:
+              <br />
+              <code className="bg-blue-800 px-1 rounded">&lt;Link to={`/talent/${'{talent.id}'}`}&gt;</code>
+            </div>
+          </div>
+          
+          <div className="flex gap-3">
+            <button
+              onClick={handleGoBack}
+              className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              Go Back
+            </button>
+            <button
+              onClick={() => {
+                // Navigate to current user's profile instead
+                const currentUser = getCurrentUserData();
+                console.log('🔍 Fallback to my profile:', currentUser);
+                
+                if (currentUser) {
+                  const userId = currentUser.id || currentUser._id || currentUser.userId;
+                  if (userId) {
+                    window.location.href = `/talent/${userId}`;
+                  } else {
+                    alert('User found but no ID available. Check console for details.');
+                  }
+                } else {
+                  alert('No user data found. Please log in first.');
+                }
+              }}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              View My Profile
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -599,9 +605,15 @@ const TalentProfile: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       {/* Debug Info Banner */}
-      <div className={`text-white p-2 text-center text-sm ${dataSource.includes('Template') || dataSource.includes('Generated') ? 'bg-orange-600' : 'bg-green-600'}`}>
-        {dataSource.includes('Template') || dataSource.includes('Generated') ? 
-          '⚠️ MOCK DATA: ' : '✅ REAL DATA: '} {talent.name} (ID: {talent.id}) | Source: {dataSource}
+      <div className={`text-white p-2 text-center text-sm ${
+        dataSource.includes('My Profile') ? 'bg-blue-600' : 
+        dataSource.includes('Template') || dataSource.includes('Generated') ? 'bg-orange-600' : 
+        'bg-green-600'
+      }`}>
+        {dataSource.includes('My Profile') ? '👤 MY PROFILE: ' : 
+         dataSource.includes('Template') || dataSource.includes('Generated') ? '⚠️ MOCK DATA: ' : 
+         '✅ TALENT PROFILE: '} 
+        {talent.name} (ID: {talent.id}) | Source: {dataSource}
       </div>
 
       {/* Header */}
