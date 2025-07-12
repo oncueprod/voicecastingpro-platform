@@ -1,883 +1,464 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, Filter, Star, MapPin, Clock, Play, Pause, SlidersHorizontal, ArrowLeft, X } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { useAuth } from '../contexts/AuthContext';
+// TalentDirectory.tsx - REAL TALENTS ONLY - NO MOCK DATA
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Search, Filter, MapPin, Star, MessageCircle, Award, Users, Sliders } from 'lucide-react';
 import { talentService, TalentProfile } from '../services/talentService';
-import { audioService, AudioFile } from '../services/audioService';
 
-interface TalentDirectoryProps {
-  searchQuery?: string;
-  onTalentSelect?: (talentId: string) => void;
-  onBack?: () => void;
-}
-
-const TalentDirectory: React.FC<TalentDirectoryProps> = ({ searchQuery = '', onTalentSelect, onBack }) => {
-  const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedLanguage, setSelectedLanguage] = useState('all');
-  const [playingTalentId, setPlayingTalentId] = useState<string | null>(null);
+const TalentDirectory: React.FC = () => {
+  const [allTalents, setAllTalents] = useState<TalentProfile[]>([]);
+  const [filteredTalents, setFilteredTalents] = useState<TalentProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [playbackError, setPlaybackError] = useState<string | null>(null);
-  const [hasActiveFilters, setHasActiveFilters] = useState(false);
-  const { user } = useAuth();
-  const [talents, setTalents] = useState<TalentProfile[]>([]);
-  const [userTalentAdded, setUserTalentAdded] = useState(false);
-  const [talentDemos, setTalentDemos] = useState<{[key: string]: AudioFile[]}>({});
-  const [audioElements, setAudioElements] = useState<{[key: string]: HTMLAudioElement}>({});
-  const audioTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  // Filter states
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState('');
+  const [minRating, setMinRating] = useState(0);
+  const [sortBy, setSortBy] = useState('name'); // name, rating, reviews, recent
 
   useEffect(() => {
-    setLocalSearchQuery(searchQuery);
-  }, [searchQuery]);
-
-  // Load talent profiles
-  useEffect(() => {
-    // Get talent profiles from service
-    const talentProfiles = talentService.getAllTalentProfiles();
-    
-    // Filter out duplicates by ID using Map
-    const uniqueProfiles = Array.from(
-      new Map(talentProfiles.map(profile => [profile.id, profile])).values()
-    );
-    
-    setTalents(uniqueProfiles);
-    
-    // Load demo files for each talent
-    const demos: {[key: string]: AudioFile[]} = {};
-    uniqueProfiles.forEach(talent => {
-      // Try to get real demos first
-      if (talent.userId) {
-        const talentDemos = audioService.getUserDemos(talent.userId);
-        if (talentDemos.length > 0) {
-          demos[talent.id] = talentDemos;
-          return;
-        }
-      }
-      
-      // If no real demos, create a mock demo with a reliable sample URL
-      demos[talent.id] = [
-        {
-          id: `demo_${talent.id}_1`,
-          name: 'Commercial Demo',
-          url: audioService.getSampleAudioUrl(),
-          duration: 30,
-          size: 1024000,
-          uploadedAt: new Date(),
-          userId: talent.userId || 'mock_user',
-          type: 'demo'
-        }
-      ];
-    });
-    setTalentDemos(demos);
+    loadTalents();
   }, []);
 
-  // Check for search query from Services component
   useEffect(() => {
-    const serviceSearchQuery = sessionStorage.getItem('talent_search_query');
-    if (serviceSearchQuery) {
-      setLocalSearchQuery(serviceSearchQuery);
-      // Map service search queries to categories
-      const categoryMap: Record<string, string> = {
-        'commercial': 'commercial',
-        'audiobook': 'audiobook',
-        'gaming': 'gaming',
-        'podcast': 'commercial', // Podcast falls under commercial
-        'ivr': 'elearning', // IVR falls under e-learning
-        'multilingual': 'all' // Show all for multilingual
-      };
-      setSelectedCategory(categoryMap[serviceSearchQuery] || 'all');
-      // Clear the session storage
-      sessionStorage.removeItem('talent_search_query');
-    }
-  }, []);
+    // Apply filters and search whenever dependencies change
+    applyFiltersAndSearch();
+  }, [allTalents, searchQuery, selectedSkills, selectedLocation, minRating, sortBy]);
 
-  // Check if any filters are active
-  useEffect(() => {
-    setHasActiveFilters(
-      localSearchQuery !== '' || 
-      selectedCategory !== 'all' || 
-      selectedLanguage !== 'all'
-    );
-  }, [localSearchQuery, selectedCategory, selectedLanguage]);
-
-  // Add user's talent profile if they are a talent
-  useEffect(() => {
-    if (user && user.type === 'talent' && !userTalentAdded) {
-      const savedProfile = localStorage.getItem('talent_profile');
-      if (savedProfile) {
-        try {
-          const profileData = JSON.parse(savedProfile);
-          
-          // Check if user's profile already exists in talent service
-          const existingProfile = talents.find(t => t.userId === user.id);
-          
-          if (!existingProfile) {
-            // Create a new talent profile based on user data
-            const newProfile = {
-              id: `talent_user_${user.id}`,
-              userId: user.id,
-              name: `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim() || user.name,
-              title: profileData.specialties || 'Voice Talent',
-              location: 'Location not specified',
-              rating: 5.0,
-              reviews: 0,
-              responseTime: '1 hour',
-              priceRange: profileData.hourlyRate || '$50-100',
-              image: profileData.profilePhoto || user.avatar || 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=400',
-              specialties: profileData.specialties ? profileData.specialties.split(',').map((s: string) => s.trim()) : ['Commercial', 'Narration'],
-              languages: profileData.languages ? profileData.languages.split(',').map((l: string) => l.trim()) : ['English'],
-              badge: 'New Talent',
-              bio: profileData.bio || 'Professional voice talent',
-              experience: profileData.yearsExperience || '1+ years',
-              completedProjects: 0,
-              repeatClients: 0,
-              equipment: ['Professional Equipment'],
-              demos: [],
-              isActive: true,
-              createdAt: new Date(),
-              updatedAt: new Date()
-            };
-            
-            // Add to talent service
-            talentService.updateTalentProfile(newProfile.id, newProfile);
-            
-            // Update local state - but ensure we don't add duplicates
-            setTalents(prev => {
-              if (!prev.some(p => p.id === newProfile.id)) {
-                return [...prev, newProfile];
-              }
-              return prev;
-            });
-            
-            setUserTalentAdded(true);
-          }
-        } catch (error) {
-          console.error('Failed to parse saved profile:', error);
-        }
-      }
-    }
-  }, [user, talents, userTalentAdded]);
-
-  const categories = [
-    { value: 'all', label: 'All Categories' },
-    { value: 'commercial', label: 'Commercial' },
-    { value: 'audiobook', label: 'Audiobook' },
-    { value: 'gaming', label: 'Video Games' },
-    { value: 'documentary', label: 'Documentary' },
-    { value: 'elearning', label: 'E-Learning' },
-  ];
-
-  const languages = [
-    { value: 'all', label: 'All Languages' },
-    { value: 'english-us', label: 'English (US)' },
-    { value: 'english-uk', label: 'English (UK)' },
-    { value: 'spanish', label: 'Spanish' },
-    { value: 'french', label: 'French' },
-    { value: 'german', label: 'German' },
-  ];
-
-  const filteredTalents = talents.filter(talent => {
-    const matchesSearch = localSearchQuery === '' || 
-                         talent.name.toLowerCase().includes(localSearchQuery.toLowerCase()) ||
-                         talent.title.toLowerCase().includes(localSearchQuery.toLowerCase()) ||
-                         talent.specialties.some((s: string) => s.toLowerCase().includes(localSearchQuery.toLowerCase())) ||
-                         talent.languages.some((l: string) => l.toLowerCase().includes(localSearchQuery.toLowerCase()));
-    
-    const matchesCategory = selectedCategory === 'all' || talent.specialties.some((s: string) => s.toLowerCase().includes(selectedCategory.toLowerCase()));
-    const matchesLanguage = selectedLanguage === 'all' || 
-                           talent.languages.some((lang: string) => lang.toLowerCase().includes(selectedLanguage.replace('-', ' ')));
-    
-    return matchesSearch && matchesCategory && matchesLanguage;
-  });
-
-  const handlePlayPause = (talentId: string, e: React.MouseEvent) => {
-    e.preventDefault(); // Prevent triggering the card click
-    e.stopPropagation();
-
+  const loadTalents = async () => {
     try {
-      // Clear any existing timer
-      if (audioTimerRef.current) {
-        clearTimeout(audioTimerRef.current);
-        audioTimerRef.current = null;
-      }
+      console.log('🔍 Loading ALL real talents...');
+      setLoading(true);
       
-      const demos = talentDemos[talentId] || [];
+      // Get ONLY real talent profiles
+      const realTalents = talentService.getAllTalentProfiles();
+      console.log(`✅ Found ${realTalents.length} REAL talents in directory`);
       
-      // Reset any previous playback errors
-      setPlaybackError(null);
-      
-      if (demos.length === 0) {
-        console.log('No demo files available for talent:', talentId);
-        return;
-      }
-      
-      // Use the first demo file
-      const demo = demos[0];
-      console.log('Demo file:', demo);
-      
-      if (playingTalentId === talentId) {
-        // Stop playing
-        const audio = audioElements[talentId];
-        if (audio) {
-          audio.pause();
-          audio.currentTime = 0;
-        }
-        setPlayingTalentId(null);
-      } else {
-        // Stop current audio if playing
-        if (playingTalentId && audioElements[playingTalentId]) {
-          audioElements[playingTalentId].pause();
-          audioElements[playingTalentId].currentTime = 0;
-        }
-        
-        // Create new audio element
-        let audio = audioElements[talentId];
-        
-        // Create a new audio element if one doesn't exist
-        if (!audio) {
-          try {
-            audio = new Audio();
-            
-            // Set up event listeners
-            audio.addEventListener('ended', () => {
-              setPlayingTalentId(null);
-            });
-            
-            audio.addEventListener('error', (e) => {
-              console.error('Audio playback error:', e);
-              setPlayingTalentId(null);
-              setPlaybackError(`Unable to play demo for ${talents.find(t => t.id === talentId)?.name}. The file may be corrupted.`);
-            });
-            
-            // Store reference
-            setAudioElements(prev => ({
-              ...prev,
-              [talentId]: audio
-            }));
-          } catch (error) {
-            console.error('Error creating audio element:', error);
-            setPlaybackError('Failed to create audio player');
-            return;
-          }
-        }
-        
-        try {
-          // Set source and play
-          audio.src = demo.url;
-          audio.volume = 0.8;
-          
-          // Play the audio with error handling
-          audio.play().catch(err => {
-            console.error('Error playing audio:', err);
-            setPlayingTalentId(null);
-            setPlaybackError(`Unable to play demo for ${talents.find(t => t.id === talentId)?.name}. Please try again.`);
-          });
-          
-          // Update state
-          setPlayingTalentId(talentId);
-          
-          // Auto-stop after the duration of the demo or 30 seconds max
-          audioTimerRef.current = setTimeout(() => {
-            if (audio && !audio.paused) {
-              audio.pause();
-              audio.currentTime = 0;
-            }
-            setPlayingTalentId(null);
-            audioTimerRef.current = null;
-          }, Math.min(demo.duration * 1000, 30000));
-        } catch (error) {
-          console.error('Error setting up audio playback:', error);
-          setPlaybackError('Failed to play audio demo');
-        }
-      }
+      setAllTalents(realTalents);
     } catch (error) {
-      console.error('Error in handlePlayPause:', error);
-      setPlaybackError('An error occurred while trying to play the audio');
+      console.error('Error loading talents:', error);
+      setAllTalents([]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Original handlePlayPause function - keeping as reference but not using it
-  const handlePlayPauseOriginal = (talentId: string, e: React.MouseEvent) => {
-    e.preventDefault(); // Prevent triggering the card click
-    e.stopPropagation();
-    
-    // Clear any existing timer
-    if (audioTimerRef.current) {
-      clearTimeout(audioTimerRef.current);
-      audioTimerRef.current = null;
+  const applyFiltersAndSearch = () => {
+    let filtered = [...allTalents];
+
+    // Apply search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(talent =>
+        talent.name.toLowerCase().includes(query) ||
+        talent.title.toLowerCase().includes(query) ||
+        talent.bio.toLowerCase().includes(query) ||
+        talent.skills.some(skill => skill.toLowerCase().includes(query)) ||
+        talent.location.toLowerCase().includes(query)
+      );
     }
-    
-    const demos = talentDemos[talentId] || [];
-    
-    // Reset any previous playback errors
-    setPlaybackError(null);
-    
-    if (demos.length === 0) {
-      console.log('No demo files available for talent:', talentId);
-      return;
+
+    // Apply skill filter
+    if (selectedSkills.length > 0) {
+      filtered = filtered.filter(talent =>
+        selectedSkills.some(skill =>
+          talent.skills.some(talentSkill =>
+            talentSkill.toLowerCase().includes(skill.toLowerCase())
+          )
+        )
+      );
     }
-    
-    // Use the first demo file
-    const demo = demos[0];
-    console.log('Demo file:', demo);
-    
-    if (playingTalentId === talentId) {
-      // Stop playing
-      const audio = audioElements[talentId];
-      if (audio) {
-        audio.pause();
-        audio.currentTime = 0;
-      }
-      setPlayingTalentId(null);
-    } else {
-      // Stop current audio if playing
-      if (playingTalentId && audioElements[playingTalentId]) {
-        audioElements[playingTalentId].pause();
-        audioElements[playingTalentId].currentTime = 0;
-      }
-      
-      let audio = audioElements[talentId];
-      
-      // Create a new audio element if one doesn't exist
-      if (!audio) {
-        try {
-          audio = new Audio();
-          
-          // Set up event listeners
-          audio.addEventListener('ended', () => {
-            setPlayingTalentId(null);
-          });
-          
-          audio.addEventListener('error', (e) => {
-            console.error('Audio playback error:', e);
-            setPlayingTalentId(null);
-            setPlaybackError(`Unable to play demo for ${talents.find(t => t.id === talentId)?.name}. The file may be corrupted.`);
-          });
-          
-          // Store reference
-          setAudioElements(prev => ({
-            ...prev,
-            [talentId]: audio
-          }));
-        } catch (error) {
-          console.error('Error creating audio element:', error);
-          setPlaybackError('Failed to create audio player');
-          return;
-        }
-      }
-      
-      try {
-        // Set source and play
-        audio.src = demo.url;
-        audio.volume = 0.8;
-        
-        // Play the audio with error handling
-        audio.play().catch(err => {
-          console.error('Error playing audio:', err);
-          setPlayingTalentId(null);
-          setPlaybackError(`Unable to play demo for ${talents.find(t => t.id === talentId)?.name}. Please try again.`);
-        });
-        
-        // Update state
-        setPlayingTalentId(talentId);
-        
-        // Auto-stop after the duration of the demo or 30 seconds max
-        audioTimerRef.current = setTimeout(() => {
-          if (audio && !audio.paused) {
-            audio.pause();
-            audio.currentTime = 0;
-          }
-          setPlayingTalentId(null);
-          audioTimerRef.current = null;
-        }, Math.min(demo.duration * 1000, 30000));
-      } catch (error) {
-        console.error('Error setting up audio playback:', error);
-        setPlaybackError('Failed to play audio demo');
-      }
+
+    // Apply location filter
+    if (selectedLocation) {
+      filtered = filtered.filter(talent =>
+        talent.location.toLowerCase().includes(selectedLocation.toLowerCase())
+      );
     }
+
+    // Apply rating filter
+    if (minRating > 0) {
+      filtered = filtered.filter(talent => (talent.rating || 0) >= minRating);
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'rating':
+          return (b.rating || 0) - (a.rating || 0);
+        case 'reviews':
+          return (b.reviewCount || 0) - (a.reviewCount || 0);
+        case 'recent':
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        case 'name':
+        default:
+          return a.name.localeCompare(b.name);
+      }
+    });
+
+    setFilteredTalents(filtered);
   };
 
-  const handleTalentClick = (talentId: string) => {
-    // Stop any playing audio before navigating
-    if (playingTalentId && audioElements[playingTalentId]) {
-      try {
-        audioElements[playingTalentId].pause();
-        audioElements[playingTalentId].currentTime = 0;
-      } catch (error) {
-        console.error('Error stopping audio:', error);
+  // Get available skills from all talents
+  const availableSkills = useMemo(() => {
+    const skills = new Set<string>();
+    allTalents.forEach(talent => {
+      talent.skills.forEach(skill => skills.add(skill));
+    });
+    return Array.from(skills).sort();
+  }, [allTalents]);
+
+  // Get available locations from all talents
+  const availableLocations = useMemo(() => {
+    const locations = new Set<string>();
+    allTalents.forEach(talent => {
+      if (talent.location) {
+        locations.add(talent.location);
       }
-      setPlayingTalentId(null);
-    }
-    
-    // Clear any existing timer
-    if (audioTimerRef.current) {
-      clearTimeout(audioTimerRef.current);
-      audioTimerRef.current = null;
-    }
-    
-    // Scroll to top before navigating
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    // Small delay to ensure scroll completes before navigation
-    setTimeout(() => {
-      onTalentSelect?.(talentId);
-    }, 100);
+    });
+    return Array.from(locations).sort();
+  }, [allTalents]);
+
+  const handleViewProfile = (talentId: string) => {
+    console.log(`🔗 Navigating to REAL talent profile: ${talentId}`);
+    navigate(`/talent/${talentId}`);
   };
 
-  const handleBackClick = () => {
-    if (onBack) {
-      onBack();
-    } else {
-      // Navigate to home page
-      window.location.href = '/';
-    }
+  const handleContactTalent = (talentId: string) => {
+    console.log(`💬 Opening contact for REAL talent: ${talentId}`);
+    navigate(`/messages?talent=${talentId}`);
   };
 
   const clearFilters = () => {
-    setLocalSearchQuery('');
-    setSelectedCategory('all');
-    setSelectedLanguage('all');
+    setSearchQuery('');
+    setSelectedSkills([]);
+    setSelectedLocation('');
+    setMinRating(0);
+    setSortBy('name');
   };
 
-  // Clean up audio on unmount
-  useEffect(() => {
-    return () => {
-      // Clean up all audio elements
-      Object.values(audioElements).forEach(audio => {
-        audio.pause();
-        audio.src = '';
-      });
-      
-      if (audioTimerRef.current) {
-        clearTimeout(audioTimerRef.current);
-      }
-    };
-  }, [audioElements]);
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1
-      }
-    }
+  const renderStars = (rating: number) => {
+    return Array.from({ length: 5 }, (_, i) => (
+      <Star
+        key={i}
+        className={`w-4 h-4 ${
+          i < Math.floor(rating) ? 'text-yellow-400 fill-current' : 'text-gray-300'
+        }`}
+      />
+    ));
   };
 
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0 }
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-900">Voice Talent Directory</h1>
+            <p className="text-gray-600 mt-2">Loading real talent profiles...</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="bg-white rounded-lg shadow-md overflow-hidden animate-pulse">
+                <div className="h-32 bg-gray-200"></div>
+                <div className="p-4">
+                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                  <div className="h-3 bg-gray-200 rounded w-1/2 mb-3"></div>
+                  <div className="h-12 bg-gray-200 rounded mb-3"></div>
+                  <div className="flex space-x-2">
+                    <div className="h-8 bg-gray-200 rounded flex-1"></div>
+                    <div className="h-8 bg-gray-200 rounded flex-1"></div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-900 pt-24 pb-20">
+    <div className="min-h-screen bg-gray-50 py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Back Button */}
-        <motion.button
-          onClick={handleBackClick}
-          className="flex items-center space-x-2 text-white/80 hover:text-white mb-6 lg:mb-8 transition-colors"
-          whileHover={{ x: -5 }}
-          transition={{ type: "spring", stiffness: 400, damping: 10 }}
-        >
-          <ArrowLeft className="h-5 w-5" />
-          <span>Back to Home</span>
-        </motion.button>
-
         {/* Header */}
-        <motion.div 
-          className="mb-8"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-        >
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-4">
-            Voice Talent Directory
-          </h1>
-          <p className="text-lg text-gray-300">
-            Discover and connect with professional voice artists from around the world
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Voice Talent Directory</h1>
+          <p className="text-gray-600 mb-4">
+            Find the perfect voice talent for your project
           </p>
-        </motion.div>
+          <div className="flex items-center justify-center space-x-2 text-green-600">
+            <Award className="w-5 h-5" />
+            <span className="font-semibold">
+              {allTalents.length} Verified Real Talent{allTalents.length !== 1 ? 's' : ''} Available
+            </span>
+          </div>
+        </div>
 
-        {/* Search and Filters */}
-        <motion.div 
-          className="bg-slate-800 rounded-xl shadow-lg border border-gray-700 p-4 sm:p-6 mb-6 lg:mb-8"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
-        >
-          {/* Search Bar */}
-          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        {/* Search and Filter Bar */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Search */}
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-500" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type="text"
-                placeholder="Search by name, specialty, or voice type..."
-                value={localSearchQuery}
-                onChange={(e) => setLocalSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
+                placeholder="Search by name, skills, location..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               />
-              {localSearchQuery && (
-                <button 
-                  onClick={() => setLocalSearchQuery('')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              )}
             </div>
+
+            {/* Filter Toggle */}
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="sm:hidden flex items-center space-x-2 px-4 py-3 bg-slate-700 border border-gray-600 rounded-lg hover:border-blue-500 transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
             >
-              <SlidersHorizontal className="h-5 w-5 text-gray-400" />
-              <span className="text-gray-300">Filters</span>
-            </button>
-          </div>
-
-          {/* Filters */}
-          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 ${showFilters ? 'block' : 'hidden sm:grid'}`}>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Category
-              </label>
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white"
-              >
-                {categories.map(category => (
-                  <option key={category.value} value={category.value}>
-                    {category.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Language
-              </label>
-              <select
-                value={selectedLanguage}
-                onChange={(e) => setSelectedLanguage(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white"
-              >
-                {languages.map(language => (
-                  <option key={language.value} value={language.value}>
-                    {language.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-end">
-              {hasActiveFilters ? (
-                <motion.button 
-                  onClick={clearFilters}
-                  className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-all font-medium flex items-center justify-center space-x-2"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <X className="h-4 w-4" />
-                  <span>Clear All Filters</span>
-                </motion.button>
-              ) : (
-                <motion.button 
-                  onClick={() => {
-                    // Apply filters logic here
-                  }}
-                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg hover:shadow-lg hover:shadow-blue-600/20 transition-all font-medium"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  Apply Filters
-                </motion.button>
+              <Sliders className="w-5 h-5" />
+              <span>Filters</span>
+              {(selectedSkills.length > 0 || selectedLocation || minRating > 0) && (
+                <span className="bg-purple-600 text-white text-xs px-2 py-1 rounded-full">
+                  {selectedSkills.length + (selectedLocation ? 1 : 0) + (minRating > 0 ? 1 : 0)}
+                </span>
               )}
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Active Filters Display */}
-        {hasActiveFilters && (
-          <motion.div 
-            className="mb-6 flex flex-wrap gap-2"
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            {localSearchQuery && (
-              <div className="bg-blue-600/30 text-blue-300 text-sm px-3 py-1 rounded-full border border-blue-600/50 flex items-center">
-                <span className="mr-2">Search: {localSearchQuery}</span>
-                <button 
-                  onClick={() => setLocalSearchQuery('')}
-                  className="text-blue-300 hover:text-white"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            )}
-            
-            {selectedCategory !== 'all' && (
-              <div className="bg-indigo-600/30 text-indigo-300 text-sm px-3 py-1 rounded-full border border-indigo-600/50 flex items-center">
-                <span className="mr-2">Category: {categories.find(c => c.value === selectedCategory)?.label}</span>
-                <button 
-                  onClick={() => setSelectedCategory('all')}
-                  className="text-indigo-300 hover:text-white"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            )}
-            
-            {selectedLanguage !== 'all' && (
-              <div className="bg-purple-600/30 text-purple-300 text-sm px-3 py-1 rounded-full border border-purple-600/50 flex items-center">
-                <span className="mr-2">Language: {languages.find(l => l.value === selectedLanguage)?.label}</span>
-                <button 
-                  onClick={() => setSelectedLanguage('all')}
-                  className="text-purple-300 hover:text-white"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            )}
-            
-            <button 
-              onClick={clearFilters}
-              className="bg-slate-700 text-gray-300 text-sm px-3 py-1 rounded-full border border-gray-600 hover:bg-slate-600 transition-colors flex items-center"
-            >
-              <span className="mr-2">Clear All</span>
-              <X className="h-3 w-3" />
             </button>
-          </motion.div>
-        )}
 
-        {/* Results count */}
-        <motion.div 
-          className="mb-6"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-        >
-          <p className="text-gray-400">
-            Showing {filteredTalents.length} voice {filteredTalents.length === 1 ? 'artist' : 'artists'}
-            {localSearchQuery && ` for "${localSearchQuery}"`}
-          </p>
-        </motion.div>
-
-        {/* Playback Error Message */}
-        {playbackError && (
-          <motion.div 
-            className="mb-6 bg-red-900/30 border border-red-600/50 rounded-lg p-4"
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <p className="text-red-300 text-sm">{playbackError}</p>
-          </motion.div>
-        )}
-
-        {/* Talent Grid */}
-        <motion.div 
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8"
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-        >
-          {filteredTalents.map((talent, index) => (
-            <motion.div
-              key={talent.id}
-              className="bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group hover:-translate-y-1 border border-gray-700 hover:border-blue-600 cursor-pointer"
-              variants={itemVariants}
-              onClick={() => handleTalentClick(talent.id)}
+            {/* Sort */}
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
             >
-              {/* Header with image and badge */}
-              <div className="relative">
-                <img
-                  src={talent.image}
-                  alt={talent.name} 
-                  className="w-full h-40 sm:h-48 object-cover"
-                />
-                <div className="absolute top-4 left-4">
-                  <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">
-                    {talent.badge}
-                  </span>
+              <option value="name">Sort by Name</option>
+              <option value="rating">Sort by Rating</option>
+              <option value="reviews">Sort by Reviews</option>
+              <option value="recent">Sort by Recent</option>
+            </select>
+          </div>
+
+          {/* Expanded Filters */}
+          {showFilters && (
+            <div className="mt-6 pt-6 border-t border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Skills Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Skills</label>
+                <div className="max-h-32 overflow-y-auto space-y-1">
+                  {availableSkills.map((skill) => (
+                    <label key={skill} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedSkills.includes(skill)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedSkills([...selectedSkills, skill]);
+                          } else {
+                            setSelectedSkills(selectedSkills.filter(s => s !== skill));
+                          }
+                        }}
+                        className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                      />
+                      <span className="ml-2 text-sm text-gray-600">{skill}</span>
+                    </label>
+                  ))}
                 </div>
               </div>
 
-              <div className="p-4 sm:p-6">
-                {/* Name and title */}
-                <div className="mb-4">
-                  <h3 className="text-lg sm:text-xl font-bold text-white mb-1">
-                    {talent.name}
-                  </h3>
-                  <p className="text-gray-400 text-sm sm:text-base">{talent.title}</p>
-                </div>
+              {/* Location Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                <select
+                  value={selectedLocation}
+                  onChange={(e) => setSelectedLocation(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="">All Locations</option>
+                  {availableLocations.map((location) => (
+                    <option key={location} value={location}>{location}</option>
+                  ))}
+                </select>
+              </div>
 
-                {/* Rating and location */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-1">
-                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                    <span className="font-semibold text-white">{talent.rating}</span>
-                    <span className="text-gray-500 text-sm">({talent.reviews})</span>
-                  </div>
-                  <div className="flex items-center space-x-1 text-gray-500 text-sm">
-                    <MapPin className="h-4 w-4" />
-                    <span>{talent.location}</span>
-                  </div>
-                </div>
+              {/* Rating Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Minimum Rating</label>
+                <select
+                  value={minRating}
+                  onChange={(e) => setMinRating(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value={0}>Any Rating</option>
+                  <option value={4}>4+ Stars</option>
+                  <option value={4.5}>4.5+ Stars</option>
+                  <option value={5}>5 Stars</option>
+                </select>
+              </div>
 
-                {/* Audio player */}
-                <div className="bg-slate-700 rounded-lg p-3 sm:p-4 mb-3 sm:mb-4 border border-gray-600">
-                  <div className="flex items-center space-x-2 sm:space-x-3">
-                    <motion.button
-                      onClick={(e) => handlePlayPause(talent.id, e)}
-                      className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-2 rounded-full hover:shadow-lg hover:shadow-blue-600/20 transition-colors"
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      {playingTalentId === talent.id ? (
-                        <Pause className="h-4 w-4" />
-                      ) : (
-                        <Play className="h-4 w-4" />
-                      )}
-                    </motion.button>
-                    <div className="flex-1">
-                      <div className={`flex items-center space-x-1 ${playingTalentId === talent.id ? 'playing' : ''}`}>
-                        {[...Array(12)].map((_, i) => (
-                          <div
-                            key={i}
-                            className={`waveform-bar ${
-                              playingTalentId === talent.id ? 'bg-blue-500' : 'bg-gray-600'
-                            }`}
-                            style={{
-                              width: '3px',
-                              height: `${Math.random() * 20 + 8}px`,
-                              animationDelay: playingTalentId === talent.id ? `${i * 0.05}s` : '0s'
-                            }}
-                          ></div>
-                        ))}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {talentDemos[talent.id]?.length > 0 
-                          ? `${talentDemos[talent.id][0].name} - ${Math.floor(talentDemos[talent.id][0].duration)}s` 
-                          : 'Voice Demo - 0:30'}
-                      </div>
+              {/* Clear Filters */}
+              <div className="md:col-span-3 flex justify-end">
+                <button
+                  onClick={clearFilters}
+                  className="text-purple-600 hover:text-purple-700 text-sm font-medium"
+                >
+                  Clear All Filters
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Results Count */}
+        <div className="mb-6 text-center">
+          <p className="text-gray-600">
+            Showing {filteredTalents.length} of {allTalents.length} real talents
+            {searchQuery && ` for "${searchQuery}"`}
+          </p>
+        </div>
+
+        {/* No Results */}
+        {allTalents.length === 0 ? (
+          <div className="text-center py-16">
+            <Users className="w-24 h-24 text-gray-300 mx-auto mb-6" />
+            <h3 className="text-2xl font-bold text-gray-800 mb-4">No Real Talents Yet</h3>
+            <p className="text-gray-600 mb-8 max-w-md mx-auto">
+              Be the first to join our platform as a voice talent and start getting hired for projects!
+            </p>
+            <button
+              onClick={() => navigate('/signup')}
+              className="bg-purple-600 text-white px-8 py-3 rounded-lg hover:bg-purple-700 transition-colors font-semibold"
+            >
+              Join as Talent
+            </button>
+          </div>
+        ) : filteredTalents.length === 0 ? (
+          <div className="text-center py-16">
+            <Filter className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-gray-800 mb-2">No Talents Match Your Filters</h3>
+            <p className="text-gray-600 mb-6">Try adjusting your search criteria</p>
+            <button
+              onClick={clearFilters}
+              className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              Clear Filters
+            </button>
+          </div>
+        ) : (
+          /* Talent Grid */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredTalents.map((talent) => (
+              <div key={talent.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+                {/* Header */}
+                <div className="relative h-32 bg-gradient-to-br from-purple-600 to-blue-600">
+                  {talent.coverImage ? (
+                    <img
+                      src={talent.coverImage}
+                      alt={`${talent.name} cover`}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-purple-600 to-blue-600"></div>
+                  )}
+                  
+                  {/* Avatar */}
+                  <div className="absolute -bottom-6 left-4">
+                    <img
+                      src={talent.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(talent.name)}&size=60&background=7c3aed&color=fff`}
+                      alt={talent.name}
+                      className="w-12 h-12 rounded-full border-4 border-white shadow-lg"
+                    />
+                  </div>
+
+                  {/* Verified Badge */}
+                  <div className="absolute top-2 right-2">
+                    <div className="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-semibold flex items-center space-x-1">
+                      <Award className="w-3 h-3" />
+                      <span>Real</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Specialties */}
-                <div className="mb-3 sm:mb-4">
-                  <div className="flex flex-wrap gap-2">
-                    {talent.specialties.slice(0, 3).map((specialty: string, idx: number) => (
-                      <span
-                        key={idx}
-                        className="bg-blue-900/50 text-blue-400 text-xs font-medium px-2 py-1 rounded-full border border-blue-800/50"
-                      >
-                        {specialty}
-                      </span>
-                    ))}
-                    {talent.specialties.length > 3 && (
-                      <span className="bg-slate-700 text-gray-400 text-xs font-medium px-2 py-1 rounded-full">
-                        +{talent.specialties.length - 3} more
-                      </span>
+                {/* Content */}
+                <div className="p-4 pt-8">
+                  <div className="mb-3">
+                    <h3 className="text-lg font-bold text-gray-900 mb-1">{talent.name}</h3>
+                    <p className="text-gray-600 text-sm mb-2">{talent.title}</p>
+                    
+                    {talent.location && (
+                      <div className="flex items-center text-gray-500 text-sm mb-2">
+                        <MapPin className="w-4 h-4 mr-1" />
+                        {talent.location}
+                      </div>
+                    )}
+
+                    {/* Rating */}
+                    {talent.rating && talent.rating > 0 && (
+                      <div className="flex items-center mb-2">
+                        <div className="flex items-center mr-2">
+                          {renderStars(talent.rating)}
+                        </div>
+                        <span className="text-sm text-gray-600">
+                          {talent.rating.toFixed(1)} ({talent.reviewCount || 0})
+                        </span>
+                      </div>
                     )}
                   </div>
-                </div>
 
-                {/* Languages */}
-                <div className="mb-3 sm:mb-4">
-                  <div className="text-xs sm:text-sm text-gray-400">
-                    Languages: {talent.languages.join(', ')}
-                  </div>
-                </div>
+                  {/* Bio */}
+                  <p className="text-gray-600 text-sm line-clamp-3 mb-3">
+                    {talent.bio}
+                  </p>
 
-                {/* Stats */}
-                <div className="flex items-center justify-between mb-4 sm:mb-6 text-xs sm:text-sm">
-                  <div className="flex items-center space-x-1 text-gray-400">
-                    <Clock className="h-4 w-4" />
-                    <span>{talent.responseTime}</span>
-                  </div>
-                  <div className="font-semibold text-white">
-                    ${talent.priceRange.replace(/\$/g, '')}
-                  </div>
-                </div>
+                  {/* Skills */}
+                  {talent.skills && talent.skills.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-4">
+                      {talent.skills.slice(0, 2).map((skill, index) => (
+                        <span
+                          key={index}
+                          className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                      {talent.skills.length > 2 && (
+                        <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">
+                          +{talent.skills.length - 2}
+                        </span>
+                      )}
+                    </div>
+                  )}
 
-                {/* Actions */}
-                <div className="space-y-1 sm:space-y-2">
-                  <motion.button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleTalentClick(talent.id);
-                    }}
-                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-2 rounded-lg hover:shadow-lg hover:shadow-blue-600/20 transition-all font-medium"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    View Profile
-                  </motion.button>
-                  <motion.button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleTalentClick(talent.id);
-                    }}
-                    className="w-full border border-gray-600 text-gray-300 py-2 rounded-lg hover:border-blue-600 hover:text-blue-400 transition-colors font-medium"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    Contact Artist
-                  </motion.button>
+                  {/* Action Buttons */}
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => handleViewProfile(talent.id)}
+                      className="flex-1 bg-purple-600 text-white py-2 px-3 rounded-lg hover:bg-purple-700 transition-colors text-sm font-semibold"
+                    >
+                      View Profile
+                    </button>
+                    <button
+                      onClick={() => handleContactTalent(talent.id)}
+                      className="flex-1 bg-gray-200 text-gray-800 py-2 px-3 rounded-lg hover:bg-gray-300 transition-colors text-sm font-semibold flex items-center justify-center"
+                    >
+                      <MessageCircle className="w-4 h-4 mr-1" />
+                      Contact
+                    </button>
+                  </div>
                 </div>
               </div>
-            </motion.div>
-          ))}
-        </motion.div>
-
-        {/* Load More */}
-        {filteredTalents.length > 0 && (
-          <motion.div 
-            className="text-center mt-8 lg:mt-12"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.1 }}
-            transition={{ duration: 0.6 }}
-          >
-            <motion.button 
-              className="bg-slate-800 border border-gray-700 text-gray-300 px-6 sm:px-8 py-3 sm:py-4 rounded-xl hover:border-blue-600 hover:text-blue-400 transition-colors font-semibold text-base sm:text-lg"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              Load More Voice Artists
-            </motion.button>
-          </motion.div>
+            ))}
+          </div>
         )}
 
-        {/* No results */}
-        {filteredTalents.length === 0 && (
-          <motion.div 
-            className="text-center py-16"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6 }}
-          >
-            <div className="bg-slate-800 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-6">
-              <Search className="h-12 w-12 text-gray-500" />
-            </div>
-            <h3 className="text-xl font-semibold text-white mb-2">
-              No voice artists found
-            </h3>
-            <p className="text-gray-400 mb-6">
-              Try adjusting your search criteria or browse all available talent.
-            </p>
-            <motion.button 
-              onClick={clearFilters}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-lg hover:shadow-lg hover:shadow-blue-600/20 transition-all font-medium"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              Clear Filters
-            </motion.button>
-          </motion.div>
-        )}
+        {/* Bottom Notice */}
+        <div className="mt-12 text-center">
+          <div className="inline-flex items-center space-x-2 bg-green-50 text-green-700 px-6 py-3 rounded-full">
+            <Award className="w-5 h-5" />
+            <span className="font-semibold">All talent profiles are verified real users</span>
+          </div>
+        </div>
       </div>
     </div>
   );
