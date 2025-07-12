@@ -67,56 +67,24 @@ const TalentProfile: React.FC = () => {
     setLoading(true);
     setError(null);
 
-    // Get current user info to check if this is their own profile
+    // Get current user info
     const currentUser = getCurrentUserData();
     const currentUserId = currentUser?.id || currentUser?._id;
     console.log('👤 Current logged-in user ID:', currentUserId);
 
-    // Try to find talent data
-    if (id) {
-      console.log('✅ Using talent ID from URL:', id);
-      setDataSource('URL Parameter');
-    } else {
-      console.log('🔍 No ID in URL, checking other sources...');
-      
-      // Check URL search parameters
-      const urlParams = new URLSearchParams(window.location.search);
-      const talentId = urlParams.get('id') || urlParams.get('talentId');
-      
-      if (talentId) {
-        console.log('✅ Found talent ID in URL params:', talentId);
-        id = talentId;
-        setDataSource('URL Search Parameter');
-      } else {
-        // If no ID provided, check if this is a request for "my talent profile"
-        console.log('🔍 No ID in URL - checking if this should be current user\'s talent profile...');
-        
-        if (currentUser) {
-          const userId = currentUser.id || currentUser._id || currentUser.userId;
-          if (userId) {
-            console.log('✅ No ID provided, using current user ID for talent profile:', userId);
-            id = userId;
-            setDataSource('Current User (No ID Provided)');
-          } else {
-            console.log('❌ Current user found but no ID available');
-            setError('Could not determine your user ID. Please make sure you are logged in.');
-            setLoading(false);
-            return;
-          }
-        } else {
-          console.log('❌ No ID provided and no current user found');
-          setError('No talent ID provided and you are not logged in. Please provide a talent ID or log in to view your profile.');
-          setLoading(false);
-          return;
-        }
-      }
+    // We MUST have a talent ID to show a talent profile
+    if (!id) {
+      console.log('❌ No talent ID provided in URL');
+      setError('No talent ID provided. Please use a proper talent profile link.');
+      setLoading(false);
+      return;
     }
 
     console.log('🆔 Talent ID to load:', id);
-    console.log('🤔 Is this the current user\'s profile?', id === currentUserId);
+    console.log('🤔 Is this the current user\'s own talent profile?', id === currentUserId);
 
-    // Try API endpoints (but expect them to fail due to database issue)
-    console.log('📡 Trying API endpoints...');
+    // Try API endpoints for the SPECIFIC talent
+    console.log('📡 Trying to load talent data for:', id);
     const apiEndpoints = [
       `/api/talent/${id}`,
       `/api/talents/${id}`,
@@ -132,10 +100,10 @@ const TalentProfile: React.FC = () => {
         
         if (response.ok) {
           const data = await response.json();
-          console.log(`✅ API Success:`, data);
+          console.log(`✅ API Success for talent ${id}:`, data);
           const normalizedData = normalizeApiData(data, id);
           setTalent(normalizedData);
-          setDataSource(`API: ${endpoint}`);
+          setDataSource(`Real Talent Data (API: ${endpoint})`);
           setLoading(false);
           foundApiData = true;
           return;
@@ -147,23 +115,25 @@ const TalentProfile: React.FC = () => {
       }
     }
 
+    // API calls failed - this is the database issue
     if (!foundApiData) {
-      console.log('🔄 API calls failed (likely database issue)...');
+      console.log('❌ ALL API calls failed for talent:', id);
+      console.log('🔍 This is due to the missing voice_actor_categories table');
       
-      // ONLY convert to talent profile if this is the current user's own profile
+      // ONLY if this is the current user's own talent profile, convert from client data
       if (currentUser && id === currentUserId) {
-        console.log('✅ This is YOUR talent profile - converting client data to talent format...');
-        
+        console.log('✅ This is YOUR own talent profile - converting client data...');
         const talentProfile = createTalentFromClientData(currentUser, id);
         setTalent(talentProfile);
-        setDataSource('Your Talent Profile (Converted from Client Data)');
+        setDataSource('Your Own Talent Profile (Converted from Client Data)');
         setLoading(false);
         return;
       } else {
-        console.log('❌ This is someone else\'s talent profile, but their data is not available due to database issues');
+        // This is someone else's talent profile - show error
+        console.log('❌ This is someone else\'s talent profile, but database is broken');
+        console.log('🚫 REFUSING to show current user\'s client data for someone else\'s profile');
         
-        // Show error for other talents since we can't load their real data
-        setError(`Talent profile for ID "${id}" is currently unavailable due to a database issue. Please try again later or contact support.`);
+        setError(`Sorry, the talent profile for "${id}" cannot be loaded right now due to a database issue. This is a temporary problem that affects all talent profiles except your own.`);
         setLoading(false);
         return;
       }
@@ -417,28 +387,26 @@ const TalentProfile: React.FC = () => {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center text-white max-w-lg">
-          <div className="text-red-400 text-6xl mb-4">🔧</div>
+          <div className="text-red-400 text-6xl mb-4">🚫</div>
           <h2 className="text-2xl font-bold text-gray-100 mb-4">Talent Profile Unavailable</h2>
           <p className="text-gray-300 mb-4">{error}</p>
           
           <div className="bg-slate-800 p-4 rounded-lg mb-4 text-left">
-            <h3 className="font-bold mb-2">🔍 What's happening:</h3>
+            <h3 className="font-bold mb-2">🔧 Technical Details:</h3>
             <ul className="text-sm text-gray-300 space-y-1">
-              <li>• The talent database is experiencing issues</li>
-              <li>• Other talent profiles cannot be loaded right now</li>
-              <li>• Your own talent profile still works</li>
-              <li>• This is a temporary database problem</li>
+              <li>• Database table "voice_actor_categories" is missing</li>
+              <li>• This prevents loading other talent profiles</li>
+              <li>• Only your own talent profile can be converted from client data</li>
+              <li>• This is a server-side database configuration issue</li>
             </ul>
           </div>
           
-          <div className="bg-blue-900 p-3 rounded-lg mb-4 text-sm">
-            <div className="font-bold mb-1">💡 Try instead:</div>
-            <div className="text-blue-200">
-              • Go back to the talent directory
+          <div className="bg-red-900 p-3 rounded-lg mb-4 text-sm">
+            <div className="font-bold mb-1">⚠️ Important:</div>
+            <div className="text-red-200">
+              This component will NOT show your client profile when viewing other talents.
               <br />
-              • View your own talent profile (should work)
-              <br />
-              • Contact support about the database issue
+              Each talent profile must load their own specific data.
             </div>
           </div>
           
@@ -447,7 +415,7 @@ const TalentProfile: React.FC = () => {
               onClick={handleGoBack}
               className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors"
             >
-              Go Back
+              Go Back to Talent Directory
             </button>
             <button
               onClick={() => {
@@ -455,13 +423,18 @@ const TalentProfile: React.FC = () => {
                 if (currentUser) {
                   const userId = currentUser.id || currentUser._id;
                   if (userId) {
+                    console.log('🔄 Navigating to your own talent profile:', userId);
                     window.location.href = `/talent/${userId}`;
+                  } else {
+                    alert('Cannot find your user ID. Please contact support.');
                   }
+                } else {
+                  alert('Please log in to view your own talent profile.');
                 }
               }}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+              className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors"
             >
-              View My Profile
+              View Your Own Talent Profile
             </button>
           </div>
         </div>
@@ -489,15 +462,13 @@ const TalentProfile: React.FC = () => {
     <div className="min-h-screen bg-slate-900 text-white">
       {/* Debug Info Banner */}
       <div className={`text-white p-2 text-center text-sm ${
-        dataSource.includes('Your Talent Profile') || dataSource.includes('Current User (No ID Provided)') ? 'bg-purple-600' : 
-        dataSource.includes('API') ? 'bg-green-600' :
-        dataSource.includes('Template') || dataSource.includes('Generated') ? 'bg-orange-600' : 
-        'bg-blue-600'
+        dataSource.includes('Your Own Talent Profile') ? 'bg-purple-600' : 
+        dataSource.includes('Real Talent Data') ? 'bg-green-600' :
+        'bg-orange-600'
       }`}>
-        {dataSource.includes('Your Talent Profile') || dataSource.includes('Current User (No ID Provided)') ? '🎭 YOUR TALENT PROFILE: ' : 
-         dataSource.includes('API') ? '✅ TALENT PROFILE (API): ' :
-         dataSource.includes('Template') || dataSource.includes('Generated') ? '⚠️ TEMPLATE TALENT: ' : 
-         '👤 PROFILE: '} 
+        {dataSource.includes('Your Own Talent Profile') ? '🎭 YOUR OWN TALENT PROFILE: ' : 
+         dataSource.includes('Real Talent Data') ? '✅ REAL TALENT PROFILE: ' :
+         '⚠️ UNKNOWN: '} 
         {talent.name} (ID: {talent.id}) | Source: {dataSource}
       </div>
 
