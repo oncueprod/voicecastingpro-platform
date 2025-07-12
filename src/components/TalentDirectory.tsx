@@ -7,14 +7,14 @@ interface TalentDirectoryProps {
   searchQuery?: string;
   onTalentSelect: (talentId: string) => void;
   onBack: () => void;
-  onJoinAsTalent: () => void;  // ADD THIS PROP
+  onJoinAsTalent: () => void;
 }
 
 const TalentDirectory: React.FC<TalentDirectoryProps> = ({ 
   searchQuery: initialSearchQuery = '', 
   onTalentSelect, 
   onBack,
-  onJoinAsTalent  // ADD THIS PROP
+  onJoinAsTalent
 }) => {
   const [allTalents, setAllTalents] = useState<TalentProfile[]>([]);
   const [filteredTalents, setFilteredTalents] = useState<TalentProfile[]>([]);
@@ -168,109 +168,6 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
       />
     ));
   };
-    let filtered = [...allTalents];
-
-    // Apply search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(talent =>
-        talent.name.toLowerCase().includes(query) ||
-        talent.title.toLowerCase().includes(query) ||
-        talent.bio.toLowerCase().includes(query) ||
-        talent.skills.some(skill => skill.toLowerCase().includes(query)) ||
-        talent.location.toLowerCase().includes(query)
-      );
-    }
-
-    // Apply skill filter
-    if (selectedSkills.length > 0) {
-      filtered = filtered.filter(talent =>
-        selectedSkills.some(skill =>
-          talent.skills.some(talentSkill =>
-            talentSkill.toLowerCase().includes(skill.toLowerCase())
-          )
-        )
-      );
-    }
-
-    // Apply location filter
-    if (selectedLocation) {
-      filtered = filtered.filter(talent =>
-        talent.location.toLowerCase().includes(selectedLocation.toLowerCase())
-      );
-    }
-
-    // Apply rating filter
-    if (minRating > 0) {
-      filtered = filtered.filter(talent => (talent.rating || 0) >= minRating);
-    }
-
-    // Apply sorting
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'rating':
-          return (b.rating || 0) - (a.rating || 0);
-        case 'reviews':
-          return (b.reviewCount || 0) - (a.reviewCount || 0);
-        case 'recent':
-          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-        case 'name':
-        default:
-          return a.name.localeCompare(b.name);
-      }
-    });
-
-    setFilteredTalents(filtered);
-  };
-
-  // Get available skills from all talents
-  const availableSkills = useMemo(() => {
-    const skills = new Set<string>();
-    allTalents.forEach(talent => {
-      talent.skills.forEach(skill => skills.add(skill));
-    });
-    return Array.from(skills).sort();
-  }, [allTalents]);
-
-  // Get available locations from all talents
-  const availableLocations = useMemo(() => {
-    const locations = new Set<string>();
-    allTalents.forEach(talent => {
-      if (talent.location) {
-        locations.add(talent.location);
-      }
-    });
-    return Array.from(locations).sort();
-  }, [allTalents]);
-
-  const handleViewProfile = (talentId: string) => {
-    console.log(`🔗 Navigating to REAL talent profile: ${talentId}`);
-    navigate(`/talent/${talentId}`);
-  };
-
-  const handleContactTalent = (talentId: string) => {
-    console.log(`💬 Opening contact for REAL talent: ${talentId}`);
-    navigate(`/messages?talent=${talentId}`);
-  };
-
-  const clearFilters = () => {
-    setSearchQuery('');
-    setSelectedSkills([]);
-    setSelectedLocation('');
-    setMinRating(0);
-    setSortBy('name');
-  };
-
-  const renderStars = (rating: number) => {
-    return Array.from({ length: 5 }, (_, i) => (
-      <Star
-        key={i}
-        className={`w-4 h-4 ${
-          i < Math.floor(rating) ? 'text-yellow-400 fill-current' : 'text-gray-300'
-        }`}
-      />
-    ));
-  };
 
   if (loading) {
     return (
@@ -303,7 +200,7 @@ const TalentDirectory: React.FC<TalentDirectoryProps> = ({
   }
 
   return (
-          <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 py-12">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-8">
