@@ -62,23 +62,45 @@ const TalentProfile: React.FC = () => {
   const fetchRealTalentData = async () => {
     let id = params.id;
     
-    // If no ID in URL, try to get current user ID and redirect
+    // If no ID in URL, try to get current user ID
     if (!id) {
       console.log('❌ No ID in URL params, trying to find current user ID...');
       
       // Try to get current user ID from various sources
       let currentUserId = null;
+      let foundInSource = '';
       
-      // Check localStorage
+      // Check localStorage with detailed logging
       const storageKeys = ['currentUser', 'user', 'userData', 'authUser'];
       for (const key of storageKeys) {
         try {
           const stored = localStorage.getItem(key);
+          console.log(`🔍 Checking localStorage.${key}:`, stored);
+          
           if (stored) {
             const parsed = JSON.parse(stored);
-            currentUserId = parsed.id || parsed._id || parsed.userId;
-            if (currentUserId) {
-              console.log(`✅ Found user ID in localStorage.${key}:`, currentUserId);
+            console.log(`📦 Parsed ${key}:`, parsed);
+            
+            // Try different possible ID field names
+            const possibleIds = [
+              parsed.id,
+              parsed._id, 
+              parsed.userId,
+              parsed.user_id,
+              parsed.uid,
+              // Handle nested user objects
+              parsed.user?.id,
+              parsed.user?._id,
+              parsed.data?.id,
+              parsed.data?._id
+            ].filter(Boolean);
+            
+            console.log(`🔑 Possible IDs from ${key}:`, possibleIds);
+            
+            if (possibleIds.length > 0) {
+              currentUserId = possibleIds[0];
+              foundInSource = `localStorage.${key}`;
+              console.log(`✅ Found user ID in ${foundInSource}:`, currentUserId);
               break;
             }
           }
@@ -87,33 +109,74 @@ const TalentProfile: React.FC = () => {
         }
       }
       
-      // Check window object
+      // Check window object with detailed logging
       if (!currentUserId) {
-        const windowKeys = ['currentUser', 'user', 'userData'];
+        const windowKeys = ['currentUser', 'user', 'userData', 'auth'];
         for (const key of windowKeys) {
           if ((window as any)[key]) {
             const userData = (window as any)[key];
-            currentUserId = userData.id || userData._id || userData.userId;
-            if (currentUserId) {
-              console.log(`✅ Found user ID in window.${key}:`, currentUserId);
+            console.log(`🪟 Checking window.${key}:`, userData);
+            
+            const possibleIds = [
+              userData.id,
+              userData._id,
+              userData.userId,
+              userData.user_id,
+              userData.uid,
+              userData.user?.id,
+              userData.user?._id
+            ].filter(Boolean);
+            
+            console.log(`🔑 Possible IDs from window.${key}:`, possibleIds);
+            
+            if (possibleIds.length > 0) {
+              currentUserId = possibleIds[0];
+              foundInSource = `window.${key}`;
+              console.log(`✅ Found user ID in ${foundInSource}:`, currentUserId);
               break;
             }
           }
         }
       }
       
-      // If we found a user ID, redirect to the correct URL
-      if (currentUserId) {
-        console.log(`🔄 Redirecting to /talent/${currentUserId}`);
-        window.location.href = `/talent/${currentUserId}`;
-        return;
+      // Try to extract from the authentication logs we saw
+      if (!currentUserId) {
+        console.log('🔍 Checking for user ID patterns in logs/authentication...');
+        // The console showed: "👤 Authenticating user: user_1752164361991_e4ogp44sg"
+        // Let's see if we can find this in any global variables
+        
+        if ((window as any).socketUser) {
+          console.log('🔌 Found socketUser:', (window as any).socketUser);
+          currentUserId = (window as any).socketUser;
+          foundInSource = 'window.socketUser';
+        }
+        
+        if (!currentUserId && (window as any).authenticatedUser) {
+          console.log('🔐 Found authenticatedUser:', (window as any).authenticatedUser);
+          currentUserId = (window as any).authenticatedUser;
+          foundInSource = 'window.authenticatedUser';
+        }
       }
       
-      // If still no ID, show error
-      console.log('❌ No user ID found anywhere');
-      setError('No talent ID provided and no current user found');
-      setLoading(false);
-      return;
+      console.log(`🎯 Final user ID search result:`, {
+        found: !!currentUserId,
+        userId: currentUserId,
+        source: foundInSource
+      });
+      
+      // If we found a user ID, use it instead of redirecting
+      if (currentUserId) {
+        console.log(`✅ Using found user ID: ${currentUserId} from ${foundInSource}`);
+        id = currentUserId;
+        setDataSource(`Auto-detected from ${foundInSource}`);
+        // Don't redirect, just use the ID we found
+      } else {
+        // If still no ID, set a helpful error but don't redirect away
+        console.log('❌ No user ID found anywhere - showing helpful error');
+        setError('No user ID found. Please make sure you are logged in.');
+        setLoading(false);
+        return;
+      }
     }
 
     console.log('🎯 Fetching real data for talent ID:', id);
