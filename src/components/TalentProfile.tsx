@@ -60,9 +60,58 @@ const TalentProfile: React.FC = () => {
   }, [params.id]);
 
   const fetchRealTalentData = async () => {
-    const id = params.id;
+    let id = params.id;
+    
+    // If no ID in URL, try to get current user ID and redirect
     if (!id) {
-      setError('No talent ID provided');
+      console.log('❌ No ID in URL params, trying to find current user ID...');
+      
+      // Try to get current user ID from various sources
+      let currentUserId = null;
+      
+      // Check localStorage
+      const storageKeys = ['currentUser', 'user', 'userData', 'authUser'];
+      for (const key of storageKeys) {
+        try {
+          const stored = localStorage.getItem(key);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            currentUserId = parsed.id || parsed._id || parsed.userId;
+            if (currentUserId) {
+              console.log(`✅ Found user ID in localStorage.${key}:`, currentUserId);
+              break;
+            }
+          }
+        } catch (e) {
+          console.log(`❌ Error reading localStorage.${key}:`, e);
+        }
+      }
+      
+      // Check window object
+      if (!currentUserId) {
+        const windowKeys = ['currentUser', 'user', 'userData'];
+        for (const key of windowKeys) {
+          if ((window as any)[key]) {
+            const userData = (window as any)[key];
+            currentUserId = userData.id || userData._id || userData.userId;
+            if (currentUserId) {
+              console.log(`✅ Found user ID in window.${key}:`, currentUserId);
+              break;
+            }
+          }
+        }
+      }
+      
+      // If we found a user ID, redirect to the correct URL
+      if (currentUserId) {
+        console.log(`🔄 Redirecting to /talent/${currentUserId}`);
+        window.location.href = `/talent/${currentUserId}`;
+        return;
+      }
+      
+      // If still no ID, show error
+      console.log('❌ No user ID found anywhere');
+      setError('No talent ID provided and no current user found');
       setLoading(false);
       return;
     }
@@ -288,23 +337,34 @@ const TalentProfile: React.FC = () => {
   };
 
   const getCurrentUserData = () => {
+    console.log('🔍 getCurrentUserData: Checking all sources...');
+    
     // Try to get current user from various sources
     try {
       const sources = [
-        () => localStorage.getItem('currentUser'),
-        () => localStorage.getItem('user'),
-        () => (window as any).currentUser,
-        () => (window as any).user
+        { name: 'localStorage.currentUser', getter: () => localStorage.getItem('currentUser') },
+        { name: 'localStorage.user', getter: () => localStorage.getItem('user') },
+        { name: 'localStorage.userData', getter: () => localStorage.getItem('userData') },
+        { name: 'localStorage.authUser', getter: () => localStorage.getItem('authUser') },
+        { name: 'window.currentUser', getter: () => (window as any).currentUser },
+        { name: 'window.user', getter: () => (window as any).user }
       ];
 
       for (const source of sources) {
-        const data = source();
+        console.log(`🔍 Checking ${source.name}...`);
+        const data = source.getter();
         if (data) {
-          return typeof data === 'string' ? JSON.parse(data) : data;
+          const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+          console.log(`✅ Found data in ${source.name}:`, parsed);
+          return parsed;
+        } else {
+          console.log(`❌ No data in ${source.name}`);
         }
       }
+      
+      console.log('❌ No user data found in any source');
     } catch (err) {
-      console.log('Error getting current user data:', err);
+      console.log('❌ Error getting current user data:', err);
     }
     return null;
   };
@@ -418,9 +478,15 @@ const TalentProfile: React.FC = () => {
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center text-white">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
-          <div className="text-xl mb-4">Loading your profile...</div>
-          <div className="text-sm text-gray-400 mb-2">Talent ID: {params.id || 'undefined'}</div>
-          <div className="text-xs text-gray-500">Checking multiple data sources...</div>
+          <div className="text-xl mb-4">
+            {params.id ? `Loading talent profile...` : `Finding your profile...`}
+          </div>
+          <div className="text-sm text-gray-400 mb-2">
+            {params.id ? `Talent ID: ${params.id}` : 'No ID in URL - searching for current user'}
+          </div>
+          <div className="text-xs text-gray-500">
+            {params.id ? 'Checking multiple data sources...' : 'Redirecting to correct profile URL...'}
+          </div>
           <button
             onClick={handleGoBack}
             className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
