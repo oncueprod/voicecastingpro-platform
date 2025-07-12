@@ -68,6 +68,32 @@ const TalentProfile: React.FC = () => {
     }
 
     console.log('🎯 Fetching real data for talent ID:', id);
+    console.log('🔍 DEBUGGING: Let\'s see what data we can find...');
+    
+    // First, let's check what's in localStorage right now
+    console.log('📦 CURRENT LOCALSTORAGE CONTENTS:');
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        try {
+          const value = localStorage.getItem(key);
+          console.log(`  ${key}:`, value);
+        } catch (e) {
+          console.log(`  ${key}: (error reading)`);
+        }
+      }
+    }
+    
+    console.log('🪟 CURRENT WINDOW OBJECT USER DATA:');
+    const windowKeys = ['currentUser', 'user', 'userData', 'auth'];
+    windowKeys.forEach(key => {
+      if ((window as any)[key]) {
+        console.log(`  window.${key}:`, (window as any)[key]);
+      } else {
+        console.log(`  window.${key}: undefined`);
+      }
+    });
+    
     setLoading(true);
     setError(null);
 
@@ -284,8 +310,28 @@ const TalentProfile: React.FC = () => {
   };
 
   const createProfileTemplate = (id: string): TalentData => {
+    console.log('🔄 Creating profile template for ID:', id);
+    
     const currentUser = getCurrentUserData();
-    const name = currentUser?.name || currentUser?.email?.split('@')[0] || `Talent ${id}`;
+    console.log('👤 Current user data found:', currentUser);
+    
+    let name = 'Professional Talent';
+    let email = undefined;
+    let phone = undefined;
+    
+    if (currentUser) {
+      name = currentUser.name || 
+             `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() ||
+             currentUser.email?.split('@')[0] ||
+             'Professional Talent';
+      email = currentUser.email;
+      phone = currentUser.phone;
+      console.log('✅ Using current user data for template');
+    } else {
+      console.log('❌ No current user data found, using generic template');
+    }
+    
+    console.log('📝 Template will use name:', name);
     
     return {
       id,
@@ -309,8 +355,8 @@ const TalentProfile: React.FC = () => {
       responseTime: '< 2 hours',
       completionRate: '100%',
       totalJobs: 0,
-      email: currentUser?.email,
-      phone: currentUser?.phone
+      email,
+      phone
     };
   };
 
@@ -424,8 +470,9 @@ const TalentProfile: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       {/* Debug Info Banner */}
-      <div className="bg-green-600 text-white p-2 text-center text-sm">
-        ✅ Real Profile Loaded: {talent.name} (ID: {talent.id}) | Source: {dataSource}
+      <div className={`text-white p-2 text-center text-sm ${dataSource.includes('Template') || dataSource.includes('Generated') ? 'bg-orange-600' : 'bg-green-600'}`}>
+        {dataSource.includes('Template') || dataSource.includes('Generated') ? 
+          '⚠️ MOCK DATA: ' : '✅ REAL DATA: '} {talent.name} (ID: {talent.id}) | Source: {dataSource}
       </div>
 
       {/* Header */}
