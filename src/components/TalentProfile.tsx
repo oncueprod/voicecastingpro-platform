@@ -42,6 +42,29 @@ const TalentProfile: React.FC = () => {
   const [isLiked, setIsLiked] = useState(false);
   const [showMessageForm, setShowMessageForm] = useState(false);
 
+  const getCurrentUserData = () => {
+    console.log('🔍 getCurrentUserData: Checking sources...');
+    
+    const sources = [
+      { name: 'localStorage.currentUser', getter: () => localStorage.getItem('currentUser') },
+      { name: 'localStorage.user', getter: () => localStorage.getItem('user') },
+      { name: 'window.currentUser', getter: () => (window as any).currentUser }
+    ];
+
+    for (const source of sources) {
+      console.log(`🔍 Checking ${source.name}...`);
+      const data = source.getter();
+      if (data) {
+        const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+        console.log(`✅ Found data in ${source.name}:`, parsed);
+        return parsed;
+      }
+    }
+    
+    console.log('❌ No user data found');
+    return null;
+  };
+
   useEffect(() => {
     console.log('🔍 TalentProfile useEffect triggered');
     console.log('📝 URL params:', params);
@@ -50,6 +73,109 @@ const TalentProfile: React.FC = () => {
     const id = params.id || '1'; // Default to '1' if no ID
     
     console.log('🎯 Using talent ID:', id);
+
+    // FIRST: Check if this is the current user's own talent profile
+    const currentUser = getCurrentUserData();
+    const currentUserId = currentUser?.id || currentUser?._id;
+    
+    console.log('👤 Current user ID:', currentUserId);
+    console.log('🤔 Is this the user\'s own talent profile?', id === currentUserId);
+
+    // If this is the current user's talent profile, load their REAL data
+    if (currentUser && id === currentUserId) {
+      console.log('✅ Loading YOUR real talent profile data...');
+      
+      try {
+        // Try to get real talent profile data from various sources
+        let realTalentData = null;
+        
+        // Check for stored talent profile data
+        const talentProfileSources = [
+          'talentProfile',
+          'userTalentProfile', 
+          'myTalentProfile',
+          'talentData'
+        ];
+        
+        for (const source of talentProfileSources) {
+          const stored = localStorage.getItem(source);
+          if (stored) {
+            try {
+              const parsed = JSON.parse(stored);
+              if (parsed.id === id || parsed._id === id) {
+                realTalentData = parsed;
+                console.log(`✅ Found real talent data in localStorage.${source}:`, parsed);
+                break;
+              }
+            } catch (e) {
+              console.log(`❌ Error parsing ${source}:`, e);
+            }
+          }
+        }
+        
+        // If no dedicated talent profile found, create one from user data
+        if (!realTalentData && currentUser) {
+          console.log('🔄 Creating real talent profile from user data...');
+          realTalentData = {
+            id: currentUser.id || currentUser._id,
+            name: currentUser.name || `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim(),
+            title: currentUser.talentTitle || currentUser.profession || 'Professional Voice Talent',
+            location: currentUser.location || currentUser.city || 'Remote',
+            bio: currentUser.talentBio || currentUser.bio || 'Professional voice talent ready to bring your projects to life.',
+            skills: currentUser.talentSkills || currentUser.skills || ['Voice Over', 'Narration'],
+            experience: currentUser.experience || '5+ years',
+            hourlyRate: currentUser.hourlyRate || currentUser.rate || '$85-175',
+            email: currentUser.email,
+            phone: currentUser.phone,
+            // Add any other talent-specific fields from user data
+            languages: currentUser.languages || ['English'],
+            samples: currentUser.voiceSamples || currentUser.samples || [],
+            portfolio: currentUser.portfolio || []
+          };
+        }
+        
+        if (realTalentData) {
+          console.log('✅ Using REAL talent profile data:', realTalentData);
+          
+          // Convert to the expected TalentData format
+          const convertedTalent: TalentData = {
+            id: realTalentData.id || realTalentData._id || id,
+            name: realTalentData.name || 'Your Name',
+            title: realTalentData.title || 'Professional Voice Talent',
+            location: realTalentData.location || 'Remote',
+            rating: realTalentData.rating || 4.9,
+            reviewCount: realTalentData.reviewCount || 0,
+            hourlyRate: realTalentData.hourlyRate || '$85-175',
+            avatar: realTalentData.avatar || realTalentData.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(realTalentData.name || 'You')}&size=200&background=7c3aed&color=fff`,
+            coverImage: realTalentData.coverImage || `https://picsum.photos/800/300?random=${id}&blur=1`,
+            bio: realTalentData.bio || 'Professional voice talent with expertise in various voice-over projects.',
+            skills: realTalentData.skills || ['Voice Over', 'Narration'],
+            languages: realTalentData.languages || ['English'],
+            experience: realTalentData.experience || '5+ years',
+            samples: (realTalentData.samples || realTalentData.voiceSamples || []).map((sample: any, index: number) => ({
+              id: sample.id || `sample_${index}`,
+              title: sample.title || sample.name || `Sample ${index + 1}`,
+              duration: sample.duration || '1:00',
+              url: sample.url || sample.audioUrl || '#',
+              category: sample.category || sample.type || 'Demo'
+            })),
+            reviews: realTalentData.reviews || [],
+            responseTime: realTalentData.responseTime || '< 2 hours',
+            completionRate: realTalentData.completionRate || '100%',
+            totalJobs: realTalentData.totalJobs || realTalentData.completedProjects || 0
+          };
+          
+          setTalent(convertedTalent);
+          return; // Exit early - we found real data
+        }
+        
+      } catch (error) {
+        console.error('❌ Error loading real talent data:', error);
+      }
+    }
+
+    // For OTHER talents OR if no real talent data found, generate mock data
+    console.log('🎭 Generating talent data for ID:', id);
 
     // Generate different talent data based on ID (ORIGINAL WORKING APPROACH)
     try {
@@ -115,7 +241,7 @@ const TalentProfile: React.FC = () => {
         location: locations[locationIndex],
         rating: 4.2 + (idNum % 8) * 0.1,
         reviewCount: 15 + (idNum * 7) % 100,
-        hourlyRate: `$${50 + (idNum * 5) % 100}-${100 + (idNum * 10) % 200}`,
+        hourlyRate: `${50 + (idNum * 5) % 100}-${100 + (idNum * 10) % 200}`,
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(talentNames[nameIndex])}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`,
         coverImage: `https://picsum.photos/800/300?random=${idNum}`,
         bio: bioTemplates[bioIndex]
@@ -264,8 +390,15 @@ const TalentProfile: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       {/* Debug Info Banner */}
-      <div className="bg-green-600 text-white p-2 text-center text-sm">
-        ✅ WORKING TALENT PROFILE: {talent.name} (ID: {talent.id}) | Original System Restored
+      <div className={`text-white p-2 text-center text-sm ${
+        getCurrentUserData()?.id === talent.id || getCurrentUserData()?._id === talent.id ? 'bg-purple-600' : 'bg-green-600'
+      }`}>
+        {getCurrentUserData()?.id === talent.id || getCurrentUserData()?._id === talent.id ? 
+          '🎭 YOUR REAL TALENT PROFILE: ' : 
+          '✅ TALENT PROFILE: '} 
+        {talent.name} (ID: {talent.id}) | 
+        {getCurrentUserData()?.id === talent.id || getCurrentUserData()?._id === talent.id ? 
+          'Real Data Loaded' : 'Generated Data'}
       </div>
 
       {/* Header */}
@@ -506,12 +639,24 @@ const TalentProfile: React.FC = () => {
 
       {/* Debug Info Panel */}
       <div className="fixed bottom-4 right-4 bg-black bg-opacity-90 text-white p-4 rounded-lg text-xs max-w-sm border border-gray-600">
-        <div className="font-bold mb-2">✅ WORKING SYSTEM:</div>
+        <div className="font-bold mb-2">🔍 System Status:</div>
         <div>Talent ID: {talent.id}</div>
         <div>Name: {talent.name}</div>
-        <div>System: Original ID-based generation</div>
-        <div className="mt-2 p-2 bg-green-800 rounded text-xs">
-          ✅ Shows different talent for each ID - WORKING!
+        
+        {getCurrentUserData()?.id === talent.id || getCurrentUserData()?._id === talent.id ? (
+          <div className="mt-2 p-2 bg-purple-800 rounded text-xs">
+            🎭 YOUR REAL TALENT PROFILE - Real data loaded!
+          </div>
+        ) : (
+          <div className="mt-2 p-2 bg-green-800 rounded text-xs">
+            ✅ Other talent - Generated data (working!)
+          </div>
+        )}
+        
+        <div className="mt-2 text-gray-400 text-xs">
+          • YOUR profile = Real data from localStorage
+          <br />
+          • Other profiles = Generated unique data
         </div>
       </div>
     </div>
